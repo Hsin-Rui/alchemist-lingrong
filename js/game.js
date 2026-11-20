@@ -1,6 +1,7 @@
 (() => {
   const D = window.GAME_DATA;
   const A = window.GameAudio;
+  const E = window.GameEngine;
   const R = D.RULES;
   const app = document.getElementById('app');
   const SLOT_NAMES = ['早', '午', '晚'];
@@ -259,25 +260,10 @@
   }
 
   // ───────── 流程 ─────────
-  function newState() {
-    return {
-      day: 1, slot: 0, silver: R.silver,
-      favor: { ...R.favor },
-      friend: { ...R.friend },
-      conc: Object.fromEntries(D.TARGETS.map((t) => [t, { status: R.status[t], preg: 0, musk: 0, debuff: null }])),
-      inv: { ...R.startInv },
-      orders: [], hand: [], seq: 0,
-      flip: null, bribe: 0, bribedToday: false, groundUntil: 0,
-      noFlipNights: 0, empressBoost: false, tired: false,
-      stats: { spikesUsed: 0, success: 0, caught: 0, groundedDays: 0, victims: [], ruined: [], sings: 0, bribes: 0, junk: 0, births: 0, muskRuin: 0 },
-      log: [], dayLog: [], result: null,
-    };
-  }
-
   function startGame() {
     A.unlock();
     A.playBgm('main');
-    S = newState();
+    S = E.newState(D);
     screen = 'title'; // 再玩一次時，教學對話要疊在標題頁上（結局頁需要上一局的結果）
     playDialog(D.TUTORIAL, startDay);
   }
@@ -609,39 +595,21 @@
   }
 
   // ───────── 結局 ─────────
-  // 封號判定：順序跟 D.TITLES 無關，D.TITLES 的順序決定誰是主封號
-  const TITLE_CHECK = {
-    shexiang: (st) => st.muskRuin > 0,
-    shuangmian: (st) => st.victims.length === 3 && st.caught === 0 && D.TARGETS.every((t) => S.friend[t] >= 35),
-    duanzi: (st) => ['meizhuang', 'zhenhuan'].every((t) => st.ruined.includes(t)),
-    wentaiyi: (st) => st.caught >= 2,
-    guimi: () => D.TARGETS.every((t) => S.friend[t] >= 40),
-    baimang: (st) => st.spikesUsed > 0 && st.success === 0,
-    jingshi: (st) => st.bribes >= 2,
-    miaoyin: (st) => st.sings >= 2,
-    bailian: (st) => st.spikesUsed === 0,
-    heian: (st) => st.junk >= 1,
-    zhongsi: (st) => st.births >= 1,
-    touming: () => false,
-  };
+  // 結局計算（含封號判定）在 js/engine.js 的純函式 E.computeEnding；
+  // 這裡的外殼只負責封號冊（localStorage）的讀寫。
   const BOOK_KEY = 'lingrong-titles';
   function loadBook() {
     try { return JSON.parse(localStorage.getItem(BOOK_KEY)) || []; } catch { return []; }
   }
+  function saveBook(book) {
+    try { localStorage.setItem(BOOK_KEY, JSON.stringify(book)); } catch { /* 無痕模式等 */ }
+  }
 
   function computeEnding(save = true) {
-    const f = S.favor;
-    const rank = 1 + D.TARGETS.filter((t) => f[t] >= f.lingrong).length;
-    const top = rank === 1 ? 'lingrong' : D.TARGETS.reduce((a, b) => (f[b] > f[a] ? b : a));
-    const opening = [D.END_TOP[top]];
-    if (top !== 'lingrong') opening.push(D.END_LING[grounded() ? 'grounded' : rank]);
-    let titles = D.TITLES.filter((t) => TITLE_CHECK[t.id](S.stats));
-    if (!titles.length) titles = [D.TITLES.find((t) => t.id === 'touming')];
-    // 封號冊：存在這台裝置的瀏覽器裡
     const before = loadBook();
-    const book = [...new Set([...before, ...titles.map((t) => t.id)])];
-    if (save) try { localStorage.setItem(BOOK_KEY, JSON.stringify(book)); } catch { /* 無痕模式等 */ }
-    return { rank, top, opening, main: titles[0], extra: titles.slice(1), book, fresh: titles.map((t) => t.id).filter((id) => !before.includes(id)) };
+    const r = E.computeEnding(D, S, before);
+    if (save) saveBook(r.book);
+    return r;
   }
 
   async function share() {
@@ -1181,7 +1149,7 @@
 
   // 測試用：網址後面加 #結局 會直接跳到隨機的結局畫面（不影響正常遊戲）
   if (decodeURIComponent(location.hash) === '#結局') {
-    S = newState();
+    S = E.newState(D);
     const pick = (a) => a[Math.floor(Math.random() * a.length)];
     D.ALL.forEach((w) => { S.favor[w] = 20 + Math.floor(Math.random() * 80); });
     D.TARGETS.forEach((t) => { S.friend[t] = Math.floor(Math.random() * 60); });
