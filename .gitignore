@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Editor / OS noise
+*.swp
+*~
+
+# Node (if tools grow deps later)
+node_modules/
