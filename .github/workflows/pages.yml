@@ -1,0 +1,55 @@
+name: Deploy game to GitHub Pages
+
+# 只發佈遊戲本體（index.html / css / js / assets）到 Pages，
+# 設計文件 docs/ 與 BMad 工具不上線，避免劇透與雜訊。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - css/**
+      - js/**
+      - assets/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時只跑一個部署
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assemble site (game files only)
+        run: |
+          mkdir -p dist
+          cp index.html dist/
+          cp -r css js assets dist/
+          touch dist/.nojekyll   # 原樣送檔，不經 Jekyll 處理
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
