@@ -4,7 +4,7 @@ title: "代碼品質重構：抽出純引擎＋測試網"
 parent: initiative-lingrong-v1
 covers: ["R6"]
 after: []
-refined: false
+refined: true
 risk: medium
 ---
 
@@ -17,6 +17,33 @@ risk: medium
 ## Outcome
 
 之後要加玩法、改畫面的人，面對的是一份有測試保護、邏輯與畫面分離的程式碼：規則只有一份、改動有回歸網接住。
+
+## Requirements
+
+1. **純引擎抽離** (parent R6)
+   **Given** 規則邏輯目前混在 `game.js`
+   **When** 抽到 `js/engine.js`
+   **Then** 引擎不依賴 DOM，雙匯出（`window.GameEngine` + `module.exports`），所有隨機走注入的 `rand()`
+
+2. **引擎單元測試** (parent R6)
+   **Given** 抽出的引擎
+   **When** 以 `node --test` 執行
+   **Then** 夜晚結算、加料 `applySpike`、翻牌子權重、結局與封號判定都有單元測試且通過
+
+3. **回歸測試網** (parent R6)
+   **Given** headless harness
+   **When** 納入 repo 並執行
+   **Then** 一輪 10 天行為與重構前一致（20/20 到結局、0 錯誤）
+
+4. **模擬器併用同一引擎** (parent R6)
+   **Given** `tools/simulate.js` 目前自帶一份規則
+   **When** 改為 import 引擎
+   **Then** 重複規則刪除，模擬數字與先前/設計一致
+
+5. **外殼化** (parent R6)
+   **Given** 抽離完成後的 `game.js`
+   **When** 檢視其職責
+   **Then** 僅餘渲染/事件/對話/音效；`index.html` meta「五天」改為「十天」
 
 ## Boundaries
 

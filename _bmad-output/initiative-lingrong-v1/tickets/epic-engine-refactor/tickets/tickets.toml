@@ -1,0 +1,56 @@
+# Epic 1「代碼品質重構」的 stories，依 build order。tracer 先。
+
+[[entry]]
+id = 1
+type = "story"
+title = "引擎骨架＋回歸測試網（tracer）"
+description = "建 js/engine.js（雙匯出、注入 rand），先搬最末端純邏輯 newState＋computeEnding＋封號判定，game.js 改用之；headless harness 升級為 repo 回歸測試（node）。遊戲玩起來不變。"
+verify = "node 回歸測試一輪 20/20 到結局、0 錯誤；js/engine.js 匯出 computeEnding 且 game.js 改用；#結局 與瀏覽器實玩與先前一致。"
+covers = ["R1", "R3"]
+after = []
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "夜晚結算＋加料＋翻牌子 進引擎＋單元測試"
+description = "把 settleNight、applySpike/predict、翻牌子權重（含喜新厭舊/賄賂/黃后進言）搬進引擎，隨機走注入 rand；補 node --test 單元測試。"
+verify = "node --test：結算/加料/翻牌子權重單元測試通過；回歸測試一輪行為不變。"
+covers = ["R1", "R2"]
+after = [1]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 3
+type = "story"
+title = "每日流程與各行動 進引擎＋單元測試"
+description = "把 startDay/endDay/nextDay 與採集、調合、交貨、送禮、賄賂、訂單生成/逾期搬進引擎；補單元測試。"
+verify = "上述行動邏輯在引擎且有單元測試通過；回歸測試一輪行為不變。"
+covers = ["R1", "R2"]
+after = [2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "模擬器改用同一引擎"
+description = "tools/simulate.js 移除自帶的重複規則，改 import 引擎；四種 bot 統計重跑。"
+verify = "simulate.js 不再自帶規則；四種 bot 數字與先前/設計文件相符（白蓮花/妙音娘子/螽斯門等比例一致）。"
+covers = ["R4"]
+after = [3]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 5
+type = "story"
+title = "收尾 sweep：外殼化＋文案修正＋全套測試"
+description = "殘餘邏輯歸位、game.js 瘦成純外殼；index.html meta 五天→十天；跑完整 node --test＋回歸套件。範圍僅清理，不含新功能。"
+verify = "game.js 僅餘渲染/事件/對話/音效；index.html 顯示十天；完整單元＋回歸套件通過。"
+covers = ["R5"]
+after = [1, 2, 3, 4]
+hitl = false
+risk = "low"
