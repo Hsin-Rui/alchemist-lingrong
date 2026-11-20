@@ -1,0 +1,25 @@
+# 《煉金術士零溶》v1 — epics in build order.
+# Table order is build order. id is permanent.
+
+[[epic]]
+id = 1
+slug = "epic-engine-refactor"
+title = "代碼品質重構：抽出純引擎＋測試網"
+description = "不依賴 DOM 的純遊戲引擎從 game.js 抽離、行為不變，單元測試與 headless 回歸測試就位，模擬器改用同一引擎；規則只剩一份。"
+covers = ["R6"]
+
+[[epic]]
+id = 2
+slug = "epic-gather-minigame"
+title = "新玩法：採集互動小遊戲"
+description = "採集從單鍵改為可互動的小遊戲（進地圖、與物件互動取得素材），建在重構後的引擎上、有測試保護，不破壞既有一輪流程。"
+covers = ["R3"]
+after = [{ epic = 1, needs = "抽出的純引擎與回歸測試網" }]
+
+[[epic]]
+id = 3
+slug = "epic-ux-input"
+title = "提升 UX：電腦鍵盤操作與介面手感"
+description = "電腦版可用鍵盤操作（既有動作皆有鍵對應與焦點指示），整體操作手感改善；採集小遊戲帶出的新 UI 一併設計打磨。"
+covers = ["R4"]
+after = [{ epic = 1, needs = "重構後的畫面/事件層" }]
