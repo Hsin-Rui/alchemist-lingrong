@@ -1,9 +1,11 @@
 // 平衡模擬器：用機器人玩很多局，統計結果。
 // 用法：node tools/simulate.js [局數]
-// 規則是照 js/game.js 的邏輯複製過來的；改了遊戲規則（不是數值）時，這裡也要跟著改。
+// 規則一律走遊戲引擎（js/engine.js）；模擬器只提供 bot 決策、mulberry32 種子、variant 覆蓋、
+// CLI 輸出，以及把引擎回傳的結構化結果翻成 S.m 統計的薄膠水。改規則只要改引擎，不必動這裡。
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const E = require('../js/engine.js');
 
 function loadData() {
   const ctx = { window: {} };
@@ -12,224 +14,102 @@ function loadData() {
 }
 
 // ───────── 一局遊戲 ─────────
-function play(D, R, bot, rand) {
-  const pick = (arr) => arr[Math.floor(rand() * arr.length)];
-  const clamp = (n) => Math.max(0, Math.min(100, n));
-  const weightedPick = (table) => {
-    const total = table.reduce((s, [, w]) => s + w, 0);
-    let r = rand() * total;
-    for (const [id, w] of table) { if ((r -= w) < 0) return id; }
-    return table[table.length - 1][0];
-  };
-  const T = D.TARGETS;
-  const S = {
-    day: 1, slot: 0, silver: R.silver,
-    favor: { ...R.favor }, friend: { ...R.friend },
-    conc: Object.fromEntries(T.map((t) => [t, { status: R.status[t], preg: 0, musk: 0, debuff: null }])),
-    inv: { ...R.startInv }, orders: [], hand: [], seq: 0,
-    flip: null, bribe: 0, bribedToday: false, groundUntil: 0,
-    noFlipNights: 0, empressBoost: false, tired: false,
-    stats: { spikesUsed: 0, success: 0, caught: 0, groundedDays: 0, victims: [], ruined: [] },
-    m: { lingFlips: 0, sings: 0, pillow: 0, preg: 0, births: 0, miscarry: 0, infertile: 0, serveFail: 0,
-      delivered: 0, late: 0, ordersTotal: 0, bribes: 0, gifts: 0, refused: 0, empress: 0, silverEarned: 0 },
+// 規則全部走引擎：newState/startDay/settleNight/applySpike（經 deliver/gift）/gather/craft/
+// buy/bribe/flipWeights/catchChance/acceptChance/computeEnding。此處只保留 bot 介面的薄膠水：
+// 前置守衛（禁足、材料是否足夠）、把引擎結構化回傳翻成 S.m 統計。擲骰一律走注入的 rand，
+// 與引擎同序，故固定種子下輸出與重構前一致。
+function play(Dv, R, bot, rand) {
+  const S = E.newState(Dv);
+  // 統計物件（引擎不寫 S.m，由本檔從報告／結果翻出）
+  S.m = {
+    lingFlips: 0, sings: 0, pillow: 0, preg: 0, births: 0, miscarry: 0, infertile: 0, serveFail: 0,
+    delivered: 0, late: 0, ordersTotal: 0, bribes: 0, gifts: 0, refused: 0, empress: 0, silverEarned: 0,
   };
   const have = (id) => S.inv[id] || 0;
-  const invAdd = (id, n = 1) => { S.inv[id] = (S.inv[id] || 0) + n; if (S.inv[id] <= 0) delete S.inv[id]; };
-  const addFavor = (w, n) => { const b = S.favor[w]; S.favor[w] = clamp(b + n); return S.favor[w] - b; };
-  const addFriend = (w, n) => { const b = S.friend[w]; S.friend[w] = clamp(b + n); return S.friend[w] - b; };
   const grounded = () => S.day <= S.groundUntil;
-  const catchChance = (who, spike, via) => D.ITEMS[spike].catch
-    * Math.max(R.friendCatchFloor, 1 - S.friend[who] / R.friendCatchDivisor)
-    * (via === 'deliver' ? R.deliverCatchFactor : 1);
-  const pillowChance = (who) => Math.max(0, Math.min(R.pillowMax, S.friend[who] - R.pillowBase)) / 100;
-  const acceptChance = (who) => Math.min(100, S.friend[who] + R.giftAcceptBonus) / 100;
-  const findRecipe = (a, b) => Object.keys(D.PRODUCTS).find((pid) => {
-    const r = D.PRODUCTS[pid].recipe;
-    return r && ((r[0] === a && r[1] === b) || (r[0] === b && r[1] === a));
-  });
-  function flipWeights(bribe = S.bribe) {
-    const w = {};
-    if (!grounded()) w.lingrong = Math.max(1, S.favor.lingrong) * (S.empressBoost ? R.empressFactor : 1) + bribe;
-    T.forEach((t) => { if (S.conc[t].status !== 'pregnant') w[t] = Math.max(1, S.favor[t]); });
-    if (S.flip && w[S.flip]) w[S.flip] *= R.repeatFlipFactor;
-    return w;
-  }
 
-  function applySpike(who, spike, via) {
-    if (!spike) return { outcome: 'plain' };
-    S.stats.spikesUsed++;
-    const it = D.ITEMS[spike];
-    if (rand() < catchChance(who, spike, via)) {
-      addFriend(who, R.caughtFriend);
-      S.groundUntil = Math.max(S.groundUntil, S.day + it.ground);
-      S.stats.caught++;
-      S.stats.groundedDays += it.ground;
-      return { outcome: 'caught', caught: true };
+  // 引擎 applySpike 的 outcome → S.m（害人成效統計）。被抓/無效/正經皆不計。
+  const tallySpike = (res) => {
+    switch (res.outcome) {
+      case 'miscarry_musk': S.m.miscarry++; break;
+      case 'miscarry_safflower': S.m.miscarry++; S.m.infertile++; break;
+      case 'musk_infertile':
+      case 'safflower_infertile': S.m.infertile++; break;
+      default: break;
     }
-    const c = S.conc[who];
-    let outcome; let fav = 0; let ruin = false;
-    if (spike === 'musk') {
-      if (c.status === 'infertile') outcome = 'musk_useless';
-      else {
-        c.musk++;
-        if (c.status === 'pregnant') {
-          if (rand() < R.muskMiscarryChance) { outcome = 'miscarry'; fav = R.fx.miscarry; c.status = 'normal'; c.preg = 0; ruin = true; S.m.miscarry++; }
-          else outcome = 'musk_miss';
-        } else if (c.musk >= R.muskDoses) { outcome = 'infertile'; fav = R.fx.infertile; c.status = 'infertile'; ruin = true; S.m.infertile++; }
-        else outcome = 'musk_dose';
-      }
-    } else if (spike === 'safflower') {
-      if (c.status === 'infertile') outcome = 'saff_useless';
-      else if (c.status === 'pregnant') { outcome = 'miscarry'; fav = R.fx.saffMiscarry; c.status = 'infertile'; c.preg = 0; ruin = true; S.m.miscarry++; S.m.infertile++; }
-      else { outcome = 'infertile'; fav = R.fx.infertile; c.status = 'infertile'; ruin = true; S.m.infertile++; }
-    } else { outcome = 'debuff'; c.debuff = spike; fav = R.fx[spike]; }
-    const useless = outcome.endsWith('_useless');
-    if (fav) addFavor(who, fav);
-    if (!useless) { S.stats.success++; if (!S.stats.victims.includes(who)) S.stats.victims.push(who); }
-    if (ruin && !S.stats.ruined.includes(who)) S.stats.ruined.push(who);
-    if (ruin && spike === 'musk') S.m.muskRuin = (S.m.muskRuin || 0) + 1;
-    return { outcome, useless };
-  }
+  };
 
-  function startDay() {
-    if (S.tired) { S.tired = false; S.slot = 1; }
-    S.orders = S.orders.filter((o) => {
-      if (o.due >= S.day) return true;
-      addFriend(o.who, R.lateFriend); S.m.late++;
-      return false;
-    });
-    const boosted = S.empressBoost && !grounded();
-    if (boosted) S.m.empress++;
-    const entries = Object.entries(flipWeights());
-    S.flip = entries.length ? weightedPick(entries) : null;
-    if (boosted) S.empressBoost = false;
-    S.bribe = 0; S.bribedToday = false;
-    const n = weightedPick(R.orderCountWeights);
-    const cands = T.filter((t) => S.orders.filter((o) => o.who === t).length < R.maxOpenOrdersPerChar);
-    for (let i = 0; i < n && cands.length; i++) {
-      const who = cands.splice(Math.floor(rand() * cands.length), 1)[0];
-      const product = S.conc[who].status === 'pregnant' ? 'tonic' : pick(D.NORMAL_ORDERS);
-      S.orders.push({ id: ++S.seq, who, product, due: S.day + R.orderDays - 1 });
-      S.m.ordersTotal++;
-    }
-  }
-
-  function settleNight(sing) {
-    const who = S.flip;
-    let conceived = null; let servedLing = false;
-    if (who === 'lingrong') {
-      if (!grounded()) {
-        addFavor('lingrong', R.serveFavor + (sing ? R.singExtraFavor : 0));
-        S.tired = sing; servedLing = true; S.m.lingFlips++; if (sing) S.m.sings++;
-      }
-    } else if (who) {
-      const c = S.conc[who];
-      if (c.debuff) { addFavor(who, R.serveFailFavor); S.m.serveFail++; }
-      else {
-        addFavor(who, R.serveFavor);
-        if (rand() < pillowChance(who)) { addFavor('lingrong', R.pillowFavor); S.m.pillow++; }
-        if (c.status === 'normal' && rand() < R.pregnancyChance) { c.status = 'pregnant'; c.preg = 0; conceived = who; S.m.preg++; }
-      }
-    }
-    T.forEach((t) => {
-      const c = S.conc[t];
-      if (c.status !== 'pregnant' || t === conceived) return;
-      if (++c.preg >= R.pregnancyNights) { c.status = 'normal'; c.preg = 0; addFavor(t, R.birthFavor); S.m.births++; }
-    });
-    T.forEach((t) => { S.conc[t].debuff = null; });
-    if (servedLing) S.noFlipNights = 0;
-    else if (++S.noFlipNights >= R.empressNights) { S.noFlipNights = 0; S.empressBoost = true; }
-  }
-
-  // 給機器人用的動作
+  // 給機器人用的動作：簽章維持與重構前一致，內部改呼叫引擎並把結果翻成 S.m。
   const api = {
-    S, D, R, have, grounded, catchChance, acceptChance, findRecipe, rand,
+    S, D: Dv, R, have, grounded, rand,
+    catchChance: (who, spike, via) => E.catchChance(Dv, S, who, spike, via),
+    acceptChance: (who) => E.acceptChance(Dv, S, who),
+    findRecipe: (a, b) => E.findRecipe(Dv, a, b),
+    // 零溶明天被翻的機率（純量）；沿用重構前語意（權重全空時為 NaN）。
     flipOdds(bribe) {
-      const w = flipWeights(bribe);
+      const w = E.flipWeights(Dv, S, bribe);
       const tot = Object.values(w).reduce((a, b) => a + b, 0);
       return (w.lingrong || 0) / tot;
     },
-    buy(id) { const p = D.ITEMS[id].price; if (S.silver < p) return false; S.silver -= p; invAdd(id); return true; },
-    bribe() {
-      if (S.bribedToday || S.silver < R.bribeCost) return false;
-      S.silver -= R.bribeCost; S.bribe += R.bribeWeight; S.bribedToday = true; S.m.bribes++; return true;
-    },
+    buy(id) { return E.buy(Dv, S, id).ok; },
+    bribe() { const r = E.bribe(Dv, S); if (r.ok) S.m.bribes++; return r.ok; },
     gather(loc) {
       if (grounded()) return false;
-      S.slot++;
-      const n = 2 + (rand() < 0.5 ? 1 : 0);
-      for (let i = 0; i < n; i++) invAdd(weightedPick(D.GATHER[loc].table));
+      E.gather(Dv, S, loc, rand);
       return true;
     },
     craft(a, b, spike) {
+      // 材料不足由 bot 端先擋（引擎的 craft 不檢查）
       if (have(a) < 1 || have(b) < 1 || (a === b && have(a) < 2)) return false;
-      S.slot++;
-      invAdd(a, -1); invAdd(b, -1);
-      const product = findRecipe(a, b) || 'junk';
-      const toInv = D.PRODUCTS[product].out === 'inv';
-      const sp = toInv ? null : spike;
-      if (sp) invAdd(sp, -1);
-      if (toInv) invAdd(product);
-      else S.hand.push({ id: ++S.seq, product, spike: product === 'junk' ? null : sp });
-      return product;
+      return E.craft(Dv, S, { mats: [a, b], spike }).product;
     },
     deliver(order) {
       if (grounded()) return false;
+      // 沿用重構前的選件：手上第一個符合品項的成品
       const item = S.hand.find((h) => h.product === order.product);
       if (!item) return false;
-      S.slot++;
-      S.orders = S.orders.filter((o) => o !== order);
-      S.hand = S.hand.filter((h) => h !== item);
-      const res = applySpike(order.who, item.spike, 'deliver');
-      if (!res.caught) {
-        const base = D.PRODUCTS[item.product].reward;
-        const reward = res.useless ? Math.round(base * R.uselessRewardRate) : base;
-        if (!res.useless) addFriend(order.who, R.deliverFriend);
-        S.silver += reward; S.m.silverEarned += reward;
-      }
+      const res = E.deliver(Dv, S, order.id, item.id, rand);
       S.m.delivered++;
+      if (!res.caught) S.m.silverEarned += res.reward;
+      tallySpike(res);
       return true;
     },
     gift(who, item) {
       if (grounded() || item.product === 'junk') return false;
       if (item.spike && who !== S.flip) return false;
-      S.slot++; S.m.gifts++;
-      if (rand() >= acceptChance(who)) { S.m.refused++; return 'refused'; }
-      S.hand = S.hand.filter((h) => h !== item);
-      const res = applySpike(who, item.spike, 'gift');
-      if (!res.caught && !res.useless) addFriend(who, D.PRODUCTS[item.product].gift);
+      S.m.gifts++;
+      const res = E.gift(Dv, S, who, item.id, rand);
+      if (res.refused) { S.m.refused++; return 'refused'; }
+      tallySpike(res);
       return true;
     },
   };
 
   for (S.day = 1; S.day <= R.days; S.day++) {
     S.slot = 0;
-    startDay();
+    const sd = E.startDay(Dv, S, rand);
+    S.m.late += sd.lapsed.length;
+    S.m.ordersTotal += sd.newOrders.length;
+    if (sd.boosted) S.m.empress++;
     let guard = 0;
     while (S.slot < R.slotsPerDay && guard++ < 10) { if (!bot.act(api)) break; }
     bot.evening?.(api);
-    settleNight(S.flip === 'lingrong' && !grounded() && bot.sing !== false);
+    const sing = S.flip === 'lingrong' && !grounded() && bot.sing !== false;
+    const nr = E.settleNight(Dv, S, { sing, rand });
+    const sv = nr.serve;
+    if (sv && sv.target === 'lingrong' && sv.kind !== 'grounded') S.m.lingFlips++;
+    if (sv && sv.kind === 'sing') S.m.sings++;
+    if (sv && sv.kind === 'debuff') S.m.serveFail++;
+    if (nr.pillow) S.m.pillow++;
+    if (nr.conceived) S.m.preg++;
+    S.m.births += nr.births.length;
   }
-  const f = S.favor; const st = S.stats;
-  const rank = 1 + T.filter((t) => f[t] >= f.lingrong).length;
-  // 封號（照 js/game.js 的 TITLE_CHECK；調合失敗機器人不會發生，所以沒有 heian）
-  const minF = Math.min(...T.map((t) => S.friend[t]));
-  const CHECK = {
-    shexiang: S.m.muskRuin > 0,
-    shuangmian: st.victims.length === 3 && st.caught === 0 && minF >= 35,
-    duanzi: ['meizhuang', 'zhenhuan'].every((t) => st.ruined.includes(t)),
-    wentaiyi: st.caught >= 2,
-    guimi: minF >= 40,
-    baimang: st.spikesUsed > 0 && st.success === 0,
-    jingshi: S.m.bribes >= 2,
-    miaoyin: S.m.sings >= 2,
-    bailian: st.spikesUsed === 0,
-    heian: false,
-    zhongsi: S.m.births > 0,
-  };
-  const titles = D.TITLES.map((t) => t.id).filter((id) => CHECK[id]);
-  const ending = titles[0] || 'touming';
-  return { S, rank, ending, titles };
+
+  // 名次／封號一律走引擎的 computeEnding（封號冊傳空陣列，模擬器不收集）。
+  // computeEnding 無封號時回 touming；重構前的 titles 只收真封號、不含 touming，故濾掉。
+  const end = E.computeEnding(Dv, S, []);
+  const titles = [end.main, ...end.extra].map((t) => t.id).filter((id) => id !== 'touming');
+  return { S, rank: end.rank, ending: end.main.id, titles };
 }
 
 // ───────── 機器人 ─────────
@@ -321,6 +201,8 @@ function mulberry32(a) {
 function runVariant(D0, variant, N) {
   const D = JSON.parse(JSON.stringify(D0, (k, v) => (typeof v === 'function' ? undefined : v)));
   const R = { ...D.RULES, ...(variant.rules || {}), fx: { ...D.RULES.fx, ...((variant.rules || {}).fx || {}) } };
+  // 把合併後的規則烘回 D.RULES，供引擎（讀 D.RULES）套用 variant 覆蓋
+  D.RULES = R;
   Object.entries(variant.items || {}).forEach(([id, o]) => Object.assign(D.ITEMS[id], o));
   Object.entries(variant.products || {}).forEach(([id, o]) => Object.assign(D.PRODUCTS[id], o));
   const out = {};

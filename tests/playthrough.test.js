@@ -1,0 +1,153 @@
+// 回歸測試：用 node 內建假 DOM 真的載入 js/engine.js + js/game.js，
+// 自動點擊玩完一輪，確認遊戲能從頭玩到結局且不 throw。
+// 執行：node --test tests/
+const { test } = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const ROOT = path.join(__dirname, '..');
+const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+
+function parseDlgFull(html) {
+  const m = html.match(/class="[^"]*dlg-text[^"]*"[^>]*data-full="([^"]*)"/);
+  return m ? m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&') : '';
+}
+function makeNode() {
+  return {
+    dataset: {}, style: {}, _html: '',
+    classList: { add() {}, remove() {}, contains() { return false; } },
+    set innerHTML(v) { this._html = String(v); }, get innerHTML() { return this._html; },
+    set textContent(v) {}, get textContent() { return ''; },
+    setAttribute() {}, removeAttribute() {}, appendChild() {}, remove() {},
+    addEventListener() {}, focus() {},
+    querySelector() { return null; }, querySelectorAll() { return []; },
+  };
+}
+
+// 載入 data.js → engine.js → game.js，回傳一個可驅動的遊戲實例
+function bootGame({ hash = '' } = {}) {
+  const app = makeNode();
+  let clickHandler = null;
+  app.addEventListener = (type, fn) => { if (type === 'click') clickHandler = fn; };
+  app.querySelector = (sel) => {
+    if (sel === '.dlg-text') {
+      const full = parseDlgFull(app._html);
+      return { dataset: { full }, set innerHTML(v) {}, get innerHTML() { return ''; } };
+    }
+    return null;
+  };
+  app.querySelectorAll = () => [];
+
+  const sandbox = {
+    console,
+    setTimeout: (fn) => { try { if (typeof fn === 'function') fn(); } catch (e) { /* 忽略 */ } return 0; },
+    clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
+    requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},
+    Math, Date, JSON, Object, Array, String, Number, Boolean, Set, Map, RegExp, Promise, parseInt, parseFloat, isNaN,
+    Image: class { set src(v) {} },
+    localStorage: (() => { const s = new Map(); return { getItem: (k) => (s.has(k) ? s.get(k) : null), setItem: (k, v) => s.set(k, String(v)), removeItem: (k) => s.delete(k) }; })(),
+    location: { hash, href: '' },
+    navigator: {},
+    document: { getElementById: (id) => (id === 'app' ? app : null), createElement: () => makeNode(), body: makeNode(), addEventListener() {}, querySelector: () => null },
+  };
+  sandbox.window = sandbox;
+  sandbox.globalThis = sandbox;
+  sandbox.window.GameAudio = { sfx() {}, playBgm() {}, toggleMute() {}, isMuted() { return false; }, unlock() {} };
+
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(read('js/data.js'), ctx, { filename: 'data.js' });
+  vm.runInContext(read('js/engine.js'), ctx, { filename: 'engine.js' });
+  vm.runInContext(read('js/game.js'), ctx, { filename: 'game.js' });
+
+  function parseButtons(html) {
+    const btns = []; const re = /<[^>]*\bdata-a="([^"]*)"[^>]*>/g; let m;
+    while ((m = re.exec(html))) {
+      const tag = m[0];
+      const v = (tag.match(/\bdata-v="([^"]*)"/) || [])[1];
+      btns.push({ a: m[1], v, disabled: /\bdisabled\b/.test(tag) });
+    }
+    return btns;
+  }
+  function click(a, v) {
+    clickHandler({ target: { closest: () => ({ dataset: { a, v }, disabled: false }) }, stopPropagation() {}, preventDefault() {} });
+  }
+  return { app, parseButtons, click };
+}
+
+// 自動玩一輪，回傳 { endedScreen, clicks, screens }
+function autoplay() {
+  const g = bootGame();
+  const visited = new Set();
+  let clicks = 0;
+  const screens = new Set();
+  for (let i = 0; i < 800; i++) {
+    const screen = g.app.dataset.screen; screens.add(screen);
+    if (screen === 'ending') return { endedScreen: 'ending', clicks, screens };
+    const btns = g.parseButtons(g.app._html).filter((b) => !b.disabled);
+    const has = (a) => btns.find((b) => b.a === a);
+    const dlgActive = /data-a="(skip|adv)"/.test(g.app._html);
+    let pick = null;
+    if (has('skip')) pick = has('skip');
+    else if (has('adv')) pick = has('adv');
+    else if (has('start') && !dlgActive && (screen === 'title' || screen === 'result')) pick = has('start');
+    else if (has('sing')) pick = { a: 'sing', v: '0' };
+    else if (has('next')) pick = has('next');
+    else if (has('resultdone')) pick = has('resultdone');
+    else if (has('sleepyes')) pick = has('sleepyes');
+    else if (has('closemodal')) pick = has('closemodal');
+    else {
+      // 巡覽各畫面一次（渲染覆蓋），以睡覺保證日程推進到結局。
+      // 註：更深的「真的採集/調合/交貨/加料被抓/演唱」行動覆蓋，待 story 1.2
+      // 那些邏輯搬入引擎時，以可重現的 seeded 引擎層單元測試補上（見 deferred-work）。
+      const tour = btns.find((b) => ['go', 'goto', 'craftfor', 'giftto'].includes(b.a) && b.v !== undefined && !visited.has(b.a + ':' + b.v));
+      if (tour) { visited.add(tour.a + ':' + tour.v); pick = tour; }
+      else if (has('sleep')) pick = has('sleep');
+      else if (has('go')) pick = { a: 'go', v: 'home' };
+      else pick = btns.find((b) => !['share', 'mute', 'bribe'].includes(b.a));
+    }
+    if (!pick) return { endedScreen: screen, clicks, screens, stuck: true };
+    g.click(pick.a, pick.v); clicks++;
+  }
+  return { endedScreen: g.app.dataset.screen, clicks, screens, exhausted: true };
+}
+
+test('遊戲開機並自動玩完一輪到結局（20 局）', () => {
+  for (let i = 0; i < 20; i++) {
+    const r = autoplay();
+    assert.strictEqual(r.endedScreen, 'ending', `第 ${i + 1} 局未到結局（stuck=${r.stuck}, exhausted=${r.exhausted}）`);
+    assert.ok(r.clicks > 0 && r.clicks < 800, `第 ${i + 1} 局點擊數異常：${r.clicks}`);
+  }
+});
+
+test('#結局 debug 路徑能算出並渲染結局（6 種隨機狀態）', () => {
+  for (let i = 0; i < 6; i++) {
+    const g = bootGame({ hash: '#結局' });
+    assert.strictEqual(g.app.dataset.screen, 'ending', '未進入結局畫面');
+    assert.ok(g.app._html.length > 500, '結局畫面內容過短');
+  }
+});
+
+test('引擎雙匯出、原始碼不碰 DOM/localStorage，且 computeEnding 為確定性純函式', () => {
+  const E = require('../js/engine.js');
+  assert.ok(typeof E.newState === 'function' && typeof E.computeEnding === 'function' && E.TITLE_CHECK, '引擎未正確匯出');
+
+  // 純度：引擎程式碼（去掉註解後）不得引用 DOM / localStorage / Math.random
+  const src = read('js/engine.js')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+  assert.ok(!/localStorage/.test(src), '引擎不應引用 localStorage');
+  assert.ok(!/\bdocument\b/.test(src), '引擎不應引用 document');
+  assert.ok(!/Math\.random/.test(src), '引擎不應直接呼叫 Math.random（隨機應走注入的 rand）');
+
+  // computeEnding 確定性：同輸入同輸出
+  const ctx = { window: {} };
+  vm.runInNewContext(read('js/data.js'), ctx);
+  const D = ctx.window.GAME_DATA;
+  const S = E.newState(D);
+  const r1 = E.computeEnding(D, S, []);
+  const r2 = E.computeEnding(D, S, []);
+  assert.deepStrictEqual(r1, r2, 'computeEnding 對同一輸入不穩定');
+  assert.ok(r1.main && typeof r1.rank === 'number' && Array.isArray(r1.opening), '結局結構不完整');
+});
