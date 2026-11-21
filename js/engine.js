@@ -26,6 +26,23 @@
     for (const [id, w] of table) { if ((r -= w) < 0) return id; }
     return table[table.length - 1][0];
   }
+  function invAdd(S, id, n = 1) {
+    S.inv[id] = (S.inv[id] || 0) + n;
+    if (S.inv[id] <= 0) delete S.inv[id];
+  }
+  const pick = (arr, rand) => arr[Math.floor(rand() * arr.length)];
+  const itemName = (D, id) => (D.ITEMS[id] || D.PRODUCTS[id]).name;
+  const have = (S, id) => S.inv[id] || 0;
+  // 手上有好幾個同樣的成品時，用最新做好的那個
+  const readyItem = (S, o) => S.hand.filter((h) => h.product === o.product).pop();
+  const recipeOk = (D, S, pid) => D.PRODUCTS[pid].recipe.every((id) => have(S, id) >= 1);
+  function findRecipe(D, a, b) {
+    return Object.keys(D.PRODUCTS).find((pid) => {
+      const r = D.PRODUCTS[pid].recipe;
+      return r && ((r[0] === a && r[1] === b) || (r[0] === b && r[1] === a));
+    });
+  }
+  const acceptChance = (D, S, who) => Math.min(100, S.friend[who] + D.RULES.giftAcceptBonus) / 100;
 
   function newState(D) {
     const R = D.RULES;
@@ -263,10 +280,175 @@
     return report;
   }
 
+  // ───────── 流程與各行動 ─────────
+  // 純狀態變更（擲骰走注入的 rand），回傳結構化結果/報告；外殼只負責 UI 回饋與路由。
+  // 狀態變更（inv/hand/orders/silver/slot/seq/bribe*/favor/friend/stats/dayLog/result/tired/旗標）由此負責。
+
+  // 買材料：足銀 → 扣錢、入庫；銀不足 → { ok:false }
+  function buy(D, S, id) {
+    const p = D.ITEMS[id].price;
+    if (S.silver < p) return { ok: false };
+    S.silver -= p;
+    invAdd(S, id);
+    return { ok: true };
+  }
+
+  // 賄賂敬事房：足銀且未打點 → 扣錢、加權、記錄；否則 { ok:false, reason }
+  function bribe(D, S) {
+    const R = D.RULES;
+    if (S.bribedToday) return { ok: false, reason: 'done' };
+    if (S.silver < R.bribeCost) return { ok: false, reason: 'poor' };
+    S.silver -= R.bribeCost;
+    S.bribe += R.bribeWeight;
+    S.bribedToday = true;
+    S.stats.bribes++;
+    return { ok: true };
+  }
+
+  // 婉拒訂單：移訂單、友好 -、記 dayLog，回 { who }；找不到 → null
+  function rejectOrder(D, S, id) {
+    const R = D.RULES;
+    const o = S.orders.find((x) => x.id === id);
+    if (!o) return null;
+    S.orders = S.orders.filter((x) => x !== o);
+    addFriend(S, o.who, R.rejectFriend);
+    S.dayLog.push(`婉拒了${charName(D, o.who)}的訂單，友好 ${R.rejectFriend}`);
+    return { who: o.who };
+  }
+
+  // 採集：slot++，採 2+(rand<0.5?1:0) 個（各 weightedPick）進 inv，回 { loc, got, ready }
+  function gather(D, S, loc, rand) {
+    const g = D.GATHER[loc];
+    S.slot++;
+    const n = 2 + (rand() < 0.5 ? 1 : 0);
+    const got = {};
+    for (let i = 0; i < n; i++) {
+      const id = weightedPick(g.table, rand);
+      got[id] = (got[id] || 0) + 1;
+      invAdd(S, id);
+    }
+    const ready = S.orders.filter((o) => !readyItem(S, o) && recipeOk(D, S, o.product));
+    S.dayLog.push(`在${g.name}採集：${Object.entries(got).map(([id, c]) => `${itemName(D, id)}×${c}`).join('、')}`);
+    return { loc, got, ready };
+  }
+
+  // 調合（確定性，無 rand）：slot++、材料 -1、findRecipe→成品或 junk；成品入 hand/inv。
+  function craft(D, S, craftSel) {
+    const [a, b] = craftSel.mats;
+    S.slot++;
+    invAdd(S, a, -1); invAdd(S, b, -1);
+    const product = findRecipe(D, a, b) || 'junk';
+    if (product === 'junk') S.stats.junk++;
+    const toInv = D.PRODUCTS[product].out === 'inv';
+    const spike = toInv ? null : craftSel.spike;
+    if (spike) invAdd(S, spike, -1);
+    if (toInv) invAdd(S, product);
+    const item = toInv ? null : { id: ++S.seq, product, spike: product === 'junk' ? null : spike };
+    if (item) S.hand.push(item);
+    // 從訂單進來的就送那張訂單；否則找第一張要這個成品的訂單
+    const order = S.orders.find((o) => o.id === craftSel.forOrder && o.product === product) || S.orders.find((o) => o.product === product);
+    S.dayLog.push(product === 'junk' ? '調合失敗，做出一坨黑黑的東西' : `調合了${itemName(D, product)}${spike ? `（加了${itemName(D, spike)}）` : ''}`);
+    return { product, spike, toInv, lostSpike: product === 'junk' && spike, order, itemId: item && item.id };
+  }
+
+  // 交貨：移訂單＋手牌，applySpike，未被抓給 reward（無效×uselessRewardRate）＋deliverFriend，設 S.result。
+  // itemId：指定要送哪一個成品（剛調合好的那個）；沒指定就送最新做好的。找不到成品 → { noItem:true }
+  function deliver(D, S, orderId, itemId, rand) {
+    const R = D.RULES;
+    const order = S.orders.find((o) => o.id === orderId);
+    const item = order && ((itemId && S.hand.find((h) => h.id === itemId && h.product === order.product)) || readyItem(S, order));
+    if (!item) return { noItem: true };
+    S.slot++;
+    S.orders = S.orders.filter((o) => o !== order);
+    S.hand = S.hand.filter((h) => h !== item);
+    const who = order.who;
+    const res = applySpike(D, S, who, item.spike, 'deliver', rand);
+    let reward = 0;
+    let friendDelta = res.friendDelta || 0;
+    if (!res.caught) {
+      const base = D.PRODUCTS[item.product].reward;
+      reward = res.useless ? Math.round(base * R.uselessRewardRate) : base;
+      if (!res.useless) friendDelta = addFriend(S, who, R.deliverFriend);
+      S.silver += reward;
+    }
+    S.result = { kind: 'deliver', who, product: item.product, spike: item.spike, reward, friendDelta, ...res };
+    S.dayLog.push(`交貨給${charName(D, who)}：${res.caught ? '被抓！' : `賞銀 +${reward}`}${res.label ? `，${res.label}` : ''}`);
+    return S.result;
+  }
+
+  // 送禮：rand>=acceptChance → 拒收（S.result.refused）；否則 applySpike＋收禮友好，設 S.result。
+  // junk／加料非侍寢者由外殼先擋；找不到成品 → { noItem:true }，被擋 → { blocked:true }
+  function gift(D, S, who, handId, rand) {
+    const item = S.hand.find((h) => h.id === handId);
+    if (!item || item.product === 'junk') return { noItem: true };
+    if (item.spike && who !== S.flip) return { blocked: true };
+    S.slot++;
+    if (rand() >= acceptChance(D, S, who)) {
+      S.result = { kind: 'gift', who, product: item.product, spike: item.spike, refused: true, friendDelta: 0 };
+      S.dayLog.push(`送禮給${charName(D, who)}被拒收`);
+      return S.result;
+    }
+    S.hand = S.hand.filter((h) => h !== item);
+    const res = applySpike(D, S, who, item.spike, 'gift', rand);
+    let friendDelta = res.friendDelta || 0;
+    if (!res.caught && !res.useless) friendDelta = addFriend(S, who, D.PRODUCTS[item.product].gift);
+    S.result = { kind: 'gift', who, product: item.product, spike: item.spike, friendDelta, reward: 0, ...res };
+    S.dayLog.push(`送${itemName(D, item.product)}給${charName(D, who)}${res.caught ? '，被抓！' : res.label ? `，${res.label}` : ''}`);
+    return S.result;
+  }
+
+  // 開日：重置 dayLog；tired→slot=1；逾期訂單移除＋lateFriend；chooseFlip＋消耗 empressBoost＋重置 bribe；
+  // 生成新訂單（weightedPick＋隨機抽對象）。回報告，外殼 renderStartLines 據此組對話。
+  // rand 擲骰順序：chooseFlip → weightedPick(orderCountWeights) → 逐張訂單抽對象＋pick(NORMAL_ORDERS)。
+  function startDay(D, S, rand) {
+    const R = D.RULES;
+    S.dayLog = [];
+    const report = { tired: false, lapsed: [], grounded: false, boosted: false, flip: null, flipFriend: 0, newOrders: [], noOrders: false };
+    if (S.tired) { S.tired = false; S.slot = 1; report.tired = true; }
+    // 逾期
+    S.orders = S.orders.filter((o) => {
+      if (o.due >= S.day) return true;
+      addFriend(S, o.who, R.lateFriend);
+      report.lapsed.push({ who: o.who, product: o.product });
+      S.dayLog.push(`${charName(D, o.who)}的訂單逾期，友好 ${R.lateFriend}`);
+      return false;
+    });
+    const grounded = S.day <= S.groundUntil;
+    report.grounded = grounded;
+    // 翻牌子
+    const boosted = S.empressBoost && !grounded;
+    report.boosted = boosted;
+    S.flip = chooseFlip(D, S, rand);
+    if (boosted) S.empressBoost = false;
+    S.bribe = 0;
+    S.bribedToday = false;
+    report.flip = S.flip;
+    if (S.flip && D.TARGETS.includes(S.flip)) report.flipFriend = S.friend[S.flip];
+    // 新訂單
+    const n = weightedPick(R.orderCountWeights, rand);
+    const cands = D.TARGETS.filter((t) => S.orders.filter((o) => o.who === t).length < R.maxOpenOrdersPerChar);
+    for (let i = 0; i < n && cands.length; i++) {
+      const who = cands.splice(Math.floor(rand() * cands.length), 1)[0];
+      const product = S.conc[who].status === 'pregnant' ? 'tonic' : pick(D.NORMAL_ORDERS, rand);
+      S.orders.push({ id: ++S.seq, who, product, due: S.day + R.orderDays - 1 });
+      report.newOrders.push({ who, product });
+    }
+    report.noOrders = (n === 0);
+    return report;
+  }
+
+  // 進日：day++、slot=0（外殼在 day>=days 時改走結局）
+  function advanceDay(D, S) {
+    S.day++;
+    S.slot = 0;
+  }
+
   const API = {
     newState, TITLE_CHECK, computeEnding,
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
+    findRecipe, acceptChance,
+    buy, bribe, rejectOrder, gather, craft, deliver, gift, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof window !== 'undefined') window.GameEngine = API;

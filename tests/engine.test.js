@@ -276,6 +276,224 @@ test('封號路徑：caught/muskRuin/sings/births/spikesUsed+success 驅動對�
   assert.strictEqual(E.TITLE_CHECK.zhongsi(S), true);
 });
 
+// ───────── 流程與各行動（seeded）─────────
+
+test('buy：足銀 → 扣錢入庫 ok:true；銀不足 → ok:false', () => {
+  const S = fresh();
+  const before = S.silver;
+  const r = E.buy(D, S, 'musk'); // 50 銀
+  assert.deepStrictEqual(r, { ok: true });
+  assert.strictEqual(S.silver, before - D.ITEMS.musk.price);
+  assert.strictEqual(S.inv.musk, 1);
+  // 銀不足
+  S.silver = 0;
+  assert.deepStrictEqual(E.buy(D, S, 'musk'), { ok: false });
+  assert.strictEqual(S.inv.musk, 1, '失敗不入庫');
+});
+
+test('bribe：足銀未打點 → 扣錢加權記 stat；已打點 → done；銀不足 → poor', () => {
+  const S = fresh();
+  S.silver = 200;
+  const r = E.bribe(D, S);
+  assert.deepStrictEqual(r, { ok: true });
+  assert.strictEqual(S.silver, 200 - D.RULES.bribeCost); // 50
+  assert.strictEqual(S.bribe, D.RULES.bribeWeight); // 100
+  assert.strictEqual(S.bribedToday, true);
+  assert.strictEqual(S.stats.bribes, 1);
+  // 已打點
+  assert.deepStrictEqual(E.bribe(D, S), { ok: false, reason: 'done' });
+  // 銀不足（重置打點旗標）
+  S.bribedToday = false; S.silver = 10;
+  assert.deepStrictEqual(E.bribe(D, S), { ok: false, reason: 'poor' });
+  assert.strictEqual(S.stats.bribes, 1, '失敗不計 stat');
+});
+
+test('rejectOrder：移訂單、友好 rejectFriend、記 dayLog、回 {who}；找不到 → null', () => {
+  const S = fresh();
+  S.orders = [{ id: 7, who: 'zhenhuan', product: 'cake', due: 3 }];
+  const r = E.rejectOrder(D, S, 7);
+  assert.deepStrictEqual(r, { who: 'zhenhuan' });
+  assert.strictEqual(S.orders.length, 0);
+  assert.strictEqual(S.friend.zhenhuan, 50 + D.RULES.rejectFriend); // 49
+  assert.ok(S.dayLog.some((l) => l.includes('婉拒')));
+  assert.strictEqual(E.rejectOrder(D, S, 999), null);
+});
+
+test('gather：slot++、採 2+(rand<0.5?1:0) 個、各 weightedPick 入庫、回 {loc,got,ready}', () => {
+  // ZERO：數量 3、weightedPick 取第一條（御花園→jasmine）
+  const S = fresh();
+  const r = E.gather(D, S, 'garden', ZERO);
+  assert.strictEqual(S.slot, 1);
+  assert.deepStrictEqual(r.got, { jasmine: 3 });
+  assert.strictEqual(S.inv.jasmine, 1 + 3); // 開局 1
+  assert.strictEqual(r.loc, 'garden');
+  assert.deepStrictEqual(r.ready, []);
+  assert.ok(S.dayLog.some((l) => l.includes('採集')));
+  // rand=0.5：數量 2、weightedPick(0.5) 於御花園 → osmanthus
+  const S2 = fresh();
+  const r2 = E.gather(D, S2, 'garden', () => 0.5);
+  assert.deepStrictEqual(r2.got, { osmanthus: 2 });
+  // ready：湊齊訂單材料時回報（此處已有 sandalwood，採到 jasmine → 安神香齊）
+  const S3 = fresh();
+  S3.orders = [{ id: 1, who: 'meizhuang', product: 'incense', due: 3 }];
+  const r3 = E.gather(D, S3, 'garden', ZERO); // 採到 jasmine
+  assert.ok(r3.ready.some((o) => o.product === 'incense'));
+});
+
+test('craft：成功入手牌、材料 -1、slot++；配方錯 → junk、stats.junk++', () => {
+  // 成功：檀香+茉莉 → 安神香
+  const S = fresh();
+  const r = E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: null, forOrder: null, forWho: null });
+  assert.strictEqual(r.product, 'incense');
+  assert.strictEqual(r.toInv, false);
+  assert.strictEqual(S.slot, 1);
+  assert.strictEqual(S.inv.sandalwood, undefined, '材料用掉（1→0 刪鍵）');
+  assert.strictEqual(S.inv.jasmine, undefined);
+  assert.strictEqual(S.hand.length, 1);
+  assert.strictEqual(S.hand[0].product, 'incense');
+  assert.strictEqual(r.itemId, S.hand[0].id);
+  // junk：亂配
+  const S2 = fresh();
+  const r2 = E.craft(D, S2, { mats: ['sandalwood', 'honey'], spike: null, forOrder: null, forWho: null });
+  assert.strictEqual(r2.product, 'junk');
+  assert.strictEqual(S2.stats.junk, 1);
+  assert.strictEqual(S2.hand[0].product, 'junk');
+  assert.strictEqual(S2.hand[0].spike, null);
+});
+
+test('craft：加料成品 item.spike 帶料、料 -1；煉紅花 toInv 入庫不可加料', () => {
+  // 加料：安神香 + 麝香
+  const S = fresh();
+  S.inv.musk = 1;
+  const r = E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: 'musk', forOrder: null, forWho: null });
+  assert.strictEqual(r.spike, 'musk');
+  assert.strictEqual(S.inv.musk, undefined, '料用掉');
+  assert.strictEqual(S.hand[0].spike, 'musk');
+  // 紅花瓣+烈酒 → 紅花（out:inv），即使選了料也忽略
+  const S2 = fresh();
+  S2.inv.petal = 1; S2.inv.liquor = 1; S2.inv.musk = 1;
+  const r2 = E.craft(D, S2, { mats: ['petal', 'liquor'], spike: 'musk', forOrder: null, forWho: null });
+  assert.strictEqual(r2.product, 'safflower');
+  assert.strictEqual(r2.toInv, true);
+  assert.strictEqual(r2.spike, null, 'toInv 不帶料');
+  assert.strictEqual(S2.inv.safflower, 1, '煉出的料入庫');
+  assert.strictEqual(S2.inv.musk, 1, 'toInv 不消耗所選料');
+  assert.strictEqual(S2.hand.length, 0, 'toInv 不入手牌');
+});
+
+test('deliver：正常賞銀＋友好；找不到成品 → {noItem:true}', () => {
+  const S = fresh();
+  S.orders = [{ id: 5, who: 'meizhuang', product: 'incense', due: 3 }];
+  S.hand = [{ id: 9, product: 'incense', spike: null }];
+  const silver0 = S.silver;
+  const r = E.deliver(D, S, 5, null, ONE);
+  assert.strictEqual(r.kind, 'deliver');
+  assert.strictEqual(r.who, 'meizhuang');
+  assert.strictEqual(r.reward, D.PRODUCTS.incense.reward); // 28
+  assert.strictEqual(r.friendDelta, D.RULES.deliverFriend); // +5
+  assert.strictEqual(S.silver, silver0 + D.PRODUCTS.incense.reward);
+  assert.strictEqual(S.friend.meizhuang, 40 + D.RULES.deliverFriend);
+  assert.strictEqual(S.orders.length, 0);
+  assert.strictEqual(S.hand.length, 0);
+  assert.strictEqual(S.slot, 1);
+  // 找不到成品
+  const S2 = fresh();
+  S2.orders = [{ id: 1, who: 'meizhuang', product: 'incense', due: 3 }];
+  assert.deepStrictEqual(E.deliver(D, S2, 1, null, ONE), { noItem: true });
+  assert.strictEqual(S2.slot, 0, 'noItem 不消耗時辰');
+});
+
+test('deliver：加料被抓 → 無賞銀、友好 caughtFriend；無效 → 賞銀減半不加友好', () => {
+  // 被抓：紅花交貨給 meizhuang（0.40×0.6×0.5=0.12，ZERO 必中）
+  const S = fresh();
+  S.orders = [{ id: 1, who: 'meizhuang', product: 'incense', due: 3 }];
+  S.hand = [{ id: 1, product: 'incense', spike: 'safflower' }];
+  const silver0 = S.silver;
+  const r = E.deliver(D, S, 1, null, ZERO);
+  assert.strictEqual(r.caught, true);
+  assert.strictEqual(r.reward, 0);
+  assert.strictEqual(S.silver, silver0, '被抓無賞銀');
+  assert.strictEqual(S.friend.meizhuang, 40 + D.RULES.caughtFriend); // 10
+  // 無效：對已不孕的滑妃下麝香交貨（ONE 不被抓 → musk_useless）
+  const S2 = fresh();
+  S2.orders = [{ id: 1, who: 'huafei', product: 'incense', due: 3 }];
+  S2.hand = [{ id: 1, product: 'incense', spike: 'musk' }];
+  const s0 = S2.silver;
+  const r2 = E.deliver(D, S2, 1, null, ONE);
+  assert.strictEqual(r2.useless, true);
+  assert.strictEqual(r2.reward, Math.round(D.PRODUCTS.incense.reward * D.RULES.uselessRewardRate)); // 14
+  assert.strictEqual(S2.silver, s0 + r2.reward);
+  assert.strictEqual(S2.friend.huafei, 10, '無效不加友好');
+});
+
+test('gift：收下 → 友好＋禮物值；拒收 → refused、不動友好', () => {
+  // 收下：ZERO < acceptChance 必收；無料 → 友好 += gift
+  const S = fresh();
+  S.hand = [{ id: 1, product: 'cream', spike: null }];
+  const r = E.gift(D, S, 'meizhuang', 1, ZERO);
+  assert.strictEqual(r.kind, 'gift');
+  assert.strictEqual(r.refused, undefined);
+  assert.strictEqual(S.friend.meizhuang, 40 + D.PRODUCTS.cream.gift); // +6
+  assert.strictEqual(S.hand.length, 0);
+  assert.strictEqual(S.slot, 1);
+  // 拒收：ONE(0.999) >= acceptChance(0.7) → 退回、友好不變、手牌留著
+  const S2 = fresh();
+  S2.hand = [{ id: 1, product: 'cream', spike: null }];
+  const r2 = E.gift(D, S2, 'meizhuang', 1, ONE);
+  assert.strictEqual(r2.refused, true);
+  assert.strictEqual(S2.friend.meizhuang, 40, '拒收不動友好');
+  assert.strictEqual(S2.hand.length, 1, '拒收退回手牌');
+  assert.strictEqual(S2.slot, 1, '拒收仍花時辰');
+});
+
+test('startDay：逾期扣友好＋移除、tired→slot=1、重置 bribe、回報告', () => {
+  const S = fresh();
+  S.day = 2;
+  S.tired = true;
+  S.bribe = 50; S.bribedToday = true;
+  S.orders = [{ id: 1, who: 'meizhuang', product: 'incense', due: 1 }]; // 逾期（due < day）
+  // seq：chooseFlip → lingrong（r=0）、orderCount → 0 張（r=0）
+  const rep = E.startDay(D, S, seq([0, 0]));
+  assert.strictEqual(rep.tired, true);
+  assert.strictEqual(S.slot, 1);
+  assert.strictEqual(S.tired, false);
+  assert.deepStrictEqual(rep.lapsed, [{ who: 'meizhuang', product: 'incense' }]);
+  assert.strictEqual(S.friend.meizhuang, 40 + D.RULES.lateFriend); // 35
+  assert.strictEqual(S.orders.length, 0, '逾期訂單移除');
+  assert.strictEqual(rep.flip, 'lingrong');
+  assert.strictEqual(S.flip, 'lingrong');
+  assert.strictEqual(S.bribe, 0);
+  assert.strictEqual(S.bribedToday, false);
+  assert.strictEqual(rep.noOrders, true);
+  assert.deepStrictEqual(rep.newOrders, []);
+});
+
+test('startDay：生成新訂單（weightedPick 數量＋隨機抽對象與品項）', () => {
+  const S = fresh();
+  // seq：flip(0)→lingrong、orderCount(0.75)→2 張、who1(0)→huafei、prod1(0)→incense、who2(0)→meizhuang、prod2(0)→incense
+  const rep = E.startDay(D, S, seq([0, 0.75, 0, 0, 0, 0]));
+  assert.strictEqual(rep.newOrders.length, 2);
+  assert.deepStrictEqual(rep.newOrders[0], { who: 'huafei', product: 'incense' });
+  assert.deepStrictEqual(rep.newOrders[1], { who: 'meizhuang', product: 'incense' });
+  assert.strictEqual(S.orders.length, 2);
+  assert.strictEqual(S.orders[0].due, S.day + D.RULES.orderDays - 1); // 1+3-1=3
+  assert.strictEqual(rep.noOrders, false);
+  // 懷孕的對象改點安胎藥（不消耗品項擲骰）
+  const S2 = fresh();
+  S2.conc.huafei.status = 'pregnant';
+  const rep2 = E.startDay(D, S2, seq([0, 0.75, 0, /*prod1 跳過*/ 0, 0]));
+  assert.strictEqual(rep2.newOrders[0].who, 'huafei');
+  assert.strictEqual(rep2.newOrders[0].product, 'tonic');
+});
+
+test('advanceDay：day++、slot 歸零', () => {
+  const S = fresh();
+  S.day = 3; S.slot = 2;
+  E.advanceDay(D, S);
+  assert.strictEqual(S.day, 4);
+  assert.strictEqual(S.slot, 0);
+});
+
 // ───────── 預測純函式（不擲骰、不改狀態）─────────
 test('predict：純函式，risk 與 catchChance 一致、不改狀態', () => {
   const S = fresh();
