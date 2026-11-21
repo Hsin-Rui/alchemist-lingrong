@@ -14,8 +14,19 @@
   let craftSel = { mats: [], spike: null, forOrder: null, forWho: null };
   let craftResult = null;
   let gatherResult = null;
+  let gatherScene = null; // 採集小遊戲即時狀態（進場時建立、離場時清空）
   let giftWho = null;
   let typer = null;
+
+  // 採集小遊戲：哪些地點走即時小遊戲（其餘維持舊的快速採集）
+  const MINIGAME = new Set(['garden']);
+  // 即時層手感常數（正規化座標；引擎只給場景規格，不含這些）
+  const PLAYER_SPEED = 0.52; // 零溶移動速度（正規化／秒）
+  const PICK_RADIUS = 0.075; // 撿取半徑
+  const CATCH_RADIUS = 0.07; // 被抓半徑
+  const CATCH_GRACE = 0.6; // 開場緩衝秒數（避免一入場就被抓）
+  const clamp01 = (n) => Math.max(0, Math.min(1, n));
+  const KEYMAP = { arrowup: 'up', w: 'up', arrowdown: 'down', s: 'down', arrowleft: 'left', a: 'left', arrowright: 'right', d: 'right' };
 
   // ───────── 小工具 ─────────
   const rand = Math.random;
@@ -298,6 +309,191 @@
     render();
   }
 
+  // ───────── 採集小遊戲（即時互動外殼）─────────
+  // 引擎 E.buildGatherScene 生成場景規格（純函式）；移動／碰撞／倒數／搖桿／鍵盤／rAF 全在此。
+  // 監聽與 rAF 只在進場時註冊、離場時移除（headless 沙箱不會進場，確保回歸網不觸發）。
+  function enterGather(loc) {
+    if (needOut()) return;
+    gatherResult = null;
+    const scene = E.buildGatherScene(D, S, loc, rand);
+    gatherScene = {
+      loc, scene,
+      player: { x: 0.5, y: 0.86 },
+      guard: { x: scene.guard.x, y: scene.guard.y, wi: 0 },
+      items: scene.items.map((it) => ({ ...it, picked: false })),
+      got: {}, picked: 0,
+      timeLeft: scene.seconds, elapsed: 0,
+      keys: {}, move: null, last: 0, ended: false,
+    };
+    screen = 'gather';
+    A.sfx('gather');
+    render();
+    bindGatherRuntime();
+  }
+
+  // 綜合鍵盤＋搖桿輸入，回正規化方向向量（長度 ≤ 1）
+  function gatherInput(gs) {
+    let x = 0;
+    let y = 0;
+    const k = gs.keys;
+    if (k.left) x -= 1;
+    if (k.right) x += 1;
+    if (k.up) y -= 1;
+    if (k.down) y += 1;
+    if (gs.move) { x += gs.move.x; y += gs.move.y; }
+    const d = Math.hypot(x, y);
+    if (d > 1) { x /= d; y /= d; }
+    return { x, y };
+  }
+
+  // 侍衛沿 waypoints 線性巡邏，到點換下一個（循環）
+  function moveGuard(gs, dt) {
+    const g = gs.guard;
+    const wps = gs.scene.guard.waypoints;
+    if (!wps.length) return;
+    const t = wps[g.wi];
+    const dx = t.x - g.x;
+    const dy = t.y - g.y;
+    const d = Math.hypot(dx, dy);
+    const step = gs.scene.guard.speed * dt;
+    if (d <= step || d === 0) { g.x = t.x; g.y = t.y; g.wi = (g.wi + 1) % wps.length; }
+    else { g.x += (dx / d) * step; g.y += (dy / d) * step; }
+  }
+
+  function updateGatherHud() {
+    const gs = gatherScene;
+    if (!gs || !gs.el) return;
+    if (gs.el.time) gs.el.time.textContent = Math.ceil(gs.timeLeft);
+    if (gs.el.count) gs.el.count.textContent = gs.picked;
+    if (gs.el.timer) gs.el.timer.classList.toggle('low', gs.timeLeft <= 10);
+  }
+
+  function gatherLoop(now) {
+    const gs = gatherScene;
+    if (!gs || gs.ended) return;
+    if (!gs.last) gs.last = now;
+    let dt = (now - gs.last) / 1000;
+    gs.last = now;
+    if (dt > 0.1) dt = 0.1; // 分頁切回來不要暴衝
+    gs.elapsed += dt;
+    gs.timeLeft -= dt;
+    if (gs.timeLeft <= 0) { gs.timeLeft = 0; updateGatherHud(); endGather('timeout'); return; }
+
+    // 玩家移動
+    const inp = gatherInput(gs);
+    const step = PLAYER_SPEED * dt;
+    gs.player.x = clamp01(gs.player.x + inp.x * step);
+    gs.player.y = clamp01(gs.player.y + inp.y * step);
+
+    // 侍衛巡邏
+    moveGuard(gs, dt);
+
+    const asp = gs.aspect || 1; // y-delta 乘 aspect：讓判定圈在畫面上是正圓
+    // 撿取判定（畫面上的圓形距離；撿後移除、只計一次）
+    gs.items.forEach((it, i) => {
+      if (it.picked) return;
+      if (Math.hypot(it.x - gs.player.x, (it.y - gs.player.y) * asp) < PICK_RADIUS) {
+        it.picked = true;
+        gs.got[it.id] = (gs.got[it.id] || 0) + 1;
+        gs.picked++;
+        const el = gs.el.items[i];
+        if (el) el.classList.add('got');
+        A.sfx(it.rare ? 'evil' : 'coin');
+      }
+    });
+
+    // 被抓判定（開場 grace 後才生效；同樣 aspect 校正成畫面正圓）
+    if (gs.elapsed > CATCH_GRACE
+      && Math.hypot(gs.guard.x - gs.player.x, (gs.guard.y - gs.player.y) * asp) < CATCH_RADIUS) {
+      endGather('caught');
+      return;
+    }
+
+    // 逐幀把正規化座標映射成 %（transform 由 CSS 負責置中）
+    if (gs.el.player) { gs.el.player.style.left = `${gs.player.x * 100}%`; gs.el.player.style.top = `${gs.player.y * 100}%`; }
+    if (gs.el.guard) { gs.el.guard.style.left = `${gs.guard.x * 100}%`; gs.el.guard.style.top = `${gs.guard.y * 100}%`; }
+    updateGatherHud();
+    gs.raf = requestAnimationFrame(gatherLoop);
+  }
+
+  // 進場後抓元素、掛監聽、啟動 rAF（render 剛重建 DOM，所以每次進場都重抓）
+  function bindGatherRuntime() {
+    const gs = gatherScene;
+    if (!gs) return;
+    gs.onKeyDown = (e) => { const k = KEYMAP[(e.key || '').toLowerCase()]; if (k) { gs.keys[k] = true; e.preventDefault(); } };
+    gs.onKeyUp = (e) => { const k = KEYMAP[(e.key || '').toLowerCase()]; if (k) gs.keys[k] = false; };
+    document.addEventListener('keydown', gs.onKeyDown);
+    document.addEventListener('keyup', gs.onKeyUp);
+
+    const base = app.querySelector('.joy-base');
+    if (base) {
+      const knob = base.querySelector('.joy-knob');
+      const RADIUS = 34; // 搖桿可拉半徑（px）
+      const setMove = (e) => {
+        const r = base.getBoundingClientRect();
+        const dx = e.clientX - (r.left + r.width / 2);
+        const dy = e.clientY - (r.top + r.height / 2);
+        const d = Math.hypot(dx, dy) || 1;
+        const cl = Math.min(d, RADIUS);
+        if (knob) knob.style.transform = `translate(${(dx / d) * cl}px, ${(dy / d) * cl}px)`;
+        const mag = Math.min(d / RADIUS, 1);
+        gs.move = { x: (dx / d) * mag, y: (dy / d) * mag };
+      };
+      const end = () => { gs.move = null; if (knob) knob.style.transform = ''; };
+      gs.onDown = (e) => { try { base.setPointerCapture(e.pointerId); } catch { /* 忽略 */ } setMove(e); e.preventDefault(); };
+      gs.onMove = (e) => { if (gs.move) setMove(e); };
+      gs.onUp = () => end();
+      base.addEventListener('pointerdown', gs.onDown);
+      base.addEventListener('pointermove', gs.onMove);
+      base.addEventListener('pointerup', gs.onUp);
+      base.addEventListener('pointercancel', gs.onUp);
+      gs.joyBase = base;
+    }
+
+    gs.el = {
+      player: app.querySelector('.pf-player'),
+      guard: app.querySelector('.pf-guard'),
+      time: app.querySelector('.hud-time'),
+      timer: app.querySelector('.pf-timer'),
+      count: app.querySelector('.hud-count'),
+      items: Array.from(app.querySelectorAll('.pf-item')),
+    };
+    // 場景是直式（非正方），座標以 left%/top% 映射；快取實際像素長寬，
+    // 讓撿取/被抓的距離在「畫面上」是正圓（半徑以 x 軸正規化單位為準）。
+    const field = app.querySelector('.playfield');
+    const w = (field && field.clientWidth) || 1;
+    const h = (field && field.clientHeight) || 1;
+    gs.aspect = h / w;
+    gs.last = 0;
+    gs.raf = requestAnimationFrame(gatherLoop);
+  }
+
+  function stopGatherRuntime(gs) {
+    if (!gs) return;
+    if (gs.raf) cancelAnimationFrame(gs.raf);
+    document.removeEventListener('keydown', gs.onKeyDown);
+    document.removeEventListener('keyup', gs.onKeyUp);
+    if (gs.joyBase) {
+      gs.joyBase.removeEventListener('pointerdown', gs.onDown);
+      gs.joyBase.removeEventListener('pointermove', gs.onMove);
+      gs.joyBase.removeEventListener('pointerup', gs.onUp);
+      gs.joyBase.removeEventListener('pointercancel', gs.onUp);
+    }
+  }
+
+  // 該趟結束（逾時／被抓／離開）：移除即時層、把收穫交回引擎套用一次，再走既有結果 sheet。
+  function endGather(how) {
+    const gs = gatherScene;
+    if (!gs || gs.ended) return;
+    gs.ended = true;
+    stopGatherRuntime(gs);
+    const haul = E.applyGatherHaul(D, S, gs.loc, gs.got);
+    gatherResult = { ...haul, ended: how };
+    gatherScene = null;
+    A.sfx(how === 'caught' ? 'boom' : 'gather');
+    render();
+  }
+
   function openCraft(orderId) {
     const o = S.orders.find((x) => x.id === orderId);
     craftSel = { mats: [], spike: null, forOrder: o ? o.id : null, forWho: o ? o.who : isTarget(S.flip) ? S.flip : null };
@@ -574,27 +770,36 @@
           <div class="loc-banner bg-${g.bg}"><span>${g.name}</span>${hits.length ? `<em>有你缺的${hits.join('、')}</em>` : ''}</div>
           <div class="loc-body">
             <div class="drops">${g.table.map(([id, w]) => `<span class="drop ${D.ITEMS[id].type === 'spike' || id === 'petal' ? 'spike' : ''} ${needed.has(id) ? 'need' : ''} ${w < 1.5 ? 'rare' : ''}">${D.ITEMS[id].type === 'spike' ? '料：' : ''}${itemName(id)}・${rarity(w)}</span>`).join('')}</div>
-            <button class="btn ${hits.length ? 'primary' : ''} wide" data-a="gather" data-v="${loc}" ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中' : loc === 'taiyi' ? '偷溜進太醫院' : '去御花園'}</button>
+            <button class="btn ${hits.length ? 'primary' : ''} wide" data-a="${MINIGAME.has(loc) ? 'enter' : 'gather'}" data-v="${loc}" ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中' : loc === 'taiyi' ? '偷溜進太醫院' : '潛入御花園偷採'}</button>
           </div></article>`;
       };
       let sheet = '';
       if (gatherResult) {
         const g = D.GATHER[gatherResult.loc];
         const done = S.slot >= R.slotsPerDay;
+        const entries = Object.entries(gatherResult.got);
+        const caught = gatherResult.ended === 'caught';
+        const endMsg = caught ? '被侍衛發現了！這趟到此為止——撿到的都保住了。'
+          : gatherResult.ended === 'timeout' ? '時辰到，先撤！撿到的都帶走了。'
+          : gatherResult.ended === 'leave' ? '見好就收，全身而退。' : '';
+        const reAction = MINIGAME.has(gatherResult.loc) ? 'enter' : 'regather';
         sheet = `<div class="sheet-layer"><div class="sheet">
           <p class="muted center">${g.intro}</p>
-          <h3 class="sheet-title">採到了！</h3>
-          <div class="got">${Object.entries(gatherResult.got).map(([id, n], i) => `<div class="got-card ${D.ITEMS[id].type}" style="animation-delay:${i * 0.15}s">${tok(id, 'lg')}<span>${itemName(id)}</span><b>+${n}${D.ITEMS[id].type === 'spike' ? ' 料！' : ''}</b></div>`).join('')}</div>
+          <h3 class="sheet-title">${caught ? '被抓了！' : '採到了！'}</h3>
+          ${endMsg ? `<p class="center ${caught ? 'ok' : 'muted'}">${endMsg}</p>` : ''}
+          ${entries.length
+            ? `<div class="got">${entries.map(([id, n], i) => `<div class="got-card ${D.ITEMS[id].type}" style="animation-delay:${i * 0.15}s">${tok(id, 'lg')}<span>${itemName(id)}</span><b>+${n}${D.ITEMS[id].type === 'spike' ? ' 料！' : ''}</b></div>`).join('')}</div>`
+            : '<p class="center muted">這趟空手而回……</p>'}
           ${gatherResult.got.petal ? '<p class="center ok">紅花瓣！加上烈酒就能煉出紅花……</p>' : ''}
           ${gatherResult.ready.map((o) => `<p class="ok center">${charName(o.who)}的${itemName(o.product)}：材料湊齊了</p>`).join('')}
-          ${done ? '' : `<button class="btn primary wide regather" data-a="regather" data-v="${gatherResult.loc}">再去${g.name}採一次</button>`}
+          ${done ? '' : `<button class="btn primary wide regather" data-a="${reAction}" data-v="${gatherResult.loc}">再去${g.name}採一次</button>`}
           <div class="row-btns">
             <button class="btn ghost" data-a="gatherdone" data-v="home">${done ? '天色晚了，回宮' : '回炎洗宮'}</button>
             ${!done && gatherResult.ready.length ? '<button class="btn primary" data-a="gatherdone" data-v="craft">直接去調合</button>' : ''}
           </div></div></div>`;
       }
       return `<div class="screen theme-light">
-        ${subHeader('出門採集', '花 1 個時辰・隨機拿到 2～3 樣')}
+        ${subHeader('出門採集', '御花園潛行偷採・太醫院快速採集')}
         <div class="scroll pad">${card('garden')}${card('taiyi')}</div>
         ${sheet}
       </div>`;
@@ -834,10 +1039,36 @@
       <h3 class="sheet-title">${modal.title}</h3>${modal.body}</div></div>`;
   }
 
+  // 採集小遊戲 overlay（疊在 gather 畫面上）。rAF 迴圈逐幀更新 player/guard 的 left/top。
+  function gatherOverlay() {
+    const gs = gatherScene;
+    const g = D.GATHER[gs.loc];
+    const items = gs.items.map((it, i) =>
+      `<div class="pf-item${it.picked ? ' got' : ''}" data-i="${i}" style="left:${it.x * 100}%;top:${it.y * 100}%">${tok(it.id, 'lg')}${it.rare ? '<span class="pf-rare">稀有</span>' : ''}</div>`
+    ).join('');
+    return `<div class="gather-play">
+      <div class="pf-hud">
+        <div class="pf-timer">⏳ <b class="hud-time">${Math.ceil(gs.timeLeft)}</b>s</div>
+        <div class="pf-pick">已撿 <b class="hud-count">0</b></div>
+        <button class="pf-quit" data-a="leavegather">離開</button>
+      </div>
+      <div class="playfield bg-${g.bg}">
+        ${items}
+        <div class="pf-guard" style="left:${gs.guard.x * 100}%;top:${gs.guard.y * 100}%"><span class="pf-ph guard">侍</span><img src="assets/characters/guard.webp" alt="侍衛" onerror="${IMG_FAIL}"></div>
+        <div class="pf-player" style="left:${gs.player.x * 100}%;top:${gs.player.y * 100}%"><span class="pf-ph">零</span><img src="assets/characters/lingrong_smile.webp" alt="零溶" onerror="${IMG_FAIL}"></div>
+      </div>
+      <div class="pf-foot">
+        <div class="joy-base"><div class="joy-knob"></div></div>
+        <p class="pf-hint">方向鍵／WASD 或拖曳搖桿：撿素材、別讓侍衛碰到你</p>
+      </div>
+    </div>`;
+  }
+
   function render() {
     const keepScroll = app.querySelector('.scroll')?.scrollTop || 0;
     const prevScreen = app.dataset.screen;
     let html = views[screen]();
+    if (gatherScene && !gatherScene.ended) html += gatherOverlay();
     if (dlg) html += dialogView();
     if (modal) html += modalView();
     app.innerHTML = html;
@@ -851,7 +1082,7 @@
   }
 
   // ───────── 事件 ─────────
-  const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'craft', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
+  const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'craft', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
   app.addEventListener('click', (e) => {
     const el = e.target.closest('[data-a]');
     if (!el || el.disabled || busy) return;
@@ -870,6 +1101,8 @@
       case 'bribe': bribe(); break;
       case 'reject': rejectOrder(Number(v)); break;
       case 'gather': gather(v); break;
+      case 'enter': enterGather(v); break;
+      case 'leavegather': endGather('leave'); break;
       case 'regather': gatherResult = null; gather(v); break;
       case 'gatherdone': {
         if (!gatherResult) { go('home'); break; }
@@ -910,6 +1143,7 @@
   function preloadImages() {
     const files = [
       ...Object.values(D.CHARS).flatMap((c) => Object.values(c.imgs).map((f) => `characters/${f}`)),
+      'characters/guard',
       ...[...Object.keys(D.ITEMS), ...Object.keys(D.PRODUCTS), 'silver'].map((id) => `items/${id}`),
       ...['yanxi', 'garden', 'taiyi', 'shop', 'yikun', 'xianfu', 'suiyu', 'night'].map((b) => `backgrounds/${b}`),
     ];

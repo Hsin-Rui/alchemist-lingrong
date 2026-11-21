@@ -10,6 +10,11 @@
   const clamp = (n) => Math.max(0, Math.min(100, n));
   const charName = (D, who) => D.CHARS[who].name;
 
+  // 採集小遊戲場景生成的預設值（可調；即時層的半徑常數在外殼 js/game.js）。
+  const GATHER_SECONDS = 30; // 每場倒數秒數
+  const GUARD_SPEED = 0.16; // 侍衛巡邏速度（正規化座標／秒）
+  const SCENE_MARGIN = 0.08; // 場景邊界留白（正規化）
+
   function addFavor(S, who, n) {
     const before = S.favor[who];
     S.favor[who] = clamp(before + n);
@@ -332,6 +337,46 @@
     return { loc, got, ready };
   }
 
+  // 採集小遊戲・場景生成（純函式、隨機走注入 rand、不碰 DOM／計時器）。
+  // 回 { loc, seconds, rare, items:[{id,rare,x,y}], guard:{x,y,waypoints,speed} }。
+  // 保證該地圖每種素材至少各 1 個（含稀有），再從非稀有常見素材多撒幾個；座標皆正規化 0..1。
+  // rand 擲骰順序：逐一素材座標 → 額外數量 → 逐一（weightedPick＋座標）→ 侍衛起點 → 巡邏點數量 → 逐一巡邏點。
+  function buildGatherScene(D, S, loc, rand) {
+    const g = D.GATHER[loc];
+    const coord = () => SCENE_MARGIN + rand() * (1 - 2 * SCENE_MARGIN);
+    // 稀有素材：地圖指定；未指定則取權重最低者
+    const rare = g.rare || g.table.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
+    const commons = g.table.filter(([id]) => id !== rare);
+    const items = [];
+    // 每種素材先放 1 個（保證每種≥1、含稀有正好 1 個）
+    for (const [id] of g.table) items.push({ id, rare: id === rare, x: coord(), y: coord() });
+    // 再從「非稀有」常見素材多撒幾個（稀有維持 1 個、總數約 7～9）
+    const extra = 3 + Math.floor(rand() * 3); // 3～5
+    for (let i = 0; i < extra; i++) {
+      const id = weightedPick(commons, rand);
+      items.push({ id, rare: false, x: coord(), y: coord() });
+    }
+    // 侍衛：起點＋數個巡邏點＋速度（起點落在上半，遠離玩家入場點）
+    const guard = { x: coord(), y: SCENE_MARGIN + rand() * (0.5 - SCENE_MARGIN), speed: GUARD_SPEED, waypoints: [] };
+    const wp = 3 + Math.floor(rand() * 2); // 3～4 個巡邏點
+    for (let i = 0; i < wp; i++) guard.waypoints.push({ x: coord(), y: coord() });
+    return { loc, seconds: GATHER_SECONDS, rare, items, guard };
+  }
+
+  // 採集小遊戲・收穫套用（純函式，無 rand）：把這趟撿到的 got 加進包包、slot++、推 dayLog、回 ready。
+  // got 空（被抓／逾時卻兩手空空）→ inv 不變、仍 slot++、dayLog 記「空手而回」。
+  function applyGatherHaul(D, S, loc, got) {
+    const g = D.GATHER[loc];
+    S.slot++;
+    const entries = Object.entries(got || {}).filter(([, c]) => c > 0);
+    for (const [id, c] of entries) invAdd(S, id, c);
+    const ready = S.orders.filter((o) => !readyItem(S, o) && recipeOk(D, S, o.product));
+    S.dayLog.push(entries.length
+      ? `在${g.name}採集：${entries.map(([id, c]) => `${itemName(D, id)}×${c}`).join('、')}`
+      : `在${g.name}空手而回`);
+    return { loc, got: got || {}, ready };
+  }
+
   // 調合（確定性，無 rand）：slot++、材料 -1、findRecipe→成品或 junk；成品入 hand/inv。
   function craft(D, S, craftSel) {
     const [a, b] = craftSel.mats;
@@ -448,7 +493,7 @@
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
     findRecipe, acceptChance,
-    buy, bribe, rejectOrder, gather, craft, deliver, gift, startDay, advanceDay,
+    buy, bribe, rejectOrder, gather, buildGatherScene, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof window !== 'undefined') window.GameEngine = API;

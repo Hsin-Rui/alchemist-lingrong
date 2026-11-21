@@ -494,6 +494,82 @@ test('advanceDay：day++、slot 歸零', () => {
   assert.strictEqual(S.slot, 0);
 });
 
+// ───────── 採集小遊戲：場景生成 buildGatherScene ─────────
+// 可重現的 seeded rand（LCG），讓「同 rand 兩次呼叫」能逐一比對。
+function lcg(seed) {
+  let s = seed >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+test('buildGatherScene：每種素材≥1、稀有正好 1 個且=地圖指定、座標皆 0..1', () => {
+  const scene = E.buildGatherScene(D, fresh(), 'garden', lcg(1));
+  assert.strictEqual(scene.loc, 'garden');
+  assert.strictEqual(scene.seconds, 30);
+  assert.strictEqual(scene.rare, 'itch'); // data.js GATHER.garden.rare
+  // 每種素材（茉莉、桂花、玫瑰、癢癢粉）至少各 1
+  const ids = scene.items.map((it) => it.id);
+  for (const [id] of D.GATHER.garden.table) assert.ok(ids.includes(id), `${id} 至少出現 1 個`);
+  // 稀有正好 1 個，且標記 rare 的就是 itch
+  const rares = scene.items.filter((it) => it.rare);
+  assert.strictEqual(rares.length, 1, '稀有正好 1 個');
+  assert.strictEqual(rares[0].id, 'itch');
+  assert.strictEqual(ids.filter((id) => id === 'itch').length, 1, '稀有素材只撒 1 個');
+  // 總數約 7～9
+  assert.ok(scene.items.length >= 7 && scene.items.length <= 9, `總數 ${scene.items.length} 落在 7～9`);
+  // 所有座標在 0..1
+  for (const it of scene.items) {
+    assert.ok(it.x >= 0 && it.x <= 1 && it.y >= 0 && it.y <= 1, '素材座標 0..1');
+  }
+  assert.ok(scene.guard.x >= 0 && scene.guard.x <= 1 && scene.guard.y >= 0 && scene.guard.y <= 1, '侍衛起點 0..1');
+  assert.ok(scene.guard.waypoints.length >= 1, '至少 1 個巡邏點');
+  for (const w of scene.guard.waypoints) assert.ok(w.x >= 0 && w.x <= 1 && w.y >= 0 && w.y <= 1, '巡邏點 0..1');
+  assert.strictEqual(scene.guard.speed, 0.16);
+});
+
+test('buildGatherScene：同 rand（同種子）兩次呼叫 → items/guard 逐一相同（決定性）', () => {
+  const a = E.buildGatherScene(D, fresh(), 'garden', lcg(42));
+  const b = E.buildGatherScene(D, fresh(), 'garden', lcg(42));
+  assert.deepStrictEqual(a, b);
+});
+
+test('buildGatherScene：地圖無 rare 欄位 → 取權重最低者為稀有（太醫院→麝香）', () => {
+  // data.js 目前只有 garden 設了 rare；taiyi 走 fallback = 權重最低（musk 0.6）
+  const scene = E.buildGatherScene(D, fresh(), 'taiyi', lcg(7));
+  assert.strictEqual(scene.rare, 'musk');
+  assert.strictEqual(scene.items.filter((it) => it.id === 'musk').length, 1, '稀有只 1 個');
+  assert.strictEqual(scene.items.filter((it) => it.rare).length, 1);
+});
+
+// ───────── 採集小遊戲：收穫套用 applyGatherHaul ─────────
+test('applyGatherHaul：inv 各 +count、slot++、dayLog 新增一列、回 {loc,got,ready}', () => {
+  const S = fresh();
+  S.orders = [{ id: 1, who: 'meizhuang', product: 'incense', due: 3 }]; // 檀香(開局有)+茉莉
+  const r = E.applyGatherHaul(D, S, 'garden', { jasmine: 2, itch: 1 });
+  assert.strictEqual(S.slot, 1);
+  assert.strictEqual(S.inv.jasmine, 1 + 2); // 開局 1
+  assert.strictEqual(S.inv.itch, 1);
+  assert.strictEqual(r.loc, 'garden');
+  assert.deepStrictEqual(r.got, { jasmine: 2, itch: 1 });
+  assert.ok(S.dayLog.some((l) => l.includes('採集')));
+  // 採到 jasmine → 安神香材料湊齊 → ready 回報
+  assert.ok(r.ready.some((o) => o.product === 'incense'));
+});
+
+test('applyGatherHaul：got 空 → inv 不變、仍 slot++、dayLog 記「空手而回」', () => {
+  const S = fresh();
+  const invBefore = JSON.stringify(S.inv);
+  const r = E.applyGatherHaul(D, S, 'garden', {});
+  assert.strictEqual(S.slot, 1, '空手仍花 1 時辰');
+  assert.strictEqual(JSON.stringify(S.inv), invBefore, '空手不動 inv');
+  assert.deepStrictEqual(r.got, {});
+  assert.ok(S.dayLog.some((l) => l.includes('空手而回')));
+  // 傳 undefined 也當空手
+  const S2 = fresh();
+  const r2 = E.applyGatherHaul(D, S2, 'garden', undefined);
+  assert.strictEqual(S2.slot, 1);
+  assert.deepStrictEqual(r2.got, {});
+});
+
 // ───────── 預測純函式（不擲骰、不改狀態）─────────
 test('predict：純函式，risk 與 catchChance 一致、不改狀態', () => {
   const S = fresh();

@@ -38,7 +38,7 @@ window.GAME_DATA = (() => {
   // 採集表：[素材, 權重]
   const GATHER = {
     garden: {
-      name: '御花園', bg: 'garden',
+      name: '御花園', bg: 'garden', rare: 'itch',
       table: [['jasmine', 3], ['osmanthus', 3], ['rose', 3], ['itch', 2]],
       intro: '零溶提著小籃子，假裝在御花園賞花……',
     },
