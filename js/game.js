@@ -114,97 +114,10 @@
     });
   }
 
-  // via: 'deliver'（她自己點的東西，比較不會懷疑）或 'gift'
-  const catchChance = (who, spike, via) => D.ITEMS[spike].catch
-    * Math.max(R.friendCatchFloor, 1 - S.friend[who] / R.friendCatchDivisor)
-    * (via === 'deliver' ? R.deliverCatchFactor : 1);
-  const riskLevel = (p) => (p < 0.12 ? '低' : p < 0.25 ? '中' : '高');
-  const pillowChance = (who) => Math.max(0, Math.min(R.pillowMax, S.friend[who] - R.pillowBase)) / 100;
   const acceptChance = (who) => Math.min(100, S.friend[who] + R.giftAcceptBonus) / 100;
 
-  function flipWeights(bribe = S.bribe) {
-    const w = {};
-    if (!grounded()) w.lingrong = Math.max(1, S.favor.lingrong) * (S.empressBoost ? R.empressFactor : 1) + bribe;
-    D.TARGETS.forEach((t) => { if (S.conc[t].status !== 'pregnant') w[t] = Math.max(1, S.favor[t]); });
-    if (S.flip && w[S.flip]) w[S.flip] *= R.repeatFlipFactor; // 黃上喜新厭舊
-    return w;
-  }
-  function flipOdds(bribe = S.bribe) {
-    const w = flipWeights(bribe);
-    const total = Object.values(w).reduce((a, b) => a + b, 0);
-    return Object.fromEntries(D.ALL.map((k) => [k, w[k] ? w[k] / total : 0]));
-  }
-
-  // 預測加料效果（不擲骰）
-  function predict(who, spike, via) {
-    if (!spike) return { txt: '正經交貨', cls: 'neutral' };
-    const c = S.conc[who];
-    const it = D.ITEMS[spike];
-    const risk = catchChance(who, spike, via);
-    const out = { risk, riskTxt: `被抓風險：${riskLevel(risk)}` };
-    if (spike === 'musk') {
-      if (c.status === 'infertile') return { ...out, txt: '無效（已不孕）', cls: 'bad' };
-      if (c.status === 'pregnant') return { ...out, txt: '50% 小產', cls: 'good' };
-      return { ...out, txt: c.musk + 1 >= R.muskDoses ? `不孕 ${R.fx.infertile}` : `麝香 ${c.musk + 1}/${R.muskDoses}`, cls: 'good' };
-    }
-    if (spike === 'safflower') {
-      if (c.status === 'infertile') return { ...out, txt: '無效（已不孕）', cls: 'bad' };
-      if (c.status === 'pregnant') return { ...out, txt: `小產＋不孕 ${R.fx.saffMiscarry}`, cls: 'good' };
-      return { ...out, txt: `不孕 ${R.fx.infertile}`, cls: 'good' };
-    }
-    const label = { itch: '狂癢', stinky: '口臭', croton: '腹瀉' }[spike];
-    return { ...out, txt: `${label} ${R.fx[spike]}${S.flip === who ? '・今晚出包' : ''}`, cls: 'good', it };
-  }
-
-  // 真正下料（擲骰、改狀態）
-  function applySpike(who, spike, via) {
-    if (!spike) return { outcome: 'plain' };
-    S.stats.spikesUsed++;
-    const it = D.ITEMS[spike];
-    if (rand() < catchChance(who, spike, via)) {
-      const friendDelta = addFriend(who, R.caughtFriend);
-      S.groundUntil = Math.max(S.groundUntil, S.day + it.ground);
-      S.stats.caught++;
-      S.stats.groundedDays += it.ground;
-      S.log.push(`第 ${S.day} 天：對${charName(who)}下${it.name}，被太醫抓到，禁足 ${it.ground} 天`);
-      return { outcome: 'caught', caught: true, friendDelta, days: it.ground };
-    }
-    const c = S.conc[who];
-    let outcome;
-    let fav = 0;
-    let label = null;
-    let ruin = false;
-    if (spike === 'musk') {
-      if (c.status === 'infertile') outcome = 'musk_useless';
-      else {
-        c.musk++;
-        if (c.status === 'pregnant') {
-          if (rand() < R.muskMiscarryChance) { outcome = 'miscarry_musk'; fav = R.fx.miscarry; label = '小產'; c.status = 'normal'; c.preg = 0; ruin = true; }
-          else { outcome = 'musk_miss'; label = `麝香 ${c.musk}/${R.muskDoses}`; }
-        } else if (c.musk >= R.muskDoses) { outcome = 'musk_infertile'; fav = R.fx.infertile; label = '不孕'; c.status = 'infertile'; ruin = true; }
-        else { outcome = 'musk_dose'; label = `麝香 ${c.musk}/${R.muskDoses}`; }
-      }
-    } else if (spike === 'safflower') {
-      if (c.status === 'infertile') outcome = 'safflower_useless';
-      else if (c.status === 'pregnant') { outcome = 'miscarry_safflower'; fav = R.fx.saffMiscarry; label = '小產'; c.status = 'infertile'; c.preg = 0; ruin = true; }
-      else { outcome = 'safflower_infertile'; fav = R.fx.infertile; label = '不孕'; c.status = 'infertile'; ruin = true; }
-    } else {
-      outcome = 'debuff';
-      c.debuff = spike;
-      fav = R.fx[spike];
-      label = { itch: '狂癢', stinky: '口臭', croton: '腹瀉' }[spike];
-    }
-    const useless = outcome.endsWith('_useless');
-    const favDelta = fav ? addFavor(who, fav) : 0;
-    if (!useless) {
-      S.stats.success++;
-      if (!S.stats.victims.includes(who)) S.stats.victims.push(who);
-    }
-    if (ruin && !S.stats.ruined.includes(who)) S.stats.ruined.push(who);
-    if (ruin && spike === 'musk') S.stats.muskRuin++;
-    S.log.push(`第 ${S.day} 天：${charName(who)} ← ${it.name}（${useless ? '無效' : label}）`);
-    return { outcome, useless, favDelta, label, dose: c.musk };
-  }
+  // catchChance／riskLevel／pillowChance／flipWeights／flipOdds／predict／applySpike／settleNight
+  // 已搬入 js/engine.js（純函式、隨機走注入的 rand）。外殼一律呼叫 E.*，並把 rand 傳入。
 
   function outcomeLines(who, spike, res) {
     if (res.caught) return fmt(D.CAUGHT, { who, spike, days: res.days });
@@ -292,9 +205,7 @@
     // 翻牌子
     const boosted = S.empressBoost && !grounded();
     if (boosted) lines.push(...D.EMPRESS);
-    const w = flipWeights();
-    const entries = Object.entries(w);
-    S.flip = entries.length ? weightedPick(entries) : null;
+    S.flip = E.chooseFlip(D, S, rand);
     if (boosted) S.empressBoost = false;
     S.bribe = 0;
     S.bribedToday = false;
@@ -350,73 +261,46 @@
   }
 
   function settleNight(sing) {
+    const report = E.settleNight(D, S, { sing, rand });
+    playDialog(renderNightLines(report), () => go('night'), 'night');
+  }
+
+  // 依引擎回傳的結算報告組對話 lines（引擎不碰對話；數值一律讀報告）
+  function renderNightLines(report) {
     const lines = [['narr', '', `—— 第 ${S.day} 天・夜 ——`]];
-    const who = S.flip;
-    let conceived = null;
-    let servedLing = false;
+    const who = report.who;
     if (!who) {
       lines.push(['narr', '', '黃上今晚獨自批奏摺，後宮一片寂靜。']);
     } else if (who === 'lingrong') {
-      if (grounded()) {
+      if (report.serve.kind === 'grounded') {
         lines.push(['narr', '', '零溶被禁足，今晚的侍寢取消了。黃上嘆了口氣，改去批奏摺。']);
       } else {
-        const d = addFavor('lingrong', R.serveFavor + (sing ? R.singExtraFavor : 0));
-        if (sing) lines.push(...D.SING);
+        const d = report.serve.favDelta;
+        if (report.sing) lines.push(...D.SING);
         else lines.push(['lingrong', 'smile', '黃上，臣妾給您捏捏肩吧。']);
-        lines.push(['narr', '', `零溶侍寢${sing ? '（演唱金縷衣）' : ''}，恩寵 +${d}`]);
-        S.dayLog.push(`零溶侍寢${sing ? '並演唱金縷衣' : ''}，恩寵 +${d}`);
-        S.tired = sing;
-        if (sing) S.stats.sings++;
-        servedLing = true;
+        lines.push(['narr', '', `零溶侍寢${report.sing ? '（演唱金縷衣）' : ''}，恩寵 +${d}`]);
       }
     } else {
-      const c = S.conc[who];
       const name = charName(who);
-      if (c.debuff) {
-        const d = addFavor(who, R.serveFailFavor);
-        lines.push(['huangshang', '_', D.SERVE_FAIL_HS[c.debuff]], ['narr', '', D.SERVE_FAIL[c.debuff].replace('{n}', name)], ['narr', '', `侍寢出包！${name}恩寵 ${d}`], ['lingrong', 'evil', '（計畫通。）']);
-        S.dayLog.push(`${name}侍寢出包，恩寵 ${d}`);
+      if (report.serve.kind === 'debuff') {
+        const d = report.serve.favDelta;
+        const debuff = report.serve.debuff;
+        lines.push(['huangshang', '_', D.SERVE_FAIL_HS[debuff]], ['narr', '', D.SERVE_FAIL[debuff].replace('{n}', name)], ['narr', '', `侍寢出包！${name}恩寵 ${d}`], ['lingrong', 'evil', '（計畫通。）']);
       } else {
-        const d = addFavor(who, R.serveFavor);
+        const d = report.serve.favDelta;
         lines.push(['narr', '', `${name}今晚侍寢，恩寵 +${d}`]);
-        S.dayLog.push(`${name}侍寢，恩寵 +${d}`);
-        if (rand() < pillowChance(who)) {
-          const g = addFavor('lingrong', R.pillowFavor);
-          lines.push([who, 'happy', '皇上，安嬪妹妹做的東西可好了，您也去看看她吧。'], ['narr', '', `枕邊風！零溶恩寵 +${g}`]);
-          S.dayLog.push(`${name}吹了枕邊風，零溶恩寵 +${g}`);
+        if (report.pillow) {
+          lines.push([who, 'happy', '皇上，安嬪妹妹做的東西可好了，您也去看看她吧。'], ['narr', '', `枕邊風！零溶恩寵 +${report.pillow.favDelta}`]);
         }
-        if (c.status === 'normal' && rand() < R.pregnancyChance) {
-          c.status = 'pregnant';
-          c.preg = 0;
-          conceived = who;
+        if (report.conceived) {
           lines.push(['narr', '', `隔天一早，太醫診出${name}有喜了！`], ['lingrong', 'evil', '（……有喜了啊。）']);
-          S.dayLog.push(`${name}有喜了`);
         }
       }
     }
-    // 懷孕進度
-    D.TARGETS.forEach((t) => {
-      const c = S.conc[t];
-      if (c.status !== 'pregnant' || t === conceived) return;
-      c.preg++;
-      if (c.preg >= R.pregnancyNights) {
-        c.status = 'normal';
-        c.preg = 0;
-        const d = addFavor(t, R.birthFavor);
-        S.stats.births++;
-        lines.push(['narr', '', `${charName(t)}平安誕下皇嗣！黃上龍心大悅，恩寵 +${d}`], ['lingrong', 'shock', '（讓她生下來了……）']);
-        S.dayLog.push(`${charName(t)}誕下皇嗣，恩寵 +${d}`);
-      }
+    report.births.forEach((b) => {
+      lines.push(['narr', '', `${charName(b.who)}平安誕下皇嗣！黃上龍心大悅，恩寵 +${b.favDelta}`], ['lingrong', 'shock', '（讓她生下來了……）']);
     });
-    D.TARGETS.forEach((t) => { S.conc[t].debuff = null; });
-    // 黃后進言倒數
-    if (servedLing) S.noFlipNights = 0;
-    else if (++S.noFlipNights >= R.empressNights) {
-      S.noFlipNights = 0;
-      S.empressBoost = true;
-      S.dayLog.push('黃后似乎打算明天替零溶說話……');
-    }
-    playDialog(lines, () => go('night'), 'night');
+    return lines;
   }
 
   function nextDay() {
@@ -535,7 +419,7 @@
     S.orders = S.orders.filter((o) => o !== order);
     S.hand = S.hand.filter((h) => h !== item);
     const who = order.who;
-    const res = applySpike(who, item.spike, 'deliver');
+    const res = E.applySpike(D, S, who, item.spike, 'deliver', rand);
     let reward = 0;
     let friendDelta = res.friendDelta || 0;
     if (!res.caught) {
@@ -563,7 +447,7 @@
       return;
     }
     S.hand = S.hand.filter((h) => h !== item);
-    const res = applySpike(who, item.spike, 'gift');
+    const res = E.applySpike(D, S, who, item.spike, 'gift', rand);
     let friendDelta = res.friendDelta || 0;
     if (!res.caught && !res.useless) friendDelta = addFriend(who, D.PRODUCTS[item.product].gift);
     S.result = { kind: 'gift', who, product: item.product, spike: item.spike, friendDelta, reward: 0, ...res };
@@ -680,14 +564,14 @@
     } else {
       const c = S.conc[f];
       body = `${avatar(f)}<div class="tn-main"><b>今晚${charName(f)}侍寢</b>
-        <small>${c.debuff ? `已經${({ itch: '狂癢', stinky: '口臭', croton: '腹瀉' })[c.debuff]}，今晚必定出包！` : `友好 ${S.friend[f]}・枕邊風 ${pct(pillowChance(f))}`}</small></div>
+        <small>${c.debuff ? `已經${({ itch: '狂癢', stinky: '口臭', croton: '腹瀉' })[c.debuff]}，今晚必定出包！` : `友好 ${S.friend[f]}・枕邊風 ${pct(E.pillowChance(D, S, f))}`}</small></div>
         <button class="btn small ${c.debuff ? '' : 'primary'}" data-a="giftto" data-v="${f}" ${grounded() || c.debuff ? 'disabled' : ''}>送禮</button>`;
     }
     return `<section class="tonight">
       <div class="tn-row">${body}</div>
       <div class="tn-bribe"><span>${S.bribedToday
-        ? `已包大紅包・明天被翻 ${pct(flipOdds().lingrong)}`
-        : `給敬事房包大紅包：明天被翻 ${pct(flipOdds(0).lingrong)} → <b>${pct(flipOdds(R.bribeWeight).lingrong)}</b>`}${S.empressBoost ? '<br>黃后明天會替零溶進言！' : ''}</span>
+        ? `已包大紅包・明天被翻 ${pct(E.flipOdds(D, S).lingrong)}`
+        : `給敬事房包大紅包：明天被翻 ${pct(E.flipOdds(D, S, 0).lingrong)} → <b>${pct(E.flipOdds(D, S, R.bribeWeight).lingrong)}</b>`}${S.empressBoost ? '<br>黃后明天會替零溶進言！' : ''}</span>
         <button class="link-btn" data-a="bribe" ${S.bribedToday || S.silver < R.bribeCost ? 'disabled' : ''}>${S.bribedToday ? '已打點' : coin(R.bribeCost)}</button></div>
     </section>`;
   }
@@ -845,7 +729,7 @@
       const spikeRow = (id) => {
         const it = D.ITEMS[id];
         const n = have(id);
-        const p = who ? predict(who, id, order ? 'deliver' : 'gift') : null;
+        const p = who ? E.predict(D, S, who, id, order ? 'deliver' : 'gift') : null;
         const on = craftSel.spike === id;
         return `<button class="srow ${on ? 'on' : ''}" data-a="spike" data-v="${id}" ${n && !toInv ? '' : 'disabled'}>
           ${tok(id)}<span class="srow-main"><b>${it.name}</b> <small>×${n}</small><small class="src">${n ? it.desc : `缺貨・${sourcesOf(id).map((s) => s.label).join('、')}`}</small></span>
@@ -914,7 +798,7 @@
       if (who) {
         list = items.length ? items.map((h) => {
           const blocked = h.spike && who !== S.flip;
-          const p = h.spike ? predict(who, h.spike, 'gift') : null;
+          const p = h.spike ? E.predict(D, S, who, h.spike, 'gift') : null;
           return `<div class="row gift-row ${blocked ? 'blocked' : ''}">${tok(h.product)}${h.spike ? tok(h.spike, 'sm') : ''}
             <div class="row-main"><b>${itemName(h.product)}${h.spike ? `<em class="spiked">＋${itemName(h.spike)}</em>` : ''}</b>
             <small>${blocked ? '加料的禮只能送給今晚侍寢的人' : p ? `${p.txt}・${p.riskTxt}` : `收下後友好 +${D.PRODUCTS[h.product].gift}`}</small></div>
@@ -973,7 +857,7 @@
     },
 
     status() {
-      const odds = flipOdds();
+      const odds = E.flipOdds(D, S);
       const row = (who) => {
         const isT = isTarget(who);
         return `<div class="hrow">
@@ -981,7 +865,7 @@
             <span class="odds">明天被翻 ${pct(odds[who])}</span></div>
           <div class="meter"><span>恩寵</span><span class="bar"><i style="width:${S.favor[who]}%;background:${D.CHARS[who].color}"></i></span><b>${S.favor[who]}</b></div>
           ${isT ? `<div class="meter"><span>友好</span><span class="bar heart"><i style="width:${S.friend[who]}%"></i></span><b>${S.friend[who]}</b></div>
-            <div class="hrow-foot">枕邊風 ${pct(pillowChance(who))}・收禮 ${pct(acceptChance(who))}</div>` : ''}
+            <div class="hrow-foot">枕邊風 ${pct(E.pillowChance(D, S, who))}・收禮 ${pct(acceptChance(who))}</div>` : ''}
         </div>`;
       };
       const inv = Object.keys(S.inv);
