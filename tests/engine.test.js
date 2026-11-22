@@ -531,21 +531,40 @@ function assertDungeon(run, label) {
   for (const it of run.items) assert.ok(dist[it.y * run.w + it.x] > 0, `${label} 素材走得到`);
   // 出生點 nearItem 步內至少有 1 個素材
   assert.ok(run.items.some((it) => dist[it.y * run.w + it.x] <= DG.nearItem), `${label} 出生點 ${DG.nearItem} 格內有素材`);
-  // 稀有放在離入口最遠的幾個庭院、一間一個，而且在步數預算內走得到
-  const entry = run.rooms.map((r) => {
-    let best = Infinity;
-    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const d = dist[y * run.w + x]; if (d >= 0 && d < best) best = d; }
-    return best;
-  });
-  const deepest = entry.slice(1).sort((a, b) => b - a).slice(0, DG.rareCount);
-  assert.deepStrictEqual(rares.map((it) => entry[roomOf(run, it)]).sort((a, b) => b - a), deepest, `${label} 稀有在最深的庭院`);
+  // 稀有位置隨機，但一定在步數預算內走得到；素材只會在草地或石板路上
   for (const it of rares) assert.ok(dist[it.y * run.w + it.x] <= DG.steps * DG.rareReach, `${label} 稀有走得到`);
+  for (const it of run.items) assert.ok('.,'.includes(run.tiles[it.y][it.x]), `${label} 素材在草地或走廊`);
   // 侍衛一開始不在場
   assert.strictEqual(run.guards.length, 0, `${label} 開場沒有侍衛`);
 }
 
-test('buildGatherDungeon：200 個 seed 都滿足生成不變式（連通、素材、出生點旁有素材、稀有最深、開場無侍衛）', () => {
+test('buildGatherDungeon：200 個 seed 都滿足生成不變式（連通、素材、出生點旁有素材、稀有走得到、開場無侍衛）', () => {
   for (let seed = 1; seed <= 200; seed++) assertDungeon(E.buildGatherDungeon(D, fresh(), 'garden', lcg(seed)), `seed ${seed}`);
+});
+
+test('buildGatherDungeon：素材位置隨機——走廊上也會有素材、稀有不一定在最深的庭院', () => {
+  let onPath = 0;
+  let rareOnPath = 0;
+  let rareNotDeepest = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    const run = E.buildGatherDungeon(D, fresh(), 'garden', lcg(seed));
+    const dist = E.gatherDist(run, run.player.x, run.player.y);
+    const entry = run.rooms.map((r) => {
+      let best = Infinity;
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const d = dist[y * run.w + x]; if (d >= 0 && d < best) best = d; }
+      return best;
+    });
+    const deepest = Math.max(...entry.slice(1));
+    for (const it of run.items) {
+      const path = run.tiles[it.y][it.x] === ',';
+      if (path) onPath++;
+      if (it.rare && path) rareOnPath++;
+      if (it.rare && (roomOf(run, it) < 0 || entry[roomOf(run, it)] < deepest)) rareNotDeepest++;
+    }
+  }
+  assert.ok(onPath > 200, `走廊上的素材 ${onPath}`);
+  assert.ok(rareOnPath > 20, `走廊上的稀有 ${rareOnPath}`);
+  assert.ok(rareNotDeepest > 150, `不在最深庭院的稀有 ${rareNotDeepest}`);
 });
 
 test('buildGatherDungeon：極端 rand（恆 0／恆 0.999／恆 0.5）也會回傳合格地圖（重骰或保底布局）', () => {
@@ -593,7 +612,7 @@ test('gatherStep 移動：8 方向各走一格、步數 -1、事件 move', () =>
   }
 });
 
-test('gatherStep 撞牆／擺設／侍衛／斜切牆角：位置與步數不變、事件 bump、侍衛不動', () => {
+test('gatherStep 撞牆／擺設／斜切牆角：位置與步數不變、事件 bump；自己撞上侍衛：當場被抓', () => {
   // 牆
   let run = mini(['#####', '#Z..#', '#...#', '#####']);
   assert.deepStrictEqual(types(E.gatherStep(run, 'n', ZERO)), ['bump']);
@@ -608,12 +627,19 @@ test('gatherStep 撞牆／擺設／侍衛／斜切牆角：位置與步數不變
   run = mini(['#####', '#Z#.#', '#...#', '#####']);
   assert.deepStrictEqual(types(E.gatherStep(run, 'se', ZERO)), ['bump']);
   assert.deepStrictEqual([run.player.x, run.player.y, run.stepsLeft], [1, 1, 60]);
-  // 侍衛站的格子（隔著牆角，侍衛抓不到也看得到，但玩家不能走上去）
+  // 自己走到侍衛站的格子：當場被抓，零溶不移動、不扣步
   run = mini(['#######', '#Z@...#', '#######']);
-  const before = JSON.stringify(run.guards);
-  assert.deepStrictEqual(types(E.gatherStep(run, 'e', ZERO)), ['bump']);
-  assert.strictEqual(run.stepsLeft, 60);
-  assert.strictEqual(JSON.stringify(run.guards), before, 'bump 不會讓侍衛行動');
+  run.got = { jasmine: 1 };
+  assert.deepStrictEqual(E.gatherStep(run, 'e', ZERO), [{ t: 'caught', g: 0, self: true }]);
+  assert.deepStrictEqual([run.player.x, run.player.y, run.stepsLeft], [1, 1, 60]);
+  assert.deepStrictEqual([run.over, run.endReason], [true, 'caught']);
+  assert.deepStrictEqual(run.got, { jasmine: 1 }, '收穫保留');
+  assert.strictEqual(run.guards[0].face, 'left', '侍衛轉身面向零溶');
+  assert.deepStrictEqual(E.gatherStep(run, 'w', ZERO), [], '結束後不再推進');
+  // 斜向撞侍衛但會切牆角 → 只是撞牆，不算被抓
+  run = mini(['#####', '#Z#.#', '#.@.#', '#####']);
+  assert.deepStrictEqual(types(E.gatherStep(run, 'se', ZERO)), ['bump']);
+  assert.strictEqual(run.over, false);
 });
 
 test('gatherStep 等待：步數 -1、侍衛照常行動', () => {

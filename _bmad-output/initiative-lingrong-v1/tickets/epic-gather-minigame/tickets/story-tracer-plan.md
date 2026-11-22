@@ -109,6 +109,8 @@ context: ['docs/game-design.md', 'docs/pixel-art-spec.md']
 
 ## Plan Change Log
 
+- 2026-11-22（使用者第二輪試玩後重新協商）：(1) 素材位置改成完全隨機，庭院和走廊都放；稀有 2 個不再固定在最深的庭院，只要求 42 步內走得到。(2) 拿掉「原地等」：方向盤中央留空、`S` 鍵不再綁定（引擎的 `wait` action 保留，測試仍在用）。(3) 零溶自己走到侍衛格上＝當場被抓（事件 `{t:'caught',g,self:true}`，不移動、不扣步），原本是撞牆。(4) 登場提示改成「侍衛開始巡邏了」／「侍衛增加了」；被抓時跳對話框，侍衛說「小主，請回宮。」，約 2.2 秒或按方向鍵後才轉場；這些文字搬到 `GATHER.garden`（`guardName`／`spawnNotes`／`caughtLine`）。(5) 遊戲畫面填滿 HUD 與方向盤之間，倍率取短邊還看得到 9 格的最大整數倍（手機 2 倍、480px 版面 3 倍），方向盤每格縮到 44×36。上面的 frozen 區與 Implementation Notes 若有「原地等」「稀有在最深處」「11×13 格」的敘述，以這一條為準。
+
 - 2026-11-22（使用者試玩後重新協商，改到 frozen 區的 I/O 矩陣兩列）：侍衛改成陸續登場（第 10 步來第一名、離玩家 ≥8 格；第 30 步來第二名、≥5 格）；出生點 4 格內保證 1 個素材；稀有 1 → 2 個；額外常見素材 4～6 → 7～9。原因：試玩常在撿到東西前就被抓。另修掉一個 bug：離屏緩衝和畫布尺寸不一致，鏡頭算錯、零溶會跑到畫面外（是上一輪 review 修補「小螢幕整數倍」時引入的）；鏡頭同時改成永遠置中。實作另加 `maxDist`（登場位置盡量不超過 14／11 格）以免侍衛遠到遇不到，數值在 `GATHER.garden.dungeon.guardSpawns`。
 
 - 2026-11-22（人工重新協商）：整份 plan 重寫。舊版（即時閃避 tracer，status `built`，commit `33afa90`，review 已處理長寬比問題）被取代。KEEP：引擎／外殼分工、`enter`/`leavegather` action 與回歸網安全作法、`applyGatherHaul`、結果 sheet＋`finishAction` 路由、禁足守衛。DROP：`buildGatherScene`、即時 rAF 位移、搖桿、30 秒倒數、aspect 校正、`.pf-*` 樣式、「不引入 canvas」的限制。

@@ -519,35 +519,29 @@
       }
     }
 
-    // 各庭院的空地、離入口的步數
+    // 可放素材的格子：庭院空地＋走廊（月洞門不放）。素材不擋路，放哪都不影響連通
     const dist = gatherDist(run, gx, gy);
-    const free = rooms.map((r) => {
-      const cells = [];
-      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (grid[y][x] === '.') cells.push([x, y]);
-      return cells;
-    });
-    const entry = free.map((cells) => Math.min(...cells.map(([x, y]) => dist[y * W + x])));
-    const take = (ri_, ok) => {
-      const pool = free[ri_].map((cell_, i) => i).filter((i) => !ok || ok(free[ri_][i]));
+    const free = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if ((grid[y][x] === '.' || grid[y][x] === ',') && dist[y * W + x] >= 1) free.push([x, y]);
+    }
+    const take = (ok) => {
+      const pool = free.map((cell_, i) => i).filter((i) => !ok || ok(free[i]));
       if (!pool.length) return null;
-      return free[ri_].splice(pool[Math.floor(rand() * pool.length)], 1)[0];
-    };
-    const takeAny = () => {
-      const open = free.map((cells, i) => i).filter((i) => free[i].length);
-      return open.length ? take(open[Math.floor(rand() * open.length)]) : null;
+      return free.splice(pool[Math.floor(rand() * pool.length)], 1)[0];
     };
 
-    // 素材：出生點附近先保證 1 個常見素材；稀有放最深的幾個庭院（一間一個）；
-    // 其餘每種至少 1 個，再多撒幾個常見的
+    // 素材：出生點附近先保證 1 個常見素材；稀有隨機放（只要求在步數預算內走得到）；
+    // 其餘每種至少 1 個，再多撒幾個常見的。庭院、走廊都可能有
     const put = (id, cell_) => { if (cell_) run.items.push({ id, rare: id === run.rare, x: cell_[0], y: cell_[1] }); };
     const commons = g.table.filter(([id]) => id !== run.rare);
-    const near = ([x, y]) => { const d = dist[y * W + x]; return d >= 1 && d <= c.nearItem; };
-    put(weightedPick(commons, rand), take(0, near));
-    const depth = rooms.map((_, i) => i).slice(1).sort((a, b) => entry[b] - entry[a]);
-    for (let i = 0; i < c.rareCount; i++) put(run.rare, take(depth[i % depth.length]));
-    for (const [id] of commons) put(id, takeAny());
+    const near = ([x, y]) => dist[y * W + x] <= c.nearItem;
+    const reach = ([x, y]) => dist[y * W + x] <= c.steps * c.rareReach;
+    put(weightedPick(commons, rand), take(near));
+    for (let i = 0; i < c.rareCount; i++) put(run.rare, take(reach));
+    for (const [id] of commons) put(id, take());
     const extra = ri(c.extraItems[0], c.extraItems[1]);
-    for (let i = 0; i < extra; i++) put(weightedPick(commons, rand), takeAny());
+    for (let i = 0; i < extra; i++) put(weightedPick(commons, rand), take());
 
     // 侍衛不在這裡生成：走滿指定步數後才由 gatherStep 放進場（見 gSpawnCell）
     gMarkSeen(run);
@@ -612,7 +606,7 @@
   // 採集地下城・推進一回合。action：'n','ne','e','se','s','sw','w','nw'（走一格）、'wait'（原地等）、'quit'（收工）。
   // 直接改 run，回傳事件清單給外殼播動畫／音效：
   //   {t:'bump'}｜{t:'move',from,to}｜{t:'wait'}｜{t:'pick',id,rare,x,y}
-  //   {t:'spawn',g,x,y}｜{t:'gmove',g,from,to}｜{t:'alert',g}｜{t:'lost',g}｜{t:'calm',g}｜{t:'caught',g}｜{t:'timeout'}｜{t:'quit'}
+  //   {t:'spawn',g,x,y}｜{t:'gmove',g,from,to}｜{t:'alert',g}｜{t:'lost',g}｜{t:'calm',g}｜{t:'caught',g,self?}｜{t:'timeout'}｜{t:'quit'}
   // 順序：玩家行動 → 撿取 → 扣步、更新已探索 → 每名侍衛（抓人判定 → 感知 → 走一格）→ 新侍衛登場 → 步數用完。
   function gatherStep(run, action, rand) {
     if (run.over) return [];
@@ -632,7 +626,15 @@
       p.face = gFace(dx, dy, p.face);
       const tx = p.x + dx;
       const ty = p.y + dy;
-      if (!gatherCanStep(run, p.x, p.y, dx, dy) || run.guards.some((gd) => gd.x === tx && gd.y === ty)) return [{ t: 'bump' }];
+      if (!gatherCanStep(run, p.x, p.y, dx, dy)) return [{ t: 'bump' }];
+      // 自己撞上侍衛：當場被抓（零溶不移動）
+      const hit = run.guards.findIndex((gd) => gd.x === tx && gd.y === ty);
+      if (hit >= 0) {
+        run.guards[hit].face = gFace(-dx, -dy, run.guards[hit].face);
+        run.over = true;
+        run.endReason = 'caught';
+        return [{ t: 'caught', g: hit, self: true }];
+      }
       ev.push({ t: 'move', from: { x: p.x, y: p.y }, to: { x: tx, y: ty } });
       p.x = tx;
       p.y = ty;

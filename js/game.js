@@ -21,14 +21,16 @@
   // 採集地下城：哪些地點走像素地下城（其餘維持舊的快速採集）
   const MINIGAME = new Set(['garden']);
   const TILE = 16;
-  const VIEW_W = 11; // 視窗 11×13 格
-  const VIEW_H = 13;
+  const MIN_VIEW = 9; // 短邊至少看得到 9 格（侍衛視野 4.5 格，看得到零溶的侍衛一定在畫面內）
+  const MAX_VIEW_W = 17; // 超大螢幕也不顯示超過這麼多格
+  const MAX_VIEW_H = 21;
+  const SAY_MS = 2200; // 被抓時侍衛那句話停留多久（可按鍵跳過）
   const STEP_MS = 120; // 走一格的補間時間
   const REPEAT_MS = 150; // 按住不放的連走間隔
   const HOLD_MS = 260; // 按住多久才開始連走（避免一按走兩步）
   const DG_KEYS = {
     w: 'n', arrowup: 'n', x: 's', arrowdown: 's', a: 'w', arrowleft: 'w', d: 'e', arrowright: 'e',
-    q: 'nw', e: 'ne', z: 'sw', c: 'se', s: 'wait',
+    q: 'nw', e: 'ne', z: 'sw', c: 'se',
   };
   let pixelAtlas = null; // sprite id → 離屏 canvas（第一次進場時建立）
 
@@ -374,27 +376,28 @@
 
   function grabDungeonEls(gs) {
     const q = (sel) => app.querySelector(sel);
-    gs.el = { root: q('.dg'), stage: q('.dg-stage'), canvas: q('.dg-canvas'), steps: q('.dg-steps b'), sun: q('.dg-sun'), got: q('.dg-got'), confirm: q('.dg-confirm'), note: q('.dg-note') };
+    gs.el = { root: q('.dg'), stage: q('.dg-stage'), canvas: q('.dg-canvas'), steps: q('.dg-steps b'), sun: q('.dg-sun'), got: q('.dg-got'), confirm: q('.dg-confirm'), note: q('.dg-note'), say: q('.dg-say') };
     gs.ctx = gs.el.canvas.getContext('2d');
     fitDungeon(gs);
     updateDungeonHud(gs);
   }
 
-  // 一律整數倍放大、最小 2 倍。螢幕放不下 11×13 格的 2 倍時，少顯示幾格，不做非整數縮放。
+  // 畫面填滿整個舞台。一律整數倍放大（最小 2 倍），倍率取「短邊還看得到 MIN_VIEW 格」的最大值；
+  // 緩衝大小＝舞台大小 ÷ 倍率，不必是整格（鏡頭以像素為單位置中，邊緣露出半格沒關係）。
   function fitDungeon(gs) {
     const { stage, canvas } = gs.el;
-    const sw = stage.clientWidth;
-    const sh = stage.clientHeight;
-    const scale = Math.max(2, Math.floor(Math.min(sw / (VIEW_W * TILE), sh / (VIEW_H * TILE))));
-    const cols = Math.max(5, Math.min(VIEW_W, Math.floor(sw / (TILE * scale))));
-    const rows = Math.max(5, Math.min(VIEW_H, Math.floor(sh / (TILE * scale))));
+    const sw = stage.clientWidth - 6; // 留白給畫框
+    const sh = stage.clientHeight - 6;
+    const scale = Math.max(2, Math.floor(Math.min(sw, sh) / (MIN_VIEW * TILE)));
+    const w = Math.max(5 * TILE, Math.min(MAX_VIEW_W * TILE, Math.floor(sw / scale)));
+    const h = Math.max(5 * TILE, Math.min(MAX_VIEW_H * TILE, Math.floor(sh / scale)));
     // 離屏緩衝和畫面上的 canvas 一定要同尺寸：鏡頭是用緩衝的寬高算的，兩者不一致時零溶會被算到畫面外
     for (const cv of [canvas, gs.buf]) {
-      if (cv.width !== cols * TILE) cv.width = cols * TILE;
-      if (cv.height !== rows * TILE) cv.height = rows * TILE;
+      if (cv.width !== w) cv.width = w;
+      if (cv.height !== h) cv.height = h;
     }
-    canvas.style.width = `${canvas.width * scale}px`;
-    canvas.style.height = `${canvas.height * scale}px`;
+    canvas.style.width = `${w * scale}px`;
+    canvas.style.height = `${h * scale}px`;
   }
 
   function updateDungeonHud(gs) {
@@ -420,6 +423,8 @@
       gs.held = action;
       gs.heldKey = key;
       gs.nextAt = performance.now() + HOLD_MS;
+      // 被抓的那句話：看過一下之後，按任何方向就跳過
+      if (gs.phase === 'ending' && gs.caughtBy >= 0 && performance.now() >= gs.sayFrom + 500) { gs.endAt = 0; return; }
       dungeonAct(action);
     };
     gs.onKeyDown = (e) => {
@@ -493,19 +498,21 @@
     if (!events.length) return;
     const now = performance.now();
     if (events[0].t === 'bump') { A.sfx('bump'); gs.held = null; return; }
+    const loc = D.GATHER[gs.loc];
     const anim = { start: now, p: null, g: {} };
     for (const ev of events) {
       switch (ev.t) {
         case 'move': anim.p = ev.from; A.sfx('step'); break;
         case 'pick': gs.fx.push({ x: ev.x, y: ev.y, t0: now + STEP_MS * 0.6 }); A.sfx(ev.rare ? 'pickRare' : 'pick'); break;
         case 'gmove': anim.g[ev.g] = ev.from; break;
-        case 'spawn': dungeonNote(ev.g === 0 ? '侍衛進園巡邏了！' : '又來了一名侍衛！'); A.sfx('guardIn'); break;
+        case 'spawn': dungeonNote(loc.spawnNotes[Math.min(ev.g, loc.spawnNotes.length - 1)]); A.sfx('guardIn'); break;
         case 'alert': gs.bubbles[ev.g] = { id: 'bubble_alert', until: now + 600 }; A.sfx('alert'); break;
         case 'lost': gs.bubbles[ev.g] = { id: 'bubble_lost', until: now + 1400 }; A.sfx('lost'); break;
         case 'caught':
-          gs.phase = 'ending'; gs.endAt = now + 950; gs.caughtBy = ev.g;
+          gs.phase = 'ending'; gs.caughtBy = ev.g; gs.held = null; gs.buffer = null;
           gs.flashUntil = now + STEP_MS + 160; gs.hopFrom = now + STEP_MS;
-          gs.bubbles[ev.g] = { id: 'bubble_alert', until: now + 950 };
+          gs.sayFrom = now + STEP_MS + 160; gs.endAt = gs.sayFrom + SAY_MS;
+          gs.bubbles[ev.g] = { id: 'bubble_alert', until: gs.sayFrom };
           A.sfx('caught');
           break;
         case 'timeout': gs.phase = 'ending'; gs.endAt = now + 750; A.sfx('timeout'); break;
@@ -543,7 +550,9 @@
         else if (gs.held && now >= gs.nextAt) { gs.nextAt = now + REPEAT_MS; dungeonAct(gs.held); }
       }
     } else if (gs.phase === 'ending') {
-      if (now >= gs.endAt) { gs.phase = 'out'; gs.t0 = now; A.sfx('exitDungeon'); }
+      // 被抓：閃白之後侍衛開口，話說完（或玩家按鍵）才轉場
+      if (gs.caughtBy >= 0 && gs.el.say.hidden && now >= gs.sayFrom) gs.el.say.hidden = false;
+      if (now >= gs.endAt) { gs.phase = 'out'; gs.t0 = now; gs.el.say.hidden = true; A.sfx('exitDungeon'); }
     } else if (gs.phase === 'out') {
       gs.mosaic = 1 + 7 * Math.min(1, t / 300);
       gs.fade = Math.max(0, Math.min(1, (t - 150) / 150));
@@ -565,8 +574,8 @@
       : { x: o.x * TILE, y: o.y * TILE });
     const me = at(run.player, gs.anim && gs.anim.p);
     // 鏡頭永遠把零溶放在畫面正中央（走到地圖邊緣也一樣，地圖外就是黑的）
-    const camX = me.x + TILE / 2 - BUF_W / 2;
-    const camY = me.y + TILE / 2 - BUF_H / 2;
+    const camX = Math.round(me.x + TILE / 2 - BUF_W / 2);
+    const camY = Math.round(me.y + TILE / 2 - BUF_H / 2);
     const x0 = Math.max(0, Math.floor(camX / TILE));
     const y0 = Math.max(0, Math.floor(camY / TILE));
     const x1 = Math.min(run.w - 1, Math.floor((camX + BUF_W) / TILE));
@@ -983,7 +992,7 @@
         const done = S.slot >= R.slotsPerDay;
         const entries = Object.entries(gatherResult.got);
         const caught = gatherResult.ended === 'caught';
-        const endMsg = caught ? '被侍衛逮個正著！這趟到此為止——撿到的都保住了。'
+        const endMsg = caught ? `${g.guardName}：「${g.caughtLine}」這趟到此為止——撿到的都保住了。`
           : gatherResult.ended === 'timeout' ? '天色暗了，先撤！撿到的都帶走了。'
           : gatherResult.ended === 'quit' ? '見好就收，全身而退。' : '';
         const reAction = MINIGAME.has(gatherResult.loc) ? 'enter' : 'regather';
@@ -1247,9 +1256,11 @@
   // 採集地下城 overlay（疊在 gather 畫面上）。畫面由 canvas 逐幀繪製，HUD 與方向盤是 DOM。
   function gatherOverlay() {
     const gs = gatherScene;
-    const names = { nw: '左上', n: '上', ne: '右上', w: '左', wait: '原地等', e: '右', sw: '左下', s: '下', se: '右下' };
-    const pad = ['nw', 'n', 'ne', 'w', 'wait', 'e', 'sw', 's', 'se']
-      .map((d) => `<button class="dg-key" data-d="${d}" aria-label="${names[d]}">${d === 'wait' ? '等' : '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1l5 9-5-2.5L1 10z"/></svg>'}</button>`).join('');
+    const g = D.GATHER[gs.loc];
+    const names = { nw: '左上', n: '上', ne: '右上', w: '左', e: '右', sw: '左下', s: '下', se: '右下' };
+    // 3×3 方向盤，正中央留空（沒有「原地等」）
+    const pad = ['nw', 'n', 'ne', 'w', '', 'e', 'sw', 's', 'se']
+      .map((d) => (d ? `<button class="dg-key" data-d="${d}" aria-label="${names[d]}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1l5 9-5-2.5L1 10z"/></svg></button>` : '<i class="dg-key-gap"></i>')).join('');
     return `<div class="dg${gs.phase === 'intro' ? '' : ' on'}">
       <div class="dg-blinds">${'<i></i>'.repeat(8)}</div>
       <div class="dg-hud snes">
@@ -1258,8 +1269,9 @@
         <button class="dg-quit" data-a="dgquit">收工</button>
       </div>
       <div class="dg-stage">
-        <canvas class="dg-canvas" width="${VIEW_W * TILE}" height="${VIEW_H * TILE}"></canvas>
+        <canvas class="dg-canvas" width="${MIN_VIEW * TILE}" height="${MIN_VIEW * TILE}"></canvas>
         <div class="dg-note snes" hidden></div>
+        <div class="dg-say snes" hidden><b>${esc(g.guardName)}</b><span>${esc(g.caughtLine)}</span></div>
         <div class="dg-confirm snes" ${gs.confirm ? '' : 'hidden'}>
           <p>現在收工嗎？撿到的都會帶走。</p>
           <div><button data-a="leavegather">收工</button><button data-a="dgstay">繼續採</button></div>
@@ -1267,7 +1279,7 @@
       </div>
       <div class="dg-foot">
         <div class="dg-pad">${pad}</div>
-        <p class="dg-hint">QWE / ASD / ZXC 移動（S 原地等）・Esc 收工</p>
+        <p class="dg-hint">QWE / A D / ZXC 或方向鍵移動・Esc 收工</p>
       </div>
     </div>`;
   }

@@ -431,7 +431,7 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .dg:not(.on) > :not(.dg-blinds) { visibility: hidden; }
 /* SNES 式視窗框：深藍漸層、白框、深色外邊、階梯圓角 */
 .snes { background: linear-gradient(#1c2a6b, #0d143d); border: 2px solid #fbf7ef; box-shadow: 0 0 0 1px #0d0a14, inset 0 0 0 1px #0d143d; border-radius: 4px; color: #fbf7ef; }
-.dg-hud { flex: none; margin: 6px; padding: 6px 8px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; }
+.dg-hud { flex: none; margin: 4px 4px 2px; padding: 4px 8px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; }
 .dg-steps { flex: none; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .dg-steps b { font-size: 20px; color: #f2c14e; min-width: 1.3em; text-align: right; }
 .dg-steps b.low { color: #ff8b8b; }
@@ -450,11 +450,11 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .dg-confirm p { margin: 0 0 12px; line-height: 1.6; }
 .dg-confirm div { display: flex; gap: 10px; justify-content: center; }
 .dg-confirm[hidden] { display: none; }
-.dg-foot { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); }
-.dg-pad { display: grid; grid-template-columns: repeat(3, 52px); grid-auto-rows: 48px; gap: 4px; }
+.dg-foot { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 12px calc(6px + env(safe-area-inset-bottom)); }
+.dg-pad { display: grid; grid-template-columns: repeat(3, 44px); grid-auto-rows: 36px; gap: 3px; }
 .dg-key { border: 2px solid #fbf7ef; border-radius: 4px; background: linear-gradient(#1c2a6b, #0d143d); box-shadow: 0 0 0 1px #0d0a14, 0 3px 0 #0d0a14; color: #fbf7ef; font-size: 16px; font-weight: 900; cursor: pointer; touch-action: none; padding: 0; }
 .dg-key:active { transform: translateY(2px); box-shadow: 0 0 0 1px #0d0a14, 0 1px 0 #0d0a14; background: #33475f; }
-.dg-key svg { width: 18px; height: 18px; fill: #fbf7ef; pointer-events: none; display: block; margin: auto; }
+.dg-key svg { width: 15px; height: 15px; fill: #fbf7ef; pointer-events: none; display: block; margin: auto; }
 .dg-key[data-d="ne"] svg { transform: rotate(45deg); }
 .dg-key[data-d="e"] svg { transform: rotate(90deg); }
 .dg-key[data-d="se"] svg { transform: rotate(135deg); }
@@ -462,7 +462,9 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .dg-key[data-d="sw"] svg { transform: rotate(225deg); }
 .dg-key[data-d="w"] svg { transform: rotate(270deg); }
 .dg-key[data-d="nw"] svg { transform: rotate(315deg); }
-.dg-key[data-d="wait"] { background: #33475f; }
+.dg-say { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 10px 12px; z-index: 2; pointer-events: none; display: flex; flex-direction: column; gap: 4px; font-size: 16px; font-weight: 700; line-height: 1.5; }
+.dg-say b { font-size: 13px; color: #f2c14e; }
+.dg-say[hidden] { display: none; }
 .dg-hint { margin: 0; font-size: 11px; color: #a9cdec; text-align: center; }
 @media (hover: none) { .dg-hint { display: none; } }
 /* 轉場百葉：8 條直條由上往下收黑；出場時反過來打開 */
