@@ -38,14 +38,57 @@ window.GAME_DATA = (() => {
   // 採集表：[素材, 權重]
   const GATHER = {
     garden: {
-      name: '御花園', bg: 'garden',
+      name: '御花園', bg: 'garden', rare: 'itch',
+      bgm: 'gather', // 採集音樂：assets/audio/bgm_gather.lite.mp3（沒有就用 8-bit 合成曲）
       table: [['jasmine', 3], ['osmanthus', 3], ['rose', 3], ['itch', 2]],
       intro: '零溶提著小籃子，假裝在御花園賞花……',
+      // 地形代號 → 像素圖（js/pixelart.js 的 id）。floor／hall 是變體清單；big 是佔 2×2 格的擺設（_0、_1 兩幀）
+      tileset: {
+        floor: ['grass_0', 'grass_1', 'grass_2'], hall: ['grass_0', 'grass_0', 'grass_1'], // 小徑也鋪草地，可走的地方一眼看得出來
+        wallTop: 'hedge_top', wallFace: 'hedge_face', door: 'gate', big: 'pond',
+        props: { F: 'flowerbed', R: 'rock', L: 'lantern' },
+        names: { '#': '樹籬', P: '荷花池', F: '花圃', R: '假山', L: '石燈籠' }, // 撞到時的提示用
+      },
+      // 巡邏者，依登場順序：稱呼、像素 sprite、結算立繪（assets/characters，可省略）、登場提示、抓到零溶時說的話
+      guards: [
+        { name: '侍衛', sprite: 'guard', img: 'guard', note: '侍衛開始巡邏了', line: '小主，請回宮。' },
+        { name: '侍衛', sprite: 'guard', img: 'guard', note: '侍衛增加了', line: '小主，請回宮。' },
+      ],
+      // 採集地下城參數（game-design §12.5）。引擎一律從這裡讀，不寫死。
+      dungeon: {
+        w: 25, h: 31, rooms: [5, 7], roomW: [4, 8], roomH: [3, 5], steps: 60,
+        guardSight: 4.5, playerSight: 5.5,
+        // 侍衛不是一開始就在場：走滿 step 步後登場，離零溶當下位置至少 minDist 格、盡量不超過 maxDist 格
+        guardSpawns: [{ step: 10, minDist: 8, maxDist: 14 }, { step: 30, minDist: 5, maxDist: 11 }],
+        rareCount: 2, extraItems: [7, 9], nearItem: 4, // 出生點 nearItem 格內保證有 1 個素材
+        searchTurns: 3, wanderKeep: 0.7, wanderIdle: 0.1,
+        loops: 2, rareReach: 0.7,
+      },
     },
     taiyi: {
-      name: '太醫院', bg: 'taiyi',
-      table: [['angelica', 3], ['croton', 2], ['petal', 1], ['musk', 0.6]],
+      name: '太醫院', bg: 'taiyi', rare: 'musk',
+      bgm: 'gather', // 想讓太醫院用不同曲子：改成 'gather_taiyi'，放 bgm_gather_taiyi.lite.mp3
+      table: [['angelica', 3], ['croton', 1.5], ['petal', 0.8], ['musk', 0.6]],
       intro: '趁太醫打瞌睡，零溶偷偷拉開了百子櫃……',
+      tileset: {
+        floor: ['ty_floor_0', 'ty_floor_1', 'ty_floor_2'], hall: ['ty_floor_0', 'ty_floor_0', 'ty_floor_1'], // 走廊也鋪木地板，可走的地方一眼看得出來
+        wallTop: 'ty_wall_top', wallFace: 'ty_wall_face', door: 'ty_door', big: 'ty_stove',
+        props: { F: 'ty_basket', R: 'ty_mortar', L: 'ty_candle' },
+        names: { '#': '百子櫃', P: '煎藥爐', F: '藥材竹簍', R: '搗藥桌', L: '燭台' },
+      },
+      guards: [
+        { name: '藥童', sprite: 'page', note: '藥童開始巡房了', line: '小主，這裡不能亂翻，請回宮。' },
+        { name: '太醫溫十粗', sprite: 'doctor', img: 'doctor', note: '溫太醫睡醒了', line: '小主，請回宮歇著吧。' },
+      ],
+      // 室內：隔間多、每間小、走廊多。麝香太強，一趟只放 1 個（game-design §12.8）
+      dungeon: {
+        w: 25, h: 31, rooms: [6, 8], roomW: [3, 6], roomH: [3, 4], steps: 60,
+        guardSight: 4.5, playerSight: 5.5,
+        guardSpawns: [{ step: 10, minDist: 8, maxDist: 14 }, { step: 30, minDist: 5, maxDist: 11 }],
+        rareCount: 1, extraItems: [7, 9], nearItem: 4,
+        searchTurns: 3, wanderKeep: 0.7, wanderIdle: 0.1,
+        loops: 3, rareReach: 0.7,
+      },
     },
   };
 

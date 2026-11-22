@@ -1,5 +1,7 @@
 // 平衡模擬器：用機器人玩很多局，統計結果。
-// 用法：node tools/simulate.js [局數]
+// 用法：node tools/simulate.js [局數] [--quick]
+//   預設採集走地下城：先用 tools/gather-bot.js 的「會躲」機器人每張地圖玩 POOL 趟，
+//   整局模擬時每次採集從中抽一趟的收穫（地下城很慢，這樣才跑得動）。--quick＝舊的一鍵採集（2～3 個）。
 // 規則一律走遊戲引擎（js/engine.js）；模擬器只提供 bot 決策、mulberry32 種子、variant 覆蓋、
 // CLI 輸出，以及把引擎回傳的結構化結果翻成 S.m 統計的薄膠水。改規則只要改引擎，不必動這裡。
 const fs = require('fs');
@@ -18,7 +20,7 @@ function loadData() {
 // buy/bribe/flipWeights/catchChance/acceptChance/computeEnding。此處只保留 bot 介面的薄膠水：
 // 前置守衛（禁足、材料是否足夠）、把引擎結構化回傳翻成 S.m 統計。擲骰一律走注入的 rand，
 // 與引擎同序，故固定種子下輸出與重構前一致。
-function play(Dv, R, bot, rand) {
+function play(Dv, R, bot, rand, hauls) {
   const S = E.newState(Dv);
   // 統計物件（引擎不寫 S.m，由本檔從報告／結果翻出）
   S.m = {
@@ -55,7 +57,8 @@ function play(Dv, R, bot, rand) {
     bribe() { const r = E.bribe(Dv, S); if (r.ok) S.m.bribes++; return r.ok; },
     gather(loc) {
       if (grounded()) return false;
-      E.gather(Dv, S, loc, rand);
+      if (hauls && hauls[loc]) E.applyGatherHaul(Dv, S, loc, hauls[loc][Math.floor(rand() * hauls[loc].length)]);
+      else E.gather(Dv, S, loc, rand);
       return true;
     },
     craft(a, b, spike) {
@@ -198,6 +201,18 @@ function mulberry32(a) {
   };
 }
 
+// 每張地下城地圖預先玩 n 趟，回 { loc: [got, …] }
+const POOL = 2000;
+function dungeonHauls(D, n = POOL) {
+  const { playDungeon } = require('./gather-bot.js');
+  const out = {};
+  for (const loc of Object.keys(D.GATHER).filter((l) => D.GATHER[l].dungeon)) {
+    const rand = mulberry32(777);
+    out[loc] = Array.from({ length: n }, () => playDungeon(D, loc, rand, { careful: true }).got);
+  }
+  return out;
+}
+
 function runVariant(D0, variant, N) {
   const D = JSON.parse(JSON.stringify(D0, (k, v) => (typeof v === 'function' ? undefined : v)));
   const R = { ...D.RULES, ...(variant.rules || {}), fx: { ...D.RULES.fx, ...((variant.rules || {}).fx || {}) } };
@@ -205,12 +220,13 @@ function runVariant(D0, variant, N) {
   D.RULES = R;
   Object.entries(variant.items || {}).forEach(([id, o]) => Object.assign(D.ITEMS[id], o));
   Object.entries(variant.products || {}).forEach(([id, o]) => Object.assign(D.PRODUCTS[id], o));
+  const hauls = variant.quick ? null : dungeonHauls(D);
   const out = {};
   BOTS.forEach((bot, bi) => {
     const rand = mulberry32(1234 + bi);
     const acc = { got: {}, win: 0, rank: 0, ling: 0, top: 0, endings: {}, m: {} , caught: 0, grounded: 0, silver: 0, birthGames: 0 };
     for (let i = 0; i < N; i++) {
-      const { S, rank, ending, titles } = play(D, R, bot, rand);
+      const { S, rank, ending, titles } = play(D, R, bot, rand, hauls);
       titles.forEach((id) => { acc.got[id] = (acc.got[id] || 0) + 1; });
       acc.win += rank === 1;
       acc.rank += rank;
@@ -234,12 +250,14 @@ function runVariant(D0, variant, N) {
   return out;
 }
 
-module.exports = { loadData, runVariant, BOTS, play, makeBot, smartSpike, mulberry32 };
+module.exports = { loadData, runVariant, BOTS, play, makeBot, smartSpike, mulberry32, dungeonHauls };
 
 if (require.main === module) {
   const N = Number(process.argv[2]) || 5000;
   const D = loadData();
-  const res = runVariant(D, {}, N);
+  const quick = process.argv.includes('--quick');
+  console.log(quick ? '採集：舊的一鍵採集' : `採集：地下城（會躲侍衛的機器人，每張地圖預玩 ${POOL} 趟抽樣）`);
+  const res = runVariant(D, { quick }, N);
   for (const [bot, r] of Object.entries(res)) {
     console.log(`\n【${bot}】逆襲成功（恩寵第一） ${(r.winRate * 100).toFixed(1)}%｜平均名次 ${r.avgRank.toFixed(2)}｜零溶恩寵 ${r.ling.toFixed(0)}｜最高對手 ${r.topRival.toFixed(0)}`);
     console.log(`  被翻 ${r.m.lingFlips.toFixed(2)} 次｜打點 ${r.m.bribes.toFixed(2)}｜枕邊風 ${r.m.pillow.toFixed(2)}｜黃后進言 ${r.m.empress.toFixed(2)}｜被抓 ${r.caught.toFixed(2)}｜禁足 ${r.grounded.toFixed(1)} 天`);

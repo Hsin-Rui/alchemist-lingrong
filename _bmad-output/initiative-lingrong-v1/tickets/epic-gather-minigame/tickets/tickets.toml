@@ -1,0 +1,35 @@
+# Epic 2「採集互動小遊戲」的 stories，依 build order。tracer 先。
+# 規格權威：docs/game-design.md §12。建在 epic 1 的純引擎上。
+
+[[entry]]
+id = 1
+type = "story"
+title = "御花園像素潛行地下城（tracer）"
+description = "（2026-11-22 改方向，取代第一版即時閃避外殼）點『御花園』轉場進入超任像素風的回合制隨機地下城：25×31 格、5～7 個庭院＋走廊、迷霧與視野；零溶 8 方向一次一格（不可斜切牆角、沒有原地等），踩到素材自動撿；素材位置隨機（庭院與走廊都有），稀有 2 個也隨機；2 名侍衛陸續登場（第 10 步／第 30 步，離零溶 ≥8／≥5 格）、巡邏／發現（！）／追擊／跟丟（？）、侍衛回合能一步走到零溶即被抓，零溶自己撞上侍衛也算；被抓時侍衛說「小主，請回宮。」；60 步用完、被抓或收工結束，收穫全保留、花 1 時辰。電腦 W/A/D/X＋方向鍵、Q/E/Z/C、Esc 收工；手機 3×3 方向盤（中央留空）；遊戲畫面填滿 HUD 與方向盤之間。引擎純函式：buildGatherDungeon／gatherStep／gatherFov＋沿用 applyGatherHaul；外殼 canvas 繪製、補間、轉場、音效與 8-bit BGM。像素美術全套依 docs/pixel-art-spec.md 以 js/pixelart.js 內嵌資料製作，附 tools/pixel-preview.html。"
+verify = "瀏覽器實玩御花園：轉場進出明顯、地圖每次不同、能 8 方向走、撿素材、侍衛會發現並追擊、被抓／60 步／收工皆正確結束且收穫進包包、花 1 時辰；像素圖 1 倍可辨識、整數倍銳利；node --test 生成不變式（多 seed）、回合規則、侍衛 AI、像素資料格式全通過；既有回歸網一輪 10 天仍 20/20、0 錯誤。"
+covers = ["R3"]
+after = ["epic-engine-refactor"]
+hitl = true
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "太醫院地圖＋地圖資料化"
+description = "依 docs/game-design.md §12.8 做太醫院，並把採集地圖抽成資料：GATHER.<loc> 加 tileset（地形代號→圖）、guards（每名巡邏者的稱呼、sprite、登場提示、被抓台詞）、房間大小範圍。太醫院＝木地板藥房＋青磚迴廊＋百子櫃牆；第 10 步藥童登場（『藥童開始巡房了』）、第 30 步太醫溫十粗登場（『溫太醫睡醒了』），兩者行為與侍衛相同、被抓台詞各自不同；素材當歸／巴豆／紅花瓣＋稀有麝香（數量見 §12.8，預設 1 個，由 rareCount 決定）；房間 6～8、環路 3。像素圖依 docs/pixel-art-spec.md §7 全套新畫（地形 9 種、藥童與溫太醫各 12 幀、4 種素材）。兩張地圖共用同一套生成與回合邏輯，外殼依資料取圖，結算立繪依抓人者更換；MINIGAME 加入 taiyi、拿掉太醫院舊的快速採集入口。此後新增地圖只需加資料。"
+verify = "御花園與太醫院皆可進場遊玩、各自素材、巡邏者、登場提示與被抓台詞正確（麝香必出）；地圖以資料表定義、加地圖只需加資料；node --test 場景生成對兩圖通過；回歸網一輪 10 天不破壞。"
+covers = ["R3"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Epic 2 收尾"
+description = "（2026-11-22 依使用者決定縮小範圍）手感、提示、難度、音樂等打磨已在 2.1／2.2 的試玩回合中完成；不做被抓懲罰（被抓維持無代價）、不做花叢躲藏。本票只做收尾：像素預覽頁補上太醫院示範房間並跟上現行規格（走廊與房間同一種地面）、文件與票務同步、epic 結案。"
+verify = "tools/pixel-preview.html 兩張示範房間都正常顯示、無 console 錯誤；node --test 全過；文件不再提到被抓懲罰旋鈕與花叢躲藏為待辦。"
+covers = ["R3"]
+after = [2]
+hitl = false
+risk = "low"

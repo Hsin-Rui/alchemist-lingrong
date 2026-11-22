@@ -14,8 +14,24 @@
   let craftSel = { mats: [], spike: null, forOrder: null, forWho: null };
   let craftResult = null;
   let gatherResult = null;
+  let gatherScene = null; // 採集地下城的外殼狀態（進場時建立、離場時清空）
   let giftWho = null;
   let typer = null;
+
+  const MINIGAME = { has: (loc) => !!(D.GATHER[loc] && D.GATHER[loc].dungeon) }; // 資料裡有 dungeon 的地點就走地下城
+  const TILE = 16;
+  const MIN_VIEW = 9; // 短邊至少看得到 9 格（侍衛視野 4.5 格，看得到零溶的侍衛一定在畫面內）
+  const MAX_VIEW_W = 17; // 超大螢幕也不顯示超過這麼多格
+  const MAX_VIEW_H = 21;
+  const SAY_MS = 2200; // 被抓時侍衛那句話停留多久（可按鍵跳過）
+  const STEP_MS = 120; // 走一格的補間時間
+  const REPEAT_MS = 150; // 按住不放的連走間隔
+  const HOLD_MS = 260; // 按住多久才開始連走（避免一按走兩步）
+  const DG_KEYS = {
+    w: 'n', arrowup: 'n', x: 's', arrowdown: 's', a: 'w', arrowleft: 'w', d: 'e', arrowright: 'e',
+    q: 'nw', e: 'ne', z: 'sw', c: 'se',
+  };
+  let pixelAtlas = null; // sprite id → 離屏 canvas（第一次進場時建立）
 
   // ───────── 小工具 ─────────
   const rand = Math.random;
@@ -298,6 +314,428 @@
     render();
   }
 
+  // ───────── 採集地下城（外殼）─────────
+  // 規則全在引擎（E.buildGatherDungeon／E.gatherStep／E.gatherFov）；這裡只負責畫面、補間、輸入、轉場、音效。
+  // 監聽與 rAF 只在進場時註冊、離場時移除（headless 回歸網不會進場）。
+  function buildAtlas() {
+    if (pixelAtlas) return pixelAtlas;
+    const P = window.PIXEL_ART;
+    const atlas = {};
+    Object.keys(P.sprites).forEach((id) => {
+      const sp = P.sprites[id];
+      const src = sp.mirror ? P.sprites[sp.mirror] : sp;
+      const cv = document.createElement('canvas');
+      cv.width = src.w;
+      cv.height = src.h;
+      const c = cv.getContext('2d');
+      src.rows.forEach((row, y) => {
+        for (let x = 0; x < row.length; x++) {
+          const col = P.palette[row[x]];
+          if (!col) continue;
+          c.fillStyle = col;
+          c.fillRect(sp.mirror ? src.w - 1 - x : x, y, 1, 1);
+        }
+      });
+      atlas[id] = cv;
+    });
+    pixelAtlas = atlas;
+    return atlas;
+  }
+  const spriteURLs = {};
+  const spriteURL = (id) => spriteURLs[id] || (spriteURLs[id] = buildAtlas()[id].toDataURL());
+  const itemSprite = (id) => (buildAtlas()[id] ? id : `${id}_0`);
+
+  function enterGather(loc) {
+    if (needOut()) return;
+    if (!window.PIXEL_ART) { gather(loc); return; } // 像素資料沒載到就退回快速採集
+    gatherResult = null;
+    gatherScene = {
+      loc, run: E.buildGatherDungeon(D, S, loc, rand),
+      phase: 'intro', t0: 0, anim: null, steps: 0, buffer: null, held: null, heldKey: null, nextAt: 0,
+      bubbles: {}, fx: [], flashUntil: 0, hopFrom: 0, caughtBy: -1, endAt: 0, mosaic: 8, fade: 0,
+      vis: new Set(), sight: [], confirm: false,
+    };
+    screen = 'gather';
+    refreshSight(gatherScene);
+    render();
+    bindGatherRuntime();
+  }
+
+  // 每回合算一次：玩家現在看得到哪些格子、看得到的侍衛各自盯著哪些格子
+  function refreshSight(gs) {
+    const { run } = gs;
+    gs.vis = new Set(E.gatherFov(run, run.player.x, run.player.y, run.cfg.playerSight));
+    gs.sight = run.guards.map((gd) => {
+      if (!gs.vis.has(gd.y * run.w + gd.x)) return null;
+      const cells = E.gatherFov(run, gd.x, gd.y, run.cfg.guardSight)
+        .filter((k) => gs.vis.has(k) && run.tiles[Math.floor(k / run.w)][k % run.w] !== '#');
+      return { cells, alert: gd.state === 'chase' };
+    });
+  }
+
+  function grabDungeonEls(gs) {
+    const q = (sel) => app.querySelector(sel);
+    gs.el = { root: q('.dg'), stage: q('.dg-stage'), canvas: q('.dg-canvas'), steps: q('.dg-steps b'), sun: q('.dg-sun'), got: q('.dg-got'), confirm: q('.dg-confirm'), note: q('.dg-note'), say: q('.dg-say') };
+    gs.ctx = gs.el.canvas.getContext('2d');
+    fitDungeon(gs);
+    updateDungeonHud(gs);
+  }
+
+  // 畫面填滿整個舞台。一律整數倍放大（最小 2 倍），倍率取「短邊還看得到 MIN_VIEW 格」的最大值；
+  // 緩衝大小＝舞台大小 ÷ 倍率，不必是整格（鏡頭以像素為單位置中，邊緣露出半格沒關係）。
+  function fitDungeon(gs) {
+    const { stage, canvas } = gs.el;
+    const sw = stage.clientWidth - 6; // 留白給畫框
+    const sh = stage.clientHeight - 6;
+    const scale = Math.max(2, Math.floor(Math.min(sw, sh) / (MIN_VIEW * TILE)));
+    const w = Math.max(5 * TILE, Math.min(MAX_VIEW_W * TILE, Math.floor(sw / scale)));
+    const h = Math.max(5 * TILE, Math.min(MAX_VIEW_H * TILE, Math.floor(sh / scale)));
+    // 離屏緩衝和畫面上的 canvas 一定要同尺寸：鏡頭是用緩衝的寬高算的，兩者不一致時零溶會被算到畫面外
+    for (const cv of [canvas, gs.buf]) {
+      if (cv.width !== w) cv.width = w;
+      if (cv.height !== h) cv.height = h;
+    }
+    canvas.style.width = `${w * scale}px`;
+    canvas.style.height = `${h * scale}px`;
+  }
+
+  function updateDungeonHud(gs) {
+    const { run } = gs;
+    gs.el.steps.textContent = Math.max(0, run.stepsLeft);
+    gs.el.steps.classList.toggle('low', run.stepsLeft <= 10);
+    gs.el.sun.style.opacity = String(0.35 + 0.65 * (run.stepsLeft / run.maxSteps));
+    const got = Object.entries(run.got);
+    gs.el.got.innerHTML = got.length
+      ? got.map(([id, n]) => `<span class="dg-item${id === run.rare ? ' rare' : ''}"><img src="${spriteURL(itemSprite(id))}" alt="${esc(itemName(id))}">×${n}</span>`).join('')
+      : '<span class="dg-empty">還沒撿到東西</span>';
+  }
+
+  function bindGatherRuntime() {
+    const gs = gatherScene;
+    if (!gs) return;
+    buildAtlas();
+    gs.buf = document.createElement('canvas');
+    gs.bctx = gs.buf.getContext('2d');
+    grabDungeonEls(gs);
+
+    const press = (action, key) => {
+      gs.held = action;
+      gs.heldKey = key;
+      gs.nextAt = performance.now() + HOLD_MS;
+      // 被抓的那句話：看過一下之後，按任何方向就跳過
+      if (gs.phase === 'ending' && gs.caughtBy >= 0 && performance.now() >= gs.sayFrom + 500) { gs.endAt = 0; return; }
+      dungeonAct(action);
+    };
+    gs.onKeyDown = (e) => {
+      const key = (e.key || '').toLowerCase();
+      if (key === 'escape') { e.preventDefault(); toggleDungeonConfirm(); return; }
+      if (gs.confirm) { if (key === 'enter') { e.preventDefault(); endGather('quit'); } return; }
+      const action = DG_KEYS[key];
+      if (!action || e.ctrlKey || e.metaKey || e.altKey) return; // 不攔瀏覽器快速鍵
+      e.preventDefault();
+      if (!e.repeat) press(action, key);
+    };
+    gs.onKeyUp = (e) => { if ((e.key || '').toLowerCase() === gs.heldKey) gs.held = null; };
+    gs.onPadDown = (e) => {
+      const btn = e.target.closest && e.target.closest('[data-d]');
+      if (!btn) return;
+      e.preventDefault();
+      press(btn.dataset.d, 'pad');
+    };
+    gs.onPadUp = () => { if (gs.heldKey === 'pad') gs.held = null; };
+    gs.onBlur = () => { gs.held = null; gs.buffer = null; };
+    gs.onResize = () => { if (gs.el.canvas.isConnected) fitDungeon(gs); };
+    document.addEventListener('keydown', gs.onKeyDown);
+    document.addEventListener('keyup', gs.onKeyUp);
+    app.addEventListener('pointerdown', gs.onPadDown);
+    document.addEventListener('pointerup', gs.onPadUp);
+    document.addEventListener('pointercancel', gs.onPadUp);
+    window.addEventListener('blur', gs.onBlur);
+    window.addEventListener('resize', gs.onResize);
+    gs.raf = requestAnimationFrame(dungeonLoop);
+  }
+
+  function stopGatherRuntime(gs) {
+    if (!gs) return;
+    if (gs.raf) cancelAnimationFrame(gs.raf);
+    clearTimeout(gs.noteTimer);
+    document.removeEventListener('keydown', gs.onKeyDown);
+    document.removeEventListener('keyup', gs.onKeyUp);
+    app.removeEventListener('pointerdown', gs.onPadDown);
+    document.removeEventListener('pointerup', gs.onPadUp);
+    document.removeEventListener('pointercancel', gs.onPadUp);
+    window.removeEventListener('blur', gs.onBlur);
+    window.removeEventListener('resize', gs.onResize);
+  }
+
+  // 第 gi 名巡邏者的資料（稱呼、sprite、提示、台詞）
+  const guardOf = (loc, gi) => { const list = D.GATHER[loc].guards; return list[Math.max(0, Math.min(gi, list.length - 1))]; };
+
+  // 畫面上方的短提示（侍衛登場等）
+  // kind：'warn'（被盯上，紅框）／'bump'（撞到東西，短一點）／不給＝一般
+  function dungeonNote(text, kind, ms) {
+    const gs = gatherScene;
+    const el = gs && gs.el.note;
+    if (!el) return;
+    el.textContent = text;
+    el.hidden = false;
+    el.className = `dg-note snes${kind ? ` ${kind}` : ''}`;
+    clearTimeout(gs.noteTimer);
+    gs.noteTimer = setTimeout(() => { el.hidden = true; }, ms || (kind === 'bump' ? 900 : 1800));
+  }
+
+  // 撞到什麼：看零溶往哪個方向走、前面那格是什麼；斜走被牆角卡住也說清楚
+  const DG_DIRS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+  function bumpText(gs, action) {
+    const { run } = gs;
+    const names = D.GATHER[gs.loc].tileset.names;
+    const d = DG_DIRS[action];
+    if (!d) return '過不去';
+    const at = (x, y) => (run.tiles[y] && run.tiles[y][x]) || '#';
+    const { x, y } = run.player;
+    const t = at(x + d[0], y + d[1]);
+    const name = names[t === 'p' ? 'P' : t];
+    if (name) return `被${name}擋住了`;
+    // 目標格能走，那就是斜切牆角
+    const side = [at(x + d[0], y), at(x, y + d[1])].find((c) => names[c === 'p' ? 'P' : c]);
+    return `斜角被${names[side === 'p' ? 'P' : side] || names['#']}卡住了`;
+  }
+
+  function toggleDungeonConfirm(show) {
+    const gs = gatherScene;
+    if (!gs || gs.phase !== 'play') return;
+    gs.confirm = show === undefined ? !gs.confirm : show;
+    gs.held = null;
+    gs.buffer = null;
+    gs.el.confirm.hidden = !gs.confirm;
+  }
+
+  // 玩家這回合做什麼 → 交給引擎 → 依事件播動畫與音效
+  function dungeonAct(action) {
+    const gs = gatherScene;
+    if (!gs || gs.phase !== 'play' || gs.confirm) return;
+    if (gs.anim) { gs.buffer = action; return; }
+    const events = E.gatherStep(gs.run, action, rand);
+    if (!events.length) return;
+    const now = performance.now();
+    if (events[0].t === 'bump') {
+      A.sfx('bump'); gs.held = null;
+      gs.bumpAt = now;
+      dungeonNote(bumpText(gs, action), 'bump');
+      return;
+    }
+    const anim = { start: now, p: null, g: {} };
+    for (const ev of events) {
+      switch (ev.t) {
+        case 'move': anim.p = ev.from; A.sfx('step'); break;
+        case 'pick': gs.fx.push({ x: ev.x, y: ev.y, t0: now + STEP_MS * 0.6 }); A.sfx(ev.rare ? 'pickRare' : 'pick'); break;
+        case 'gmove': anim.g[ev.g] = ev.from; break;
+        case 'spawn': dungeonNote(guardOf(gs.loc, ev.g).note); A.sfx('guardIn'); break;
+        case 'alert': gs.bubbles[ev.g] = { id: 'bubble_alert', until: now + 600 }; A.sfx('alert'); dungeonNote(`被${guardOf(gs.loc, ev.g).name}盯上了！快躲！`, 'warn'); break;
+        case 'lost': gs.bubbles[ev.g] = { id: 'bubble_lost', until: now + 1400 }; A.sfx('lost'); dungeonNote(`${guardOf(gs.loc, ev.g).name}跟丟了`); break;
+        case 'caught':
+          gs.phase = 'ending'; gs.caughtBy = ev.g; gs.held = null; gs.buffer = null;
+          gs.flashUntil = now + STEP_MS + 160; gs.hopFrom = now + STEP_MS;
+          gs.sayFrom = now + STEP_MS + 160; gs.endAt = gs.sayFrom + SAY_MS;
+          gs.bubbles[ev.g] = { id: 'bubble_alert', until: gs.sayFrom };
+          gs.el.say.innerHTML = `<b>${esc(guardOf(gs.loc, ev.g).name)}</b><span>${esc(guardOf(gs.loc, ev.g).line)}</span>`;
+          A.sfx('caught');
+          break;
+        case 'timeout': gs.phase = 'ending'; gs.endAt = now + 750; A.sfx('timeout'); break;
+        default: break;
+      }
+    }
+    gs.anim = anim;
+    gs.steps++;
+    refreshSight(gs);
+    updateDungeonHud(gs);
+  }
+
+  function dungeonLoop(now) {
+    const gs = gatherScene;
+    if (!gs) return;
+    if (!gs.el.canvas.isConnected) grabDungeonEls(gs); // 中途被重繪過就重新抓元素
+    if (!gs.t0) gs.t0 = now;
+    const t = now - gs.t0;
+    if (gs.anim && now - gs.anim.start >= STEP_MS) gs.anim = null;
+    if (gs.phase === 'intro') {
+      // 百葉收黑（CSS 動畫），收完才亮出像素畫面
+      if (t >= 320) {
+        gs.phase = 'reveal'; gs.t0 = now;
+        gs.el.root.classList.add('on');
+        fitDungeon(gs);
+        A.sfx('enterDungeon');
+        if (A.dungeonBgm) A.dungeonBgm(true, D.GATHER[gs.loc].bgm);
+      }
+    } else if (gs.phase === 'reveal') {
+      gs.mosaic = 8 - 7 * Math.min(1, t / 400);
+      if (t >= 400) { gs.mosaic = 1; gs.phase = 'play'; dungeonNote(D.GATHER[gs.loc].intro, null, 2800); }
+    } else if (gs.phase === 'play') {
+      if (!gs.anim) {
+        if (gs.buffer) { const a = gs.buffer; gs.buffer = null; dungeonAct(a); }
+        else if (gs.held && now >= gs.nextAt) { gs.nextAt = now + REPEAT_MS; dungeonAct(gs.held); }
+      }
+    } else if (gs.phase === 'ending') {
+      // 被抓：閃白之後侍衛開口，話說完（或玩家按鍵）才轉場
+      if (gs.caughtBy >= 0 && gs.el.say.hidden && now >= gs.sayFrom) gs.el.say.hidden = false;
+      if (now >= gs.endAt) { gs.phase = 'out'; gs.t0 = now; gs.el.say.hidden = true; A.sfx('exitDungeon'); }
+    } else if (gs.phase === 'out') {
+      gs.mosaic = 1 + 7 * Math.min(1, t / 300);
+      gs.fade = Math.max(0, Math.min(1, (t - 150) / 150));
+      if (t >= 320) { finishGather(); return; }
+    }
+    if (gs.phase !== 'intro') drawDungeon(gs, now);
+    gs.raf = requestAnimationFrame(dungeonLoop);
+  }
+
+  function drawDungeon(gs, now) {
+    const { run } = gs;
+    const atlas = buildAtlas();
+    const b = gs.bctx;
+    const BUF_W = gs.buf.width;
+    const BUF_H = gs.buf.height;
+    const p = gs.anim ? Math.min(1, (now - gs.anim.start) / STEP_MS) : 1;
+    const at = (o, from) => (from
+      ? { x: Math.round((from.x + (o.x - from.x) * p) * TILE), y: Math.round((from.y + (o.y - from.y) * p) * TILE) }
+      : { x: o.x * TILE, y: o.y * TILE });
+    const me = at(run.player, gs.anim && gs.anim.p);
+    // 鏡頭永遠把零溶放在畫面正中央（走到地圖邊緣也一樣，地圖外就是黑的）
+    const camX = Math.round(me.x + TILE / 2 - BUF_W / 2);
+    const camY = Math.round(me.y + TILE / 2 - BUF_H / 2);
+    const x0 = Math.max(0, Math.floor(camX / TILE));
+    const y0 = Math.max(0, Math.floor(camY / TILE));
+    const x1 = Math.min(run.w - 1, Math.floor((camX + BUF_W) / TILE));
+    const y1 = Math.min(run.h - 1, Math.floor((camY + BUF_H) / TILE));
+    const tick = Math.floor(now / 500) % 2; // 2Hz 待機動畫
+    const hash = (x, y) => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 8;
+    const put = (id, x, y) => b.drawImage(atlas[id], x - camX, y - camY);
+    const tile = (x, y) => (run.tiles[y] && run.tiles[y][x]) || '#';
+    const seen = (x, y) => run.seen[y * run.w + x];
+    const ts = D.GATHER[gs.loc].tileset;
+
+    b.fillStyle = '#0d0a14';
+    b.fillRect(0, 0, BUF_W, BUF_H);
+
+    // 地面
+    const sprites = [];
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (!seen(x, y)) continue;
+      const t = tile(x, y);
+      const h = hash(x, y);
+      if (t === '#') put(tile(x, y + 1) === '#' ? ts.wallTop : ts.wallFace, x * TILE, y * TILE);
+      else if (t === ',') put(ts.hall[h % ts.hall.length], x * TILE, y * TILE);
+      else if (t === 'G') put(ts.door, x * TILE, y * TILE);
+      else put(ts.floor[h < 5 ? 0 : h < 7 ? 1 % ts.floor.length : 2 % ts.floor.length], x * TILE, y * TILE);
+      // 擺設：比一格高的圖（16×24）往上疊
+      const prop = ts.props[t];
+      if (prop) sprites.push({ id: prop, x: x * TILE, y: y * TILE - (atlas[prop].height - TILE), base: y * TILE, dim: !gs.vis.has(y * run.w + x) });
+    }
+    // 荷花池（2×2 格，從左上格畫；多看一圈以免左上格剛好在畫面外）
+    for (let y = Math.max(0, y0 - 1); y <= y1; y++) for (let x = Math.max(0, x0 - 1); x <= x1; x++) {
+      if (tile(x, y) === 'P' && (seen(x, y) || seen(x + 1, y + 1))) put(`${ts.big}_${tick}`, x * TILE, y * TILE);
+    }
+    // 素材、角色：依 y 排序
+    run.items.forEach((it) => {
+      if (!seen(it.x, it.y)) return;
+      sprites.push({ id: it.rare ? `${it.id}_${tick}` : itemSprite(it.id), x: it.x * TILE, y: it.y * TILE - (it.rare ? tick : 0), base: it.y * TILE + 1, dim: !gs.vis.has(it.y * run.w + it.x) });
+    });
+    const actor = (who, o, from, extraY, shake = 0) => {
+      const pos = at(o, from);
+      pos.x += shake;
+      const frame = from && p < 0.75 ? 1 + (gs.steps % 2) : 0;
+      sprites.push({ shadow: true, x: pos.x + 2, y: pos.y + 11, base: pos.y + 2 });
+      sprites.push({ id: `${who}_${o.face}_${frame}`, x: pos.x, y: pos.y - 10 - (from ? 0 : tick) + extraY, base: pos.y + 3, head: pos });
+      return pos;
+    };
+    // 撞到東西：零溶左右抖一下
+    const bumpT = now - (gs.bumpAt || -1e9);
+    actor('ling', run.player, gs.anim && gs.anim.p, 0, bumpT < 180 ? [2, -2, 1, -1, 0][Math.floor(bumpT / 36)] : 0);
+    const heads = {};
+    run.guards.forEach((gd, gi) => {
+      // 看不到的侍衛不畫，但記下位置：跟丟的「？」要浮在迷霧裡給玩家看
+      if (!gs.vis.has(gd.y * run.w + gd.x)) { heads[gi] = at(gd, gs.anim && gs.anim.g[gi]); return; }
+      const hop = gi === gs.caughtBy && now >= gs.hopFrom ? -Math.round(Math.abs(Math.sin((now - gs.hopFrom) / 110)) * 4) : 0;
+      heads[gi] = actor(guardOf(gs.loc, gi).sprite, gd, gs.anim && gs.anim.g[gi], hop);
+    });
+    sprites.sort((s1, s2) => s1.base - s2.base);
+    const paint = (list) => list.forEach((s) => {
+      if (s.shadow) { b.globalAlpha = 0.35; put('shadow', s.x, s.y); b.globalAlpha = 1; } else put(s.id, s.x, s.y);
+    });
+
+    // 記憶中的擺設與素材先畫，再蓋迷霧：沒看過＝黑；看過但現在看不到＝變暗
+    paint(sprites.filter((s) => s.dim));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (gs.vis.has(y * run.w + x)) continue;
+      b.fillStyle = seen(x, y) ? 'rgba(13,10,20,.55)' : '#0d0a14';
+      b.fillRect(x * TILE - camX, y * TILE - camY, TILE, TILE);
+    }
+    // 侍衛視野（畫在地上，不蓋到角色）
+    gs.sight.forEach((s) => {
+      if (!s) return;
+      b.fillStyle = s.alert ? 'rgba(210,69,63,.35)' : 'rgba(210,69,63,.2)';
+      s.cells.forEach((k) => b.fillRect((k % run.w) * TILE - camX, Math.floor(k / run.w) * TILE - camY, TILE, TILE));
+    });
+
+    // 看得到的東西最後畫：高的 sprite（角色的頭、假山、燈籠）不會被上面那格的迷霧切掉
+    paint(sprites.filter((s) => !s.dim));
+
+    // 天色：最後 15 步慢慢變暗
+    const dusk = Math.max(0, 1 - run.stepsLeft / 15);
+    if (dusk > 0) { b.fillStyle = `rgba(28,22,74,${(0.32 * dusk).toFixed(3)})`; b.fillRect(0, 0, BUF_W, BUF_H); }
+
+    // 氣泡、撿取特效
+    Object.keys(heads).forEach((gi) => {
+      const bub = gs.bubbles[gi];
+      if (bub && now < bub.until) put(bub.id, heads[gi].x + 4, heads[gi].y - 21);
+    });
+    gs.fx = gs.fx.filter((f) => now < f.t0 + 330);
+    gs.fx.forEach((f) => { if (now >= f.t0) put(`sparkle_${Math.min(2, Math.floor((now - f.t0) / 110))}`, f.x * TILE, f.y * TILE - 6); });
+    if (now < gs.flashUntil && now >= gs.hopFrom) { b.fillStyle = 'rgba(255,255,255,.75)'; b.fillRect(0, 0, BUF_W, BUF_H); }
+
+    // 輸出（馬賽克：先縮小再用最近鄰放大）
+    const c = gs.ctx;
+    c.imageSmoothingEnabled = false;
+    const m = Math.max(1, Math.round(gs.mosaic));
+    if (m <= 1) c.drawImage(gs.buf, 0, 0);
+    else {
+      const w = Math.ceil(BUF_W / m);
+      const h = Math.ceil(BUF_H / m);
+      c.drawImage(gs.buf, 0, 0, BUF_W, BUF_H, 0, 0, w, h);
+      c.drawImage(gs.el.canvas, 0, 0, w, h, 0, 0, w * m, h * m);
+    }
+    if (gs.fade > 0) { c.fillStyle = `rgba(13,10,20,${gs.fade})`; c.fillRect(0, 0, BUF_W, BUF_H); }
+  }
+
+  // 結束這趟：收工由玩家觸發；被抓／步數用完由引擎事件觸發（那時 run.over 已經是 true）
+  function endGather(how) {
+    const gs = gatherScene;
+    if (!gs || gs.phase !== 'play') return;
+    if (how === 'quit') E.gatherStep(gs.run, 'quit', rand);
+    gs.confirm = false;
+    gs.el.confirm.hidden = true;
+    gs.phase = 'out';
+    gs.t0 = 0;
+    A.sfx('exitDungeon');
+  }
+
+  // 轉場播完：拆掉即時層、把收穫交回引擎套用一次，再走既有的結果 sheet
+  function finishGather() {
+    const gs = gatherScene;
+    if (!gs) return;
+    stopGatherRuntime(gs);
+    const haul = E.applyGatherHaul(D, S, gs.loc, gs.run.got);
+    gatherResult = { ...haul, ended: gs.run.endReason, by: gs.run.caughtBy };
+    gatherScene = null;
+    if (A.dungeonBgm) A.dungeonBgm(false);
+    render();
+    const blinds = document.createElement('div');
+    blinds.className = 'dg-blinds open';
+    blinds.innerHTML = '<i></i>'.repeat(8);
+    app.appendChild(blinds);
+    setTimeout(() => blinds.remove(), 380);
+    A.sfx(haul.got[gs.run.rare] ? 'evil' : 'gather');
+  }
+
   function openCraft(orderId) {
     const o = S.orders.find((x) => x.id === orderId);
     craftSel = { mats: [], spike: null, forOrder: o ? o.id : null, forWho: o ? o.who : isTarget(S.flip) ? S.flip : null };
@@ -574,27 +1012,37 @@
           <div class="loc-banner bg-${g.bg}"><span>${g.name}</span>${hits.length ? `<em>有你缺的${hits.join('、')}</em>` : ''}</div>
           <div class="loc-body">
             <div class="drops">${g.table.map(([id, w]) => `<span class="drop ${D.ITEMS[id].type === 'spike' || id === 'petal' ? 'spike' : ''} ${needed.has(id) ? 'need' : ''} ${w < 1.5 ? 'rare' : ''}">${D.ITEMS[id].type === 'spike' ? '料：' : ''}${itemName(id)}・${rarity(w)}</span>`).join('')}</div>
-            <button class="btn ${hits.length ? 'primary' : ''} wide" data-a="gather" data-v="${loc}" ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中' : loc === 'taiyi' ? '偷溜進太醫院' : '去御花園'}</button>
+            <button class="btn ${hits.length ? 'primary' : ''} wide" data-a="${MINIGAME.has(loc) ? 'enter' : 'gather'}" data-v="${loc}" ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中' : loc === 'taiyi' ? '偷溜進太醫院' : '潛入御花園偷採'}</button>
           </div></article>`;
       };
       let sheet = '';
       if (gatherResult) {
         const g = D.GATHER[gatherResult.loc];
         const done = S.slot >= R.slotsPerDay;
+        const entries = Object.entries(gatherResult.got);
+        const caught = gatherResult.ended === 'caught';
+        const who = caught ? guardOf(gatherResult.loc, gatherResult.by) : null;
+        const endMsg = caught ? `${who.name}：「${who.line}」這趟到此為止——撿到的都保住了。`
+          : gatherResult.ended === 'timeout' ? '天色暗了，先撤！撿到的都帶走了。'
+          : gatherResult.ended === 'quit' ? '見好就收，全身而退。' : '';
+        const reAction = MINIGAME.has(gatherResult.loc) ? 'enter' : 'regather';
         sheet = `<div class="sheet-layer"><div class="sheet">
-          <p class="muted center">${g.intro}</p>
-          <h3 class="sheet-title">採到了！</h3>
-          <div class="got">${Object.entries(gatherResult.got).map(([id, n], i) => `<div class="got-card ${D.ITEMS[id].type}" style="animation-delay:${i * 0.15}s">${tok(id, 'lg')}<span>${itemName(id)}</span><b>+${n}${D.ITEMS[id].type === 'spike' ? ' 料！' : ''}</b></div>`).join('')}</div>
+          ${caught && who.img ? `<div class="caught-guard"><img src="assets/characters/${who.img}.webp" alt="${esc(who.name)}" onerror="${IMG_FAIL}"></div>` : ''}
+          <h3 class="sheet-title">${caught ? '被抓了！' : '採到了！'}</h3>
+          ${endMsg ? `<p class="center ${caught ? 'ok' : 'muted'}">${endMsg}</p>` : ''}
+          ${entries.length
+            ? `<div class="got">${entries.map(([id, n], i) => `<div class="got-card ${D.ITEMS[id].type}" style="animation-delay:${i * 0.15}s">${tok(id, 'lg')}<span>${itemName(id)}</span><b>+${n}${D.ITEMS[id].type === 'spike' ? ' 料！' : ''}</b></div>`).join('')}</div>`
+            : '<p class="center muted">這趟空手而回……</p>'}
           ${gatherResult.got.petal ? '<p class="center ok">紅花瓣！加上烈酒就能煉出紅花……</p>' : ''}
           ${gatherResult.ready.map((o) => `<p class="ok center">${charName(o.who)}的${itemName(o.product)}：材料湊齊了</p>`).join('')}
-          ${done ? '' : `<button class="btn primary wide regather" data-a="regather" data-v="${gatherResult.loc}">再去${g.name}採一次</button>`}
+          ${done ? '' : `<button class="btn primary wide regather" data-a="${reAction}" data-v="${gatherResult.loc}">再去${g.name}採一次</button>`}
           <div class="row-btns">
             <button class="btn ghost" data-a="gatherdone" data-v="home">${done ? '天色晚了，回宮' : '回炎洗宮'}</button>
             ${!done && gatherResult.ready.length ? '<button class="btn primary" data-a="gatherdone" data-v="craft">直接去調合</button>' : ''}
           </div></div></div>`;
       }
       return `<div class="screen theme-light">
-        ${subHeader('出門採集', '花 1 個時辰・隨機拿到 2～3 樣')}
+        ${subHeader('出門採集', '潛入御花園或太醫院，躲開巡邏偷採素材')}
         <div class="scroll pad">${card('garden')}${card('taiyi')}</div>
         ${sheet}
       </div>`;
@@ -834,10 +1282,41 @@
       <h3 class="sheet-title">${modal.title}</h3>${modal.body}</div></div>`;
   }
 
+  // 採集地下城 overlay（疊在 gather 畫面上）。畫面由 canvas 逐幀繪製，HUD 與方向盤是 DOM。
+  function gatherOverlay() {
+    const gs = gatherScene;
+    const names = { nw: '左上', n: '上', ne: '右上', w: '左', e: '右', sw: '左下', s: '下', se: '右下' };
+    // 3×3 方向盤，正中央留空（沒有「原地等」）
+    const pad = ['nw', 'n', 'ne', 'w', '', 'e', 'sw', 's', 'se']
+      .map((d) => (d ? `<button class="dg-key" data-d="${d}" aria-label="${names[d]}"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1l5 9-5-2.5L1 10z"/></svg></button>` : '<i class="dg-key-gap"></i>')).join('');
+    return `<div class="dg${gs.phase === 'intro' ? '' : ' on'}">
+      <div class="dg-blinds">${'<i></i>'.repeat(8)}</div>
+      <div class="dg-hud snes">
+        <div class="dg-steps"><i class="dg-sun"></i>剩 <b>${gs.run.stepsLeft}</b> / ${gs.run.maxSteps}</div>
+        <div class="dg-got"></div>
+        <button class="dg-quit" data-a="dgquit">收工</button>
+      </div>
+      <div class="dg-stage">
+        <canvas class="dg-canvas" width="${MIN_VIEW * TILE}" height="${MIN_VIEW * TILE}"></canvas>
+        <div class="dg-note snes" hidden></div>
+        <div class="dg-say snes" hidden></div>
+        <div class="dg-confirm snes" ${gs.confirm ? '' : 'hidden'}>
+          <p>現在收工嗎？撿到的都會帶走。</p>
+          <div><button data-a="leavegather">收工</button><button data-a="dgstay">繼續採</button></div>
+        </div>
+      </div>
+      <div class="dg-foot">
+        <div class="dg-pad">${pad}</div>
+        <p class="dg-hint">QWE / A D / ZXC 或方向鍵移動・Esc 收工</p>
+      </div>
+    </div>`;
+  }
+
   function render() {
     const keepScroll = app.querySelector('.scroll')?.scrollTop || 0;
     const prevScreen = app.dataset.screen;
     let html = views[screen]();
+    if (gatherScene) html += gatherOverlay();
     if (dlg) html += dialogView();
     if (modal) html += modalView();
     app.innerHTML = html;
@@ -851,7 +1330,7 @@
   }
 
   // ───────── 事件 ─────────
-  const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'craft', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
+  const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'dgquit', 'dgstay', 'craft', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
   app.addEventListener('click', (e) => {
     const el = e.target.closest('[data-a]');
     if (!el || el.disabled || busy) return;
@@ -870,6 +1349,10 @@
       case 'bribe': bribe(); break;
       case 'reject': rejectOrder(Number(v)); break;
       case 'gather': gather(v); break;
+      case 'enter': enterGather(v); break;
+      case 'leavegather': endGather('quit'); break;
+      case 'dgquit': toggleDungeonConfirm(true); break;
+      case 'dgstay': toggleDungeonConfirm(false); break;
       case 'regather': gatherResult = null; gather(v); break;
       case 'gatherdone': {
         if (!gatherResult) { go('home'); break; }
@@ -910,6 +1393,7 @@
   function preloadImages() {
     const files = [
       ...Object.values(D.CHARS).flatMap((c) => Object.values(c.imgs).map((f) => `characters/${f}`)),
+      'characters/guard',
       ...[...Object.keys(D.ITEMS), ...Object.keys(D.PRODUCTS), 'silver'].map((id) => `items/${id}`),
       ...['yanxi', 'garden', 'taiyi', 'shop', 'yikun', 'xianfu', 'suiyu', 'night'].map((b) => `backgrounds/${b}`),
     ];

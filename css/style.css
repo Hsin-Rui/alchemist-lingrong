@@ -424,3 +424,59 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .rank { margin: 0; padding-left: 22px; }
 .rank li { padding: 4px 0; }
 .rank li span { display: inline-block; min-width: 64px; border-bottom: 3px solid var(--c); margin-right: 8px; }
+
+/* ───── 採集地下城（像素風；規範 docs/pixel-art-spec.md） ───── */
+.dg { position: absolute; inset: 0; z-index: 25; display: flex; flex-direction: column; color: #fff; user-select: none; -webkit-user-select: none; touch-action: none; }
+.dg.on { background: #0d0a14; }
+.dg:not(.on) > :not(.dg-blinds) { visibility: hidden; }
+/* SNES 式視窗框：深藍漸層、白框、深色外邊、階梯圓角 */
+.snes { background: linear-gradient(#1c2a6b, #0d143d); border: 2px solid #fbf7ef; box-shadow: 0 0 0 1px #0d0a14, inset 0 0 0 1px #0d143d; border-radius: 4px; color: #fbf7ef; }
+.dg-hud { flex: none; margin: 4px 4px 2px; padding: 4px 8px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; }
+.dg-steps { flex: none; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.dg-steps b { font-size: 20px; color: #f2c14e; min-width: 1.3em; text-align: right; }
+.dg-steps b.low { color: #ff8b8b; }
+.dg-sun { width: 14px; height: 14px; background: #f2c14e; box-shadow: 0 0 0 2px #c98d2a; border-radius: 2px; margin-right: 4px; }
+.dg-got { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 2px 8px; font-size: 13px; }
+.dg-item { display: inline-flex; align-items: center; gap: 2px; }
+.dg-item img { width: 24px; height: 24px; image-rendering: pixelated; }
+.dg-item.rare { color: #d9b3f5; }
+.dg-empty { opacity: .6; font-weight: 400; }
+.dg-quit, .dg-confirm button { min-height: 36px; padding: 4px 14px; border: 2px solid #fbf7ef; border-radius: 4px; background: #33475f; color: #fbf7ef; font-weight: 700; font-size: 14px; cursor: pointer; }
+.dg-stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+.dg-canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; box-shadow: 0 0 0 2px #fbf7ef, 0 0 0 3px #0d0a14; }
+.dg-confirm { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(280px, 86%); padding: 14px; text-align: center; z-index: 2; }
+.dg-note { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); padding: 6px 12px; font-size: 14px; font-weight: 700; width: max-content; max-width: calc(100% - 16px); text-align: center; z-index: 2; pointer-events: none; }
+.dg-note[hidden] { display: none; }
+.dg-note.warn { background: linear-gradient(#8e2a2e, #4d1418); color: #fff; animation: dg-warn .4s steps(2) 2; }
+.dg-note.bump { font-size: 13px; padding: 4px 10px; opacity: .92; }
+@keyframes dg-warn { 50% { transform: translateX(-50%) scale(1.08); } }
+.dg-confirm p { margin: 0 0 12px; line-height: 1.6; }
+.dg-confirm div { display: flex; gap: 10px; justify-content: center; }
+.dg-confirm[hidden] { display: none; }
+.dg-foot { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 4px 12px calc(6px + env(safe-area-inset-bottom)); }
+.dg-pad { display: grid; grid-template-columns: repeat(3, 44px); grid-auto-rows: 36px; gap: 3px; }
+.dg-key { border: 2px solid #fbf7ef; border-radius: 4px; background: linear-gradient(#1c2a6b, #0d143d); box-shadow: 0 0 0 1px #0d0a14, 0 3px 0 #0d0a14; color: #fbf7ef; font-size: 16px; font-weight: 900; cursor: pointer; touch-action: none; padding: 0; }
+.dg-key:active { transform: translateY(2px); box-shadow: 0 0 0 1px #0d0a14, 0 1px 0 #0d0a14; background: #33475f; }
+.dg-key svg { width: 15px; height: 15px; fill: #fbf7ef; pointer-events: none; display: block; margin: auto; }
+.dg-key[data-d="ne"] svg { transform: rotate(45deg); }
+.dg-key[data-d="e"] svg { transform: rotate(90deg); }
+.dg-key[data-d="se"] svg { transform: rotate(135deg); }
+.dg-key[data-d="s"] svg { transform: rotate(180deg); }
+.dg-key[data-d="sw"] svg { transform: rotate(225deg); }
+.dg-key[data-d="w"] svg { transform: rotate(270deg); }
+.dg-key[data-d="nw"] svg { transform: rotate(315deg); }
+.dg-say { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 10px 12px; z-index: 2; pointer-events: none; display: flex; flex-direction: column; gap: 4px; font-size: 16px; font-weight: 700; line-height: 1.5; }
+.dg-say b { font-size: 13px; color: #f2c14e; }
+.dg-say[hidden] { display: none; }
+.dg-hint { margin: 0; font-size: 11px; color: #a9cdec; text-align: center; }
+@media (hover: none) { .dg-hint { display: none; } }
+/* 轉場百葉：8 條直條由上往下收黑；出場時反過來打開 */
+.dg-blinds { position: absolute; inset: 0; z-index: 40; display: flex; pointer-events: none; }
+.dg-blinds i { flex: 1; background: #0d0a14; transform-origin: top; animation: dg-close .3s steps(8) both; }
+.dg.on > .dg-blinds { display: none; }
+.dg-blinds.open i { transform-origin: bottom; animation: dg-open .35s steps(8) both; }
+@keyframes dg-close { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes dg-open { from { transform: scaleY(1); } to { transform: scaleY(0); } }
+.caught-guard { height: 120px; display: flex; justify-content: center; }
+.caught-guard img { height: 100%; object-fit: contain; }
+.caught-guard.noimg { display: none; }
