@@ -407,6 +407,46 @@ function connect(url) {
     await press('m');
     for (let i = 0; i < 20 && await hasDlg(); i++) await press('Space', { wait: 15 });
 
+    // ── 對話速度、略過、防連按（story 3） ──
+    const txt = () => ev("document.querySelector('.dlg-text')?.innerHTML || ''");
+    const full = () => ev("document.querySelector('.dlg-text')?.dataset.full || ''");
+    const LONG = '這是一句很長很長的測試台詞，用來確認逐字顯示的速度是不是兩倍速，大概每秒七十個字左右。';
+    await ev(`__e2e.playDialog([['narr','',${JSON.stringify(LONG)}],['narr','','第二句'],['doctor','_','且慢！這東西裡有料！',{lock:true}],['narr','','之後']], () => __e2e.go('home'))`);
+    check('對話按鈕文字「略過 ≫」與「▶ 2×」', (await ev("document.querySelector('.skip-btn').textContent")) === '略過 ≫' && (await ev("document.querySelector('.speed-btn').textContent")) === '▶ 2×');
+    await sleep(150);
+    const part = (await txt()).length;
+    check('2× 逐字顯示（150ms 後只出現一部分）', part > 3 && part < LONG.length, String(part));
+    await sleep(900);
+    check('2× 約 1 秒內打完一長句', (await txt()) === LONG);
+    // Shift 跟其他鍵組合時不算
+    await cdp.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Shift', code: 'ShiftLeft', windowsVirtualKeyCode: 16 });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37, modifiers: 8 });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37, modifiers: 8 });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Shift', code: 'ShiftLeft', windowsVirtualKeyCode: 16 });
+    await sleep(40);
+    check('Shift 與其他鍵組合時不切換速度', (await ev("document.querySelector('.speed-btn').textContent")) === '▶ 2×');
+    await press('Shift');
+    check('Shift 單獨按放 → 瞬間', (await ev("document.querySelector('.speed-btn').textContent")) === '▶ 瞬間');
+    await press('Space');
+    check('瞬間：下一句直接整句出現', (await txt()) === '第二句' && (await full()) === '第二句');
+    await press('Space');
+    check('防連按句直接整句顯示、▼ 隱藏', (await txt()).startsWith('且慢！') && (await ev("getComputedStyle(document.querySelector('.dlg-next')).visibility")) === 'hidden');
+    await press('Space', { wait: 10 }); await press('Enter', { wait: 10 });
+    await click(240, 450);
+    check('0.6 秒內按鍵與點擊無效', (await full()).startsWith('且慢！'));
+    await sleep(650);
+    check('0.6 秒後 ▼ 出現', (await ev("getComputedStyle(document.querySelector('.dlg-next')).visibility")) === 'visible');
+    await press('Space');
+    check('解鎖後可推進', (await full()) === '之後');
+    await ev("document.querySelector('.speed-btn').click()");
+    check('點倍速按鈕切回 2×', (await ev("document.querySelector('.speed-btn').textContent")) === '▶ 2×');
+    await press('Escape');
+    check('對話中 Esc 略過整段', !(await hasDlg()) && (await scr()) === 'home');
+    await ev(`__e2e.playDialog([['doctor','_','且慢！',{lock:true}],['narr','','後面']], () => __e2e.go('home'))`);
+    await press('Escape');
+    check('Esc 略過不受防連按影響', !(await hasDlg()));
+    await press('Shift'); // 切到瞬間，之後重開遊戲要回到 2×
+
     // ── 純鍵盤玩到結局 ──
     let craftedOnDay = 0;
     let singChecked = false;
@@ -422,7 +462,7 @@ function connect(url) {
       stuck = sig === last ? stuck + 1 : 0;
       last = sig;
       if (stuck > 30) throw new Error(`卡住了：${sig}`);
-      if (dlgOn) { await press('Space', { wait: 15 }); continue; }
+      if (dlgOn) { await press('Space', { wait: (await ev("!!document.querySelector('.dialog-box.locked')")) ? 120 : 15 }); continue; } // 防連按句等它解鎖
       if (await hasModal('sing')) {
         if (!(await focus())) await press('ArrowRight');
         const k1 = (await focus())?.key;
@@ -496,6 +536,10 @@ function connect(url) {
     // ── 手機寬度＋觸控：整輪看不到焦點框 ──
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     await load({ width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
+    await ev("__e2e.playDialog([['narr','','重開後']], () => __e2e.go('title'))");
+    check('重開遊戲後對話速度回到 2×（不記住）', (await ev("document.querySelector('.speed-btn').textContent")) === '▶ 2×');
+    check('手機：倍速按鈕至少 40px 高、在略過左邊同列', await ev("(() => { const a = document.querySelector('.speed-btn'), b = document.querySelector('.skip-btn'); if (!a || !b) return false; const r = a.getBoundingClientRect(), q = b.getBoundingClientRect(); return r.height >= 40 && Math.abs(r.top - q.top) < 2 && r.right <= q.left; })()"));
+    await ev("document.querySelector('.skip-btn').click()");
     const tap = async (sel) => {
       const c = await ev(`__t.center(${JSON.stringify(sel)})`);
       if (!c) return false;

@@ -17,6 +17,9 @@
   let gatherScene = null; // 採集地下城的外殼狀態（進場時建立、離場時清空）
   let giftWho = null;
   let typer = null;
+  let dlgSpeed = 'x2'; // 對話速度：'x2'（約每秒 70 字）或 'instant'；不記住，每次開遊戲回到 2×
+  const LOCK_MS = 600; // 防連按：高潮句整句顯示後這段時間內按鍵無效
+  const TYPE_MS = 14; // 2×：每字 14ms ≈ 每秒 70 字
   let cursor = { on: false, key: null, sig: null }; // 鍵盤游標：是否顯示、目前停在哪個動作（data-a|data-v#第幾個）、所在畫面
 
   const MINIGAME = { has: (loc) => !!(D.GATHER[loc] && D.GATHER[loc].dungeon) }; // 資料裡有 dungeon 的地點就走地下城
@@ -103,11 +106,22 @@
   // predict／applySpike／settleNight／流程與各行動 已搬入 js/engine.js
   //（純函式、隨機走注入的 rand）。外殼一律呼叫 E.*，並把 rand 傳入。
 
+  // 防連按：在 lines 的第 idx 句加上 { lock: true }（複製，不改動資料表）
+  const lockLine = (lines, idx) => lines.map((l, i) => (i === idx ? [l[0], l[1], l[2], { lock: true }] : l));
+  const SPIKE_HIT = new Set(['debuff', 'musk_dose', 'musk_miss', 'musk_infertile', 'miscarry_musk', 'miscarry_safflower', 'safflower_infertile']);
+  // 加料得手的那一句：旁白重擊句或受害者出糗（oops）的第一句；都沒有就取零溶奸笑那句（再沒有就零溶的那句）
+  function hitIndex(lines) {
+    const i = lines.findIndex((l) => l[0] === 'narr' || l[1] === 'oops');
+    if (i >= 0) return i;
+    const j = lines.findIndex((l) => l[1] === 'evil');
+    return j >= 0 ? j : Math.max(0, lines.findIndex((l) => l[0] === 'lingrong')); // 麝香落空：零溶那句
+  }
+
   function outcomeLines(who, spike, res) {
-    if (res.caught) return fmt(D.CAUGHT, { who, spike, days: res.days });
+    if (res.caught) return lockLine(fmt(D.CAUGHT, { who, spike, days: res.days }), 0); // 被抓那一句（且慢！）
     if (res.outcome === 'plain') return D.THANKS[who];
-    if (res.outcome === 'debuff') return D.DEBUFF_LINES[who][spike];
-    return fmt(D.OUTCOME_LINES[res.outcome], { who, dose: res.dose });
+    const lines = res.outcome === 'debuff' ? D.DEBUFF_LINES[who][spike] : fmt(D.OUTCOME_LINES[res.outcome], { who, dose: res.dose });
+    return SPIKE_HIT.has(res.outcome) ? lockLine(lines, hitIndex(lines)) : lines;
   }
 
   // 手上有好幾個同樣的成品時，用最新做好的那個
@@ -128,6 +142,7 @@
   }
   function advanceDialog() {
     if (!dlg) return;
+    if (dlg.lockUntil && performance.now() < dlg.lockUntil) return; // 防連按
     if (typer) { completeTyper(); return; }
     dlg.i++;
     if (dlg.i >= dlg.lines.length) finishDialog();
@@ -144,6 +159,19 @@
     const el = app.querySelector('.dlg-text');
     if (!el) return;
     const text = el.dataset.full;
+    const opt = dlg.lines[dlg.i][3];
+    if (opt && opt.lock) {
+      // 高潮句：直接整句，LOCK_MS 內按鍵無效，▼ 之後才出現
+      el.innerHTML = esc(text).replace(/\n/g, '<br>');
+      const box = app.querySelector('.dialog-box');
+      if (box) box.classList.add('locked');
+      const at = dlg.i;
+      const d = dlg;
+      dlg.lockUntil = performance.now() + LOCK_MS;
+      setTimeout(() => { if (dlg === d && dlg.i === at && box) box.classList.remove('locked'); }, LOCK_MS);
+      return;
+    }
+    if (dlgSpeed === 'instant') { el.innerHTML = esc(text).replace(/\n/g, '<br>'); return; }
     let n = 0;
     typer = {
       el,
@@ -152,7 +180,7 @@
         n += 1;
         el.innerHTML = esc(text.slice(0, n)).replace(/\n/g, '<br>');
         if (n >= text.length) stopTyper();
-      }, 28),
+      }, TYPE_MS),
     };
   }
 
@@ -178,7 +206,7 @@
     if (report.grounded) lines.push(['baojuan', '_', `小主還在禁足中（到第 ${S.groundUntil} 天）……今天只能待在炎洗宮了。`]);
     if (report.boosted) lines.push(...D.EMPRESS);
     if (report.flip === 'lingrong') {
-      lines.push(['baojuan', '_', '小主！小主！敬事房傳話——今晚黃上翻的是您的牌子！'], ['lingrong', 'evil', '終於……輪到本嬪了。']);
+      lines.push(['baojuan', '_', '小主！小主！敬事房傳話——今晚黃上翻的是您的牌子！', { lock: true }], ['lingrong', 'evil', '終於……輪到本嬪了。']);
     } else if (report.flip) {
       lines.push(['baojuan', '_', `小主，敬事房傳話，今晚黃上翻了${charName(report.flip)}的牌子。`]);
       lines.push(report.flipFriend >= 50
@@ -1271,12 +1299,20 @@
     },
   };
 
+  const speedLabel = () => (dlgSpeed === 'instant' ? '▶ 瞬間' : '▶ 2×');
+  function toggleSpeed() {
+    dlgSpeed = dlgSpeed === 'instant' ? 'x2' : 'instant';
+    const b = app.querySelector('.speed-btn');
+    if (b) b.textContent = speedLabel();
+    if (dlgSpeed === 'instant') completeTyper();
+  }
+
   function dialogView() {
     const [who, expr, text] = dlg.lines[dlg.i];
     const isNarr = who === 'narr';
     const color = isNarr ? '#6b5a80' : D.CHARS[who].color;
     return `<div class="dialog-layer bg-${dlg.bg}" data-a="adv">
-      <button class="skip-btn" data-a="skip">快轉 ≫</button>
+      <div class="dlg-ctrls"><button class="speed-btn" data-a="speed">${speedLabel()}</button><button class="skip-btn" data-a="skip">略過 ≫</button></div>
       ${isNarr ? '' : portrait(who, expr, 'dlg-portrait')}
       <div class="dialog-box ${isNarr ? 'narr' : ''}" style="--c:${color}">
         ${isNarr ? '' : `<div class="speaker">${D.CHARS[who].name}</div>`}
@@ -1498,6 +1534,9 @@
       if (k === ' ' || k === 'Enter') {
         e.preventDefault();
         if (!e.repeat) advanceDialog();
+      } else if (k === 'Escape' && !e.repeat) {
+        e.preventDefault();
+        finishDialog(); // 略過整段：不受防連按影響
       }
       return;
     }
@@ -1525,6 +1564,18 @@
       if (pressEnter()) e.preventDefault();
     }
   });
+  // Shift 單獨按放＝切換對話速度（與其他鍵組合時不算）
+  let shiftAlone = false;
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Shift') shiftAlone = false;
+    else if (!e.repeat) shiftAlone = true;
+  }, true);
+  document.addEventListener('keyup', (e) => {
+    if (e.key !== 'Shift') return;
+    if (shiftAlone && !busy && !gatherScene) toggleSpeed();
+    shiftAlone = false;
+  });
+  document.addEventListener('pointerdown', () => { shiftAlone = false; }, true);
   document.addEventListener('pointerdown', hideCursor, true);
   document.addEventListener('scroll', () => { if (cursor.on) syncCursor(); }, true);
   if (typeof window.addEventListener === 'function') window.addEventListener('resize', () => { if (cursor.on) syncCursor(); });
@@ -1546,6 +1597,7 @@
     switch (a) {
       case 'adv': advanceDialog(); break;
       case 'skip': finishDialog(); break;
+      case 'speed': toggleSpeed(); break;
       case 'start': startGame(); break;
       case 'mute': A.toggleMute(); render(); break;
       case 'go': go(v); break;
