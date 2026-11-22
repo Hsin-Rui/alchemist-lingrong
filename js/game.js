@@ -19,6 +19,8 @@
   let typer = null;
   let dlgSpeed = 'x2'; // 對話速度：'x2'（約每秒 70 字）或 'instant'；不記住，每次開遊戲回到 2×
   const LOCK_MS = 600; // 防連按：高潮句整句顯示後這段時間內按鍵無效
+  const VEIL_VERDICT = 0.45; // 被抓暗幕（DESIGN dim-veil）：宣判句起／結果頁一開始
+  const VEIL_AFTER_STAMP = 0.62; // 被抓暗幕：結果頁章落下後
   const TYPE_MS = 14; // 2×：每字 14ms ≈ 每秒 70 字
   let cursor = { on: false, key: null, sig: null }; // 鍵盤游標：是否顯示、目前停在哪個動作（data-a|data-v#第幾個）、所在畫面
 
@@ -108,23 +110,28 @@
 
   // 防連按：在 lines 的第 idx 句加上 { lock: true }（複製，不改動資料表）
   const lockLine = (lines, idx) => lines.map((l, i) => (i === idx ? [l[0], l[1], l[2], { lock: true }] : l));
-  // 演出等級：加料得手的事件分輕／中／重（對話與結果頁共用）。被抓、收下、拒收、無效不在表內＝一般演出
+  // 演出等級：加料得手的事件分輕／中／重（對話與結果頁共用）；被抓也是「重」（另加暗幕）。收下、拒收、無效不在表內＝一般演出
   const FX_TIER = {
     debuff: 'light',
     musk_dose: 'medium', musk_miss: 'medium',
     musk_infertile: 'heavy', safflower_infertile: 'heavy', miscarry_musk: 'heavy', miscarry_safflower: 'heavy',
   };
   const FX_STOP = { light: 70, medium: 120, heavy: 190 }; // 結果頁狠章落到 0.9 倍時的停格（ms）
-  const fxTier = (r) => (r && !r.caught && !r.refused && !r.useless && FX_TIER[r.outcome]) || null;
-  // 對話演出標記（第 4 元素的 fx）：victim 受害者跳起來抖、tremble 受害者抖、evil 零溶奸笑特寫、slam 旁白框「砰」
+  const fxTier = (r) => (r && !r.refused && (r.caught ? 'heavy' : !r.useless && FX_TIER[r.outcome])) || null;
+  // 對話演出標記（第 4 元素的 fx）：victim 受害者跳起來抖、tremble 受害者抖、evil 零溶奸笑特寫、slam 旁白框「砰」；
+  // 被抓（tier = 'caught'）：enter 溫太醫從右側衝入、tremble 受害者抖、shock 零溶嚇得往後退、dim 宣判句起畫面變暗（暗幕）
+  const CAUGHT_FX = { doctor: 'enter', lingrong: 'shock', narr: 'dim' };
   function markFx(lines, who, tier) {
     const fx = lines.map(() => null);
-    const vi = lines.findIndex((l) => l[0] === who);
-    if (vi >= 0 && tier !== 'medium') fx[vi] = tier === 'light' ? 'victim' : 'tremble';
-    let li = -1;
-    lines.forEach((l, i) => { if (l[0] === 'lingrong' && (l[1] === 'evil' || li < 0 || lines[li][1] !== 'evil')) li = i; });
-    if (li >= 0) fx[li] = 'evil';
-    if (tier === 'heavy') { const ni = lines.findIndex((l) => l[0] === 'narr'); if (ni >= 0) fx[ni] = 'slam'; }
+    if (tier === 'caught') lines.forEach((l, i) => { fx[i] = l[0] === who ? 'tremble' : CAUGHT_FX[l[0]] || null; });
+    else {
+      const vi = lines.findIndex((l) => l[0] === who);
+      if (vi >= 0 && tier !== 'medium') fx[vi] = tier === 'light' ? 'victim' : 'tremble';
+      let li = -1;
+      lines.forEach((l, i) => { if (l[0] === 'lingrong' && (l[1] === 'evil' || li < 0 || lines[li][1] !== 'evil')) li = i; });
+      if (li >= 0) fx[li] = 'evil';
+      if (tier === 'heavy') { const ni = lines.findIndex((l) => l[0] === 'narr'); if (ni >= 0) fx[ni] = 'slam'; }
+    }
     return lines.map((l, i) => (fx[i] ? [l[0], l[1], l[2], { ...(l[3] || {}), fx: fx[i] }] : l));
   }
   // 加料得手的那一句：旁白重擊句或受害者出糗（oops）的第一句；都沒有就取零溶奸笑那句（再沒有就零溶的那句）
@@ -136,7 +143,7 @@
   }
 
   function outcomeLines(who, spike, res) {
-    if (res.caught) return lockLine(fmt(D.CAUGHT, { who, spike, days: res.days }), 0); // 被抓那一句（且慢！）
+    if (res.caught) return markFx(lockLine(fmt(D.CAUGHT, { who, spike, days: res.days }), 0), who, 'caught'); // 被抓那一句（且慢！）鎖 0.6 秒
     if (res.outcome === 'plain') return D.THANKS[who];
     const lines = res.outcome === 'debuff' ? D.DEBUFF_LINES[who][spike] : fmt(D.OUTCOME_LINES[res.outcome], { who, dose: res.dose });
     const tier = fxTier(res);
@@ -179,11 +186,19 @@
     tremble: [[{ transform: 'none' }, { transform: 'translate(-5px,0) rotate(-2deg)' }, { transform: 'translate(5px,0) rotate(2deg)' }, { transform: 'translate(-4px,0) rotate(-1deg)' }, { transform: 'translate(3px,0)' }, { transform: 'none' }], { duration: 480, easing: 'ease-out' }],
     evil: [[{ transform: 'none' }, { transform: 'translateY(-10px) scale(1.16)' }], { duration: 700, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }],
     slam: [[{ transform: 'scale(1.12)' }, { transform: 'scale(1)' }], { duration: 160, easing: 'ease-in' }],
+    enter: [[{ transform: 'translateX(120%)' }, { transform: 'translateX(-14px)' }, { transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.3,1.4,.5,1)' }],
+    shock: [[{ transform: 'none' }, { transform: 'translate(-14px,6px) scale(.94) rotate(-4deg)' }, { transform: 'translate(8px,0) rotate(3deg)' }, { transform: 'translate(-4px,0)' }, { transform: 'none' }], { duration: 560, easing: 'ease-out' }],
+    dim: [[{ opacity: 0 }, { opacity: VEIL_VERDICT }], { duration: 900, easing: 'ease-in', fill: 'forwards' }],
   };
   function playLineFx(fx) {
-    const el = app.querySelector(fx === 'slam' ? '.dialog-box' : '.dlg-portrait');
+    const el = app.querySelector(fx === 'slam' ? '.dialog-box' : fx === 'dim' ? '.dialog-layer > .fx-veil' : '.dlg-portrait');
     if (!el || typeof el.animate !== 'function' || !LINE_FX[fx]) return; // 假 DOM 沒有 animate()
-    el.animate(...LINE_FX[fx]);
+    const a = el.animate(...LINE_FX[fx]);
+    if (fx === 'dim') {
+      // 同一句重繪（例如按 M）時接著暗，不從頭再暗一次
+      if (dlg.veilLine === dlg.i) a.currentTime = performance.now() - dlg.veilAt;
+      else { dlg.veilLine = dlg.i; dlg.veilAt = performance.now(); }
+    }
   }
   function startTyper() {
     stopTyper();
@@ -1229,7 +1244,7 @@
       else if (r.label) { stamp = r.label; stampCls = r.outcome === 'musk_dose' || r.outcome === 'musk_miss' ? 'purple' : 'red'; }
       else { stamp = '收下'; stampCls = 'gold'; }
       const tier = fxTier(r);
-      if (tier) stampCls += ' fierce'; // 狠章（加料得手）；被抓維持一般章（story 5 再加演出）
+      if (tier) stampCls += ' fierce'; // 狠章（加料得手、被抓）
       const shake = tier === 'heavy' && !r.fxDone && !dlg; // 只有「重」在蓋章時晃一次；重繪不再晃
       const lines = [];
       if (r.kind === 'deliver') {
@@ -1250,7 +1265,9 @@
       }
       const done = S.slot >= R.slotsPerDay;
       const hurt = r.caught ? false : r.favDelta < 0;
-      return `<div class="screen result bg-${c.bg}${tier ? ` fx-${tier}` : ''}${shake ? ' fx-shake' : ''}">
+      // 被抓暗幕：一開始 0.45，章落下後 0.62（playResultFx 播）；重繪時直接維持 0.62
+      return `<div class="screen result bg-${c.bg}${tier ? ` fx-${tier}` : ''}${r.caught ? ' fx-caught' : ''}${shake ? ' fx-shake' : ''}">
+        ${r.caught ? `<div class="fx-veil${r.fxDone ? ' settled' : ''}"></div>` : ''}
         <div class="result-stage">
           ${portrait(r.caught ? 'doctor' : r.who, hurt ? 'oops' : 'happy', 'result-portrait')}
           <div class="stamp ${stampCls}">${stamp}</div>
@@ -1345,6 +1362,7 @@
     medium: [[{ transform: 'none' }, { transform: 'translateY(-8px)' }, { transform: 'none' }], { duration: 360, easing: 'ease-out' }],
     heavy: [[{ transform: 'none' }, { transform: 'translateY(14px) scaleY(.92)' }, { transform: 'translate(-6px,0) rotate(-2deg)' }, { transform: 'translate(5px,0) rotate(2deg)' }, { transform: 'none' }], { duration: 520, easing: 'ease-out' }],
   };
+  const DOCTOR_FX = [[{ transform: 'none' }, { transform: 'scale(1.08)' }, { transform: 'none' }], { duration: 400, easing: 'ease-out' }]; // 被抓：溫太醫逼近一下
   function playResultFx() {
     const tier = fxTier(S.result);
     const st = tier && app.querySelector('.stamp.fierce');
@@ -1367,8 +1385,11 @@
     setTimeout(() => {
       if (!stage.isConnected) return;
       inkSplash(stage, box, color);
-      if (pt) pt.animate(...RESULT_PORTRAIT_FX[tier]);
+      if (pt) pt.animate(...(S.result.caught ? DOCTOR_FX : RESULT_PORTRAIT_FX[tier]));
     }, FX_T0 + FX_SLAM + stop);
+    // 被抓：章落下（停格結束）後暗幕從 0.45 再沉到 0.62
+    const veil = S.result.caught && app.querySelector('.result .fx-veil');
+    if (veil) veil.animate([{ opacity: VEIL_VERDICT }, { opacity: VEIL_AFTER_STAMP }], { duration: 1400, delay: FX_T0 + FX_SLAM + stop, easing: 'ease-out', fill: 'both' });
   }
   // 14 顆墨點往外噴＋一圈墨痕擴到 1.6 倍後消失（與章同色）
   function inkSplash(stage, b, color) {
@@ -1411,6 +1432,7 @@
     const color = isNarr ? '#6b5a80' : D.CHARS[who].color;
     const fx = opt && opt.fx ? ` fx-${opt.fx}` : ''; // 演出標記（e2e 也看這個 class）
     return `<div class="dialog-layer bg-${dlg.bg}" data-a="adv">
+      ${opt && opt.fx === 'dim' ? '<div class="fx-veil"></div>' : ''}
       <div class="dlg-ctrls"><button class="speed-btn" data-a="speed">${speedLabel()}</button><button class="skip-btn" data-a="skip">略過 ≫</button></div>
       ${isNarr ? '' : portrait(who, expr, `dlg-portrait${fx}`)}
       <div class="dialog-box ${isNarr ? `narr${fx}` : ''}" style="--c:${color}">
@@ -1794,7 +1816,7 @@
       safflower_useless: ['紅花白下（一般）', 'meizhuang', 'safflower', { status: 'infertile' }, [NO_CATCH]],
       plain: ['收下（一般）', 'huafei', null, null, []],
       refused: ['拒收（一般）', 'huafei', null, null, [NO_CATCH], true],
-      caught: ['被抓', 'huafei', 'croton', null, [0]],
+      caught: ['被抓（重＋暗幕）', 'huafei', 'croton', null, [0]],
     };
     window.addEventListener('hashchange', () => location.reload()); // 選單連結換 hash → 重新播
     const key = fxHash.slice('#演出='.length);

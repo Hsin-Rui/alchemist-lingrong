@@ -132,12 +132,12 @@ test('#結局 debug 路徑能算出並渲染結局（6 種隨機狀態）', () =
   }
 });
 
-test('#演出 測試入口：各事件播對話＋結果頁，等級對應狠章／搖晃；沒加 hash 時不存在', () => {
+test('#演出 測試入口：各事件播對話＋結果頁，等級對應狠章／搖晃；沒加 hash 時不存在', async () => {
   // 事件 → [狠章?, 搖晃?]
   const cases = {
     croton: [true, false], itch: [true, false], musk_dose: [true, false], musk_miss: [true, false],
     musk_infertile: [true, true], safflower_infertile: [true, true], miscarry_musk: [true, true], miscarry_safflower: [true, true],
-    musk_useless: [false, false], safflower_useless: [false, false], plain: [false, false], refused: [false, false], caught: [false, false],
+    musk_useless: [false, false], safflower_useless: [false, false], plain: [false, false], refused: [false, false], caught: [true, true],
   };
   for (const [ev, [fierce, shake]] of Object.entries(cases)) {
     const g = bootGame({ hash: `#演出=${ev}` });
@@ -146,9 +146,21 @@ test('#演出 測試入口：各事件播對話＋結果頁，等級對應狠章
     assert.strictEqual(g.app.dataset.screen, 'result', `${ev}：對話後沒到結果頁`);
     assert.strictEqual(/class="stamp [^"]*fierce/.test(g.app._html), fierce, `${ev}：狠章不符`);
     assert.strictEqual(/fx-shake/.test(g.app._html), shake, `${ev}：搖晃不符`);
+    assert.strictEqual(/class="fx-veil/.test(g.app._html), ev === 'caught', `${ev}：暗幕只屬被抓`);
     g.click('mute'); // 結果頁重繪不再晃
     assert.ok(!/fx-shake/.test(g.app._html), `${ev}：重繪後又晃`);
+    if (ev === 'caught') assert.ok(/class="fx-veil settled"/.test(g.app._html), 'caught：重繪後暗幕應維持 0.62（settled）');
   }
+  // 被抓對話的演出標記：溫太醫衝入（鎖句）、受害者抖、零溶後退、宣判句暗幕
+  const g = bootGame({ hash: '#演出=caught' });
+  const marks = [];
+  for (let i = 0; i < 4 && /data-a="skip"/.test(g.app._html); i++) {
+    marks.push((g.app._html.match(/ fx-(enter|tremble|shock|dim)\b/) || [])[1] + (/class="fx-veil"/.test(g.app._html) ? '+veil' : ''));
+    if (i === 0) await new Promise((r) => setTimeout(r, 650)); // 「且慢！」那句鎖 0.6 秒（整句，無逐字）
+    else g.click('adv'); // 先補完逐字
+    g.click('adv');
+  }
+  assert.deepStrictEqual(marks, ['enter', 'tremble', 'shock', 'dim+veil'], `被抓對話標記不符：${marks}`);
   assert.strictEqual(bootGame({ hash: '#演出=不存在' }).app.dataset.screen, 'title', '未知事件應回標題頁');
   assert.strictEqual(bootGame({ hash: '#演出=constructor' }).app.dataset.screen, 'title', '原型鏈上的名字也算未知事件');
   assert.ok(/演出測試/.test(bootGame({ hash: '#演出' }).app._html), '#演出 應顯示事件選單');

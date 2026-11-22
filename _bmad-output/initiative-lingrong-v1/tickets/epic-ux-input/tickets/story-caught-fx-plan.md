@@ -3,14 +3,14 @@ title: '被抓演出（caught-fx）'
 type: feature
 ticket: '5'
 created: '2026-11-22'
-status: ready-for-dev
-baseline_revision: ''
+status: built
+baseline_revision: '0427be9a5878070bbd8aef1f6cd04ba7c7bccc10'
 route: full
 route_source: auto
 risk: medium
-review: ''
-review_source: ''
-lenses_ran: []
+review: quick
+review_source: pinned
+lenses_ran: ['quick']
 review_loop_iteration: 0
 followup_review_recommended: false
 context: ['{project-root}/_bmad-output/initiative-lingrong-v1/tickets/epic-ux-input/ux-ux-input/EXPERIENCE.md', '{project-root}/_bmad-output/initiative-lingrong-v1/tickets/epic-ux-input/ux-ux-input/DESIGN.md', '{project-root}/_bmad-output/initiative-lingrong-v1/tickets/epic-ux-input/ux-ux-input/mockups/fx-demo.html', '{project-root}/_bmad-output/initiative-lingrong-v1/tickets/epic-ux-input/tickets/story-spike-fx-plan.md']
@@ -70,10 +70,10 @@ deferred: []
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `js/game.js` -- 被抓對話演出標記（衝入、受害者抖、零溶後退、宣判暗幕）；結果頁被抓改重級狠章＋暗幕 0.45→0.62；測試入口加被抓。 -- 依 EXPERIENCE 被抓列。
-- [ ] `css/style.css` -- 暗幕層、衝入／後退動畫、層級（章／收據／按鈕在暗幕上）。 -- 依 DESIGN 暗幕與 Elevation。
-- [ ] `tools/keyboard-e2e.js` -- 以測試入口觸發被抓：斷言對話各句立繪 class、宣判句後暗幕 opacity 約 0.45、對話中無搖晃；結果頁狠章、重級停格、晃一次、章落下後暗幕約 0.62、章／收據／按鈕不在暗幕之下（elementFromPoint 或 z-index 檢查）；reduce motion 不晃；Esc 略過後結果頁演出照常；重繪不重播；0 console 錯誤。 -- 覆蓋 I/O 矩陣。
-- [ ] `tests/playthrough.test.js` -- 更新被抓的演出預期；照舊全過。
+- [x] `js/game.js` -- 被抓對話演出標記（衝入、受害者抖、零溶後退、宣判暗幕）；結果頁被抓改重級狠章＋暗幕 0.45→0.62；測試入口加被抓。 -- 依 EXPERIENCE 被抓列。
+- [x] `css/style.css` -- 暗幕層、衝入／後退動畫、層級（章／收據／按鈕在暗幕上）。 -- 依 DESIGN 暗幕與 Elevation。
+- [x] `tools/keyboard-e2e.js` -- 以測試入口觸發被抓：斷言對話各句立繪 class、宣判句後暗幕 opacity 約 0.45、對話中無搖晃；結果頁狠章、重級停格、晃一次、章落下後暗幕約 0.62、章／收據／按鈕不在暗幕之下（elementFromPoint 或 z-index 檢查）；reduce motion 不晃；Esc 略過後結果頁演出照常；重繪不重播；0 console 錯誤。 -- 覆蓋 I/O 矩陣。
+- [x] `tests/playthrough.test.js` -- 更新被抓的演出預期；照舊全過。
 
 **Acceptance Criteria:**
 - Given 測試入口觸發被抓，when 對話播放，then 溫太醫從右側衝入、受害者抖、零溶後退，宣判句起畫面漸暗，全程不晃。
@@ -81,6 +81,13 @@ deferred: []
 - Given 系統減少動態效果，when 被抓，then 不晃，其他演出照常。
 
 ## Implementation Notes
+
+- `fxTier()` 對被抓回傳 `heavy`（拒收優先排除），所以結果頁自動走 story 4 的狠章、0.19s 停格、`fx-shake`、`fxDone` 防重播；另加 `.fx-caught` class。
+- 對話標記：`markFx(lines, who, 'caught')` 依說話者給 `enter`（溫太醫）、`tremble`（受害者，依 EXPERIENCE「受害者抖」）、`shock`（零溶）、`dim`（旁白宣判）；「且慢！」仍是 `lockLine` 鎖句。動畫數值取自 fx-demo。
+- 暗幕 `.fx-veil`（`#140C1C`、`pointer-events: none`）：對話中在宣判句插入 `.dialog-layer` 第一個子元素（z 0，旁白框／略過／倍速疊在上面），WAAPI 0→0.45 / 900ms；同一句重繪時用 `currentTime` 接續不重暗。結果頁暗幕 z 2，章（z 3）、墨點、墨圈、`.receipt`、`.footer-cta`（z 3）在上；立繪在下。CSS 靜止值 0.45，`playResultFx()` 在章落下（160+190+190ms）後 WAAPI 0.45→0.62 / 1400ms；重繪時 `fxDone` → `.settled` 直接 0.62。
+- 結果頁溫太醫立繪用 fx-demo 的「逼近一下」（scale 1.08）而非受害者被震。
+- `#演出` 選單標籤改為「被抓（重＋暗幕）」；入口本身 story 4 已有。
+- 截圖肉眼看暗幕不明顯，以像素驗證：背景 232→101（≈62%）、按鈕像素與未暗時相同。
 
 ## Plan Change Log
 
@@ -95,3 +102,19 @@ deferred: []
 
 **Manual checks (if no CLI):**
 - `node tools/keyboard-e2e.js --shots <dir>`：截圖被抓對話（暗幕中）與結果頁（暗幕 62%，章與按鈕明亮）。
+
+### 2026-11-22 — Review pass
+- verdicts: 5 findings — high 0, medium 0, low 4, false 1, maybe-false 0
+- findings:
+  - `[low]` `[reject]` 結果頁蓋章前 2 秒內重繪（按 M）會讓暗幕提早跳到 0.62 — 需在 2 秒窗口內按 M 才會遇到，修法要加計時狀態，不划算；試玩時留意。
+  - `[low]` `[reject]` 減少動態下只測了溫太醫衝入，沒測其他對話演出 — 同一 Web Animations 路徑、reduce motion 不影響，屬測試補強。
+  - `[false]` `[reject]` 宣判句少了示範頁的旁白框「砰」 — EXPERIENCE 被抓列未要求，規格與示範頁衝突時以規格為準。
+  - `[low]` `[patch]` css 註解「狠章（加料得手）」過時 — 改為「加料得手、被抓」。
+  - `[low]` `[patch]` e2e「被抓略過：暗幕沉到 0.62」缺失敗細節 — 補上實測值。
+
+## Auto Run Result
+
+- 摘要：被抓改重級演出：對話中溫太醫衝入、受害者抖、零溶後退、宣判句暗幕 0.45；結果頁紅狠章停格 0.19s＋晃一次、暗幕 0.45→0.62，章／收據／按鈕在暗幕上；減少動態不晃。
+- 檔案：`js/game.js`、`css/style.css`、`tests/playthrough.test.js`、`tools/keyboard-e2e.js`。
+- 驗證：node --test 69/69；simulate --quick OK；keyboard-e2e 157/157、0 console 錯誤。
+- 殘留風險：手感需試玩確認（hitl）；未做 review。

@@ -285,13 +285,21 @@ h3 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .rline small { display: block; color: var(--muted); font-size: 12px; }
 .rline b { white-space: nowrap; }
 .rline .gold { color: #6E4B12; } .rline .purple { color: var(--purple); } .rline .grey { color: var(--muted); } .rline .red { color: var(--red); }
-/* 狠章（加料得手）：大一號、粗框；落下／停格／回彈由 js（Web Animations）播，這裡只放靜止的最終樣子 */
+/* 狠章（加料得手、被抓）：大一號、粗框；落下／停格／回彈由 js（Web Animations）播，這裡只放靜止的最終樣子 */
 .stamp.fierce { font-size: 72px; border-width: 8px; padding: 12px 24px; min-width: 220px; left: 0; right: 0; width: max-content; margin: 0 auto; animation: none; transform: rotate(-12deg); z-index: 3; }
 .stamp.fierce.purple { font-size: 48px; }
 .fx-ink { position: absolute; border-radius: 50%; pointer-events: none; z-index: 4; opacity: 0; }
 .fx-ring { position: absolute; border: 6px solid; border-radius: 16px; pointer-events: none; z-index: 2; opacity: 0; }
 /* 搖晃：只有「重」事件的結果頁蓋章時一次（延遲＝起砸 160ms＋砸 190ms＋重停格 190ms）；振幅 15px、0.76 秒逐漸衰減 */
 .result.fx-shake { animation: fxshake .76s linear .54s; }
+/* 被抓暗幕（DESIGN dim-veil #140C1C）：壓暗背景與立繪；不擋點擊。透明度由 js 播（0→0.45、0.45→0.62），這裡是靜止值 */
+.fx-veil { position: absolute; inset: 0; background: #140C1C; opacity: .45; pointer-events: none; }
+.dialog-layer > .fx-veil { z-index: 0; } /* 對話：旁白框、略過／倍速在暗幕之上（定位元素依 DOM 順序疊在上面） */
+.result > .fx-veil { z-index: 2; }
+.result > .fx-veil.settled { opacity: .62; } /* 重繪：直接維持章落下後的暗度 */
+/* 章（狠章 z 3）、墨點、收據、底部按鈕在暗幕之上，不被壓暗 */
+.result.fx-caught .fx-ring { z-index: 3; }
+.result.fx-caught .receipt, .result.fx-caught .footer-cta { position: relative; z-index: 3; }
 
 /* ───── 對話 ───── */
 .dialog-layer { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); cursor: pointer; }

@@ -666,13 +666,91 @@ function connect(url) {
     await sleep(500);
     check('減少動態：墨點照常', await ev("document.querySelectorAll('.fx-ink').length === 14"));
 
-    // 一般：收下／拒收／無效／麝香白下／被抓（被抓不再每個紅章都晃）
-    for (const [evName, cls] of [['plain', 'gold'], ['refused', 'grey'], ['musk_useless', 'grey'], ['safflower_useless', 'grey'], ['caught', 'red']]) {
+    // 一般：收下／拒收／無效／麝香白下
+    for (const [evName, cls] of [['plain', 'gold'], ['refused', 'grey'], ['musk_useless', 'grey'], ['safflower_useless', 'grey']]) {
       await loadFx(evName);
       await toResult();
       p = await ev(FX_PROBE);
       check(`一般：${evName} 一般章、不晃`, p.cls === `stamp ${cls}` && !p.shakeCls && p.shakeAnim === 'none', JSON.stringify(p));
     }
+    // ── 被抓演出（story 5）：溫太醫衝入、受害者抖、零溶後退、宣判暗幕；結果頁重級狠章＋暗幕 0.45→0.62 ──
+    const veilOp = (sel) => ev(`(() => { const v = document.querySelector('${sel}'); return v ? Math.round(parseFloat(getComputedStyle(v).opacity) * 100) / 100 : null; })()`);
+    // 暗幕有 pointer-events: none，elementFromPoint 會略過它；檢查時暫時打開，看該點最上層是不是暗幕（＝被壓暗）
+    const UNDER_VEIL = `(() => {
+      const v = document.querySelector('.result > .fx-veil'); if (!v) return null;
+      v.style.pointerEvents = 'auto';
+      const hit = (sel) => { const e = document.querySelector(sel); const r = e.getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return t === v; };
+      const out = { stamp: hit('.stamp'), receipt: hit('.receipt'), button: hit('.footer-cta .btn'), portrait: hit('.result-portrait') };
+      v.style.pointerEvents = '';
+      return out;
+    })()`;
+    await loadFx('caught');
+    check('被抓：「且慢！」溫太醫立繪從右側衝入（fx-enter＋動畫）', await ev("!!document.querySelector('.dlg-portrait.fx-enter') && document.querySelector('.dlg-portrait').getAnimations().some((a) => /translateX/.test(JSON.stringify(a.effect.getKeyframes())))"));
+    check('被抓：「且慢！」句鎖住', await ev("!!document.querySelector('.dialog-box.locked')"));
+    await press('Space');
+    check('被抓：鎖住時按空白無效', await ev("!!document.querySelector('.dlg-portrait.fx-enter')"));
+    check('被抓：對話中不搖晃（且慢句）', await noShakeNow());
+    await sleep(650); await press('Space');
+    check('被抓：受害者句立繪抖（fx-tremble）', await ev("!!document.querySelector('.dlg-portrait.fx-tremble') && document.querySelector('.dlg-portrait').getAnimations().length > 0"));
+    check('被抓：受害者句尚未暗幕', !(await ev("!!document.querySelector('.fx-veil')")));
+    await press('Space'); await press('Space');
+    check('被抓：零溶喊冤句立繪往後退（fx-shock）', await ev("!!document.querySelector('.dlg-portrait.fx-shock') && document.querySelector('.dlg-portrait').getAnimations().length > 0"));
+    check('被抓：對話中不搖晃（零溶句）', await noShakeNow());
+    await press('Space'); await press('Space');
+    check('被抓：宣判句（旁白）出現暗幕', await ev("!!document.querySelector('.dialog-box.narr.fx-dim') && !!document.querySelector('.dialog-layer > .fx-veil')"));
+    const v0 = await veilOp('.dialog-layer > .fx-veil');
+    check('被抓：宣判句暗幕從淺開始漸暗', v0 !== null && v0 < 0.3, String(v0));
+    await sleep(1000);
+    check('被抓：宣判句 0.9 秒後暗幕約 0.45', (await veilOp('.dialog-layer > .fx-veil')) === 0.45, String(await veilOp('.dialog-layer > .fx-veil')));
+    check('被抓：暗幕色 #140C1C、不擋點擊', await ev("(() => { const s = getComputedStyle(document.querySelector('.dialog-layer > .fx-veil')); return s.backgroundColor === 'rgb(20, 12, 28)' && s.pointerEvents === 'none'; })()"));
+    check('被抓：宣判句不搖晃', await noShakeNow());
+    check('被抓：旁白框在暗幕之上', await ev("(() => { const v = document.querySelector('.dialog-layer > .fx-veil'); v.style.pointerEvents = 'auto'; const r = document.querySelector('.dialog-box').getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); v.style.pointerEvents = ''; return t !== v; })()"));
+    await shot('fx-caught-verdict');
+    await press('Space');
+    check('被抓：宣判後到結果頁', await waitFor("document.getElementById('app').dataset.screen === 'result'", 2000));
+    const vStart = await veilOp('.result > .fx-veil');
+    p = await ev(FX_PROBE);
+    check('被抓結果頁：暗幕一開始約 0.45', vStart === 0.45, String(vStart));
+    check('被抓結果頁：紅狠章 72px', /fierce/.test(p.cls) && /red/.test(p.cls) && p.font === '72px', JSON.stringify(p));
+    check('被抓結果頁：停格約 0.19 秒', p.hold === 190, String(p.hold));
+    check('被抓結果頁：蓋章時晃一次（fxshake 0.76 秒、一次）', p.shakeCls && p.shakeAnim === 'fxshake' && p.shakeDur === '0.76s' && (await ev("getComputedStyle(document.querySelector('.result')).animationIterationCount")) === '1', JSON.stringify(p));
+    await sleep(2200);
+    check('被抓結果頁：章落下後暗幕約 0.62', (await veilOp('.result > .fx-veil')) === 0.62, String(await veilOp('.result > .fx-veil')));
+    const uv = await ev(UNDER_VEIL);
+    check('被抓結果頁：章、收據、按鈕在暗幕之上；立繪在暗幕之下', uv && !uv.stamp && !uv.receipt && !uv.button && uv.portrait, JSON.stringify(uv));
+    check('被抓結果頁：墨點在暗幕之上（14 顆）', await ev("document.querySelectorAll('.fx-ink').length === 14 && +getComputedStyle(document.querySelector('.fx-ink')).zIndex > +getComputedStyle(document.querySelector('.result > .fx-veil')).zIndex"));
+    await shot('fx-caught-result');
+    await press('m'); await press('m'); // 重繪
+    check('被抓結果頁：重繪不重播（不晃、無墨點、章無動畫）', await ev("!document.querySelector('.fx-shake') && document.querySelectorAll('.fx-ink').length === 0 && document.querySelector('.stamp').getAnimations().length === 0"));
+    check('被抓結果頁：重繪後暗幕維持 0.62', (await veilOp('.result > .fx-veil')) === 0.62, String(await veilOp('.result > .fx-veil')));
+    await ev(HELPERS);
+    await press('ArrowDown');
+    const fc = await focus();
+    check('被抓結果頁：鍵盤游標落在按鈕上', !!fc && /^resultdone/.test(fc.key), JSON.stringify(fc));
+    await press('Enter');
+    check('被抓結果頁：Enter 回炎洗宮', await waitFor("document.getElementById('app').dataset.screen === 'home'", 2000));
+    // 略過：被抓對話「且慢！」鎖句中按 Esc → 直接結果頁，演出照常
+    await loadFx('caught');
+    await press('Escape');
+    check('被抓略過：Esc 直接到結果頁（不受防連按影響）', await waitFor("document.getElementById('app').dataset.screen === 'result'", 2000));
+    p = await ev(FX_PROBE);
+    check('被抓略過：結果頁狠章、0.19 秒、晃一次、暗幕 0.45', /fierce/.test(p.cls) && p.hold === 190 && p.shakeAnim === 'fxshake' && (await veilOp('.result > .fx-veil')) === 0.45, JSON.stringify(p));
+    await sleep(2200);
+    check('被抓略過：暗幕沉到 0.62', (await veilOp('.result > .fx-veil')) === 0.62, String(await veilOp('.result > .fx-veil')));
+    await ev(HELPERS);
+    const btn = await ev("__t.center('.footer-cta .btn')");
+    await click(btn[0], btn[1]);
+    check('被抓結果頁：按鈕可用滑鼠點（暗幕不擋）', await waitFor("document.getElementById('app').dataset.screen === 'home'", 2000));
+    // 減少動態：不晃，其他照常
+    await loadFx('caught', true);
+    check('被抓＋減少動態：溫太醫衝入照常', await ev("document.querySelector('.dlg-portrait.fx-enter').getAnimations().length > 0"));
+    await toResult();
+    p = await ev(FX_PROBE);
+    check('被抓＋減少動態：不晃', p.shakeAnim === 'none', JSON.stringify(p));
+    check('被抓＋減少動態：狠章與停格照常', /fierce/.test(p.cls) && p.hold === 190, JSON.stringify(p));
+    await sleep(2200);
+    check('被抓＋減少動態：暗幕照常 0.62', (await veilOp('.result > .fx-veil')) === 0.62);
+
     await loadFx('不存在');
     check('演出入口：未知事件 → 標題頁', (await scr()) === 'title' && !(await hasDlg()));
     await loadFx(null);
