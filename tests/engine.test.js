@@ -583,6 +583,8 @@ test('採集地圖資料：每張地下城地圖都有 tileset 與每名巡邏�
     if (!g.dungeon) continue;
     for (const k of ['floor', 'hall']) assert.ok(Array.isArray(g.tileset[k]) && g.tileset[k].length, `${loc} tileset.${k}`);
     for (const k of ['wallTop', 'wallFace', 'door', 'big']) assert.ok(g.tileset[k], `${loc} tileset.${k}`);
+    for (const k of ['#', 'P', 'F', 'R', 'L']) assert.ok(g.tileset.names[k], `${loc} tileset.names['${k}']（撞到時的提示）`);
+    assert.ok(g.intro, `${loc} 進場開場白`);
     assert.strictEqual(Object.keys(g.tileset.props).sort().join(''), 'FLR', `${loc} 擺設`);
     assert.strictEqual(g.guards.length, g.dungeon.guardSpawns.length, `${loc} 巡邏者數＝登場時程數`);
     for (const gd of g.guards) for (const k of ['name', 'sprite', 'note', 'line']) assert.ok(gd[k], `${loc} guards.${k}`);

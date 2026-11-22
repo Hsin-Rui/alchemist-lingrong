@@ -472,14 +472,33 @@
   const guardOf = (loc, gi) => { const list = D.GATHER[loc].guards; return list[Math.max(0, Math.min(gi, list.length - 1))]; };
 
   // 畫面上方的短提示（侍衛登場等）
-  function dungeonNote(text) {
+  // kind：'warn'（被盯上，紅框）／'bump'（撞到東西，短一點）／不給＝一般
+  function dungeonNote(text, kind, ms) {
     const gs = gatherScene;
     const el = gs && gs.el.note;
     if (!el) return;
     el.textContent = text;
     el.hidden = false;
+    el.className = `dg-note snes${kind ? ` ${kind}` : ''}`;
     clearTimeout(gs.noteTimer);
-    gs.noteTimer = setTimeout(() => { el.hidden = true; }, 1800);
+    gs.noteTimer = setTimeout(() => { el.hidden = true; }, ms || (kind === 'bump' ? 900 : 1800));
+  }
+
+  // 撞到什麼：看零溶往哪個方向走、前面那格是什麼；斜走被牆角卡住也說清楚
+  const DG_DIRS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+  function bumpText(gs, action) {
+    const { run } = gs;
+    const names = D.GATHER[gs.loc].tileset.names;
+    const d = DG_DIRS[action];
+    if (!d) return '過不去';
+    const at = (x, y) => (run.tiles[y] && run.tiles[y][x]) || '#';
+    const { x, y } = run.player;
+    const t = at(x + d[0], y + d[1]);
+    const name = names[t === 'p' ? 'P' : t];
+    if (name) return `被${name}擋住了`;
+    // 目標格能走，那就是斜切牆角
+    const side = [at(x + d[0], y), at(x, y + d[1])].find((c) => names[c === 'p' ? 'P' : c]);
+    return `斜角被${names[side === 'p' ? 'P' : side] || names['#']}卡住了`;
   }
 
   function toggleDungeonConfirm(show) {
@@ -499,7 +518,12 @@
     const events = E.gatherStep(gs.run, action, rand);
     if (!events.length) return;
     const now = performance.now();
-    if (events[0].t === 'bump') { A.sfx('bump'); gs.held = null; return; }
+    if (events[0].t === 'bump') {
+      A.sfx('bump'); gs.held = null;
+      gs.bumpAt = now;
+      dungeonNote(bumpText(gs, action), 'bump');
+      return;
+    }
     const anim = { start: now, p: null, g: {} };
     for (const ev of events) {
       switch (ev.t) {
@@ -507,8 +531,8 @@
         case 'pick': gs.fx.push({ x: ev.x, y: ev.y, t0: now + STEP_MS * 0.6 }); A.sfx(ev.rare ? 'pickRare' : 'pick'); break;
         case 'gmove': anim.g[ev.g] = ev.from; break;
         case 'spawn': dungeonNote(guardOf(gs.loc, ev.g).note); A.sfx('guardIn'); break;
-        case 'alert': gs.bubbles[ev.g] = { id: 'bubble_alert', until: now + 600 }; A.sfx('alert'); break;
-        case 'lost': gs.bubbles[ev.g] = { id: 'bubble_lost', until: now + 1400 }; A.sfx('lost'); break;
+        case 'alert': gs.bubbles[ev.g] = { id: 'bubble_alert', until: now + 600 }; A.sfx('alert'); dungeonNote(`被${guardOf(gs.loc, ev.g).name}盯上了！快躲！`, 'warn'); break;
+        case 'lost': gs.bubbles[ev.g] = { id: 'bubble_lost', until: now + 1400 }; A.sfx('lost'); dungeonNote(`${guardOf(gs.loc, ev.g).name}跟丟了`); break;
         case 'caught':
           gs.phase = 'ending'; gs.caughtBy = ev.g; gs.held = null; gs.buffer = null;
           gs.flashUntil = now + STEP_MS + 160; gs.hopFrom = now + STEP_MS;
@@ -545,7 +569,7 @@
       }
     } else if (gs.phase === 'reveal') {
       gs.mosaic = 8 - 7 * Math.min(1, t / 400);
-      if (t >= 400) { gs.mosaic = 1; gs.phase = 'play'; }
+      if (t >= 400) { gs.mosaic = 1; gs.phase = 'play'; dungeonNote(D.GATHER[gs.loc].intro, null, 2800); }
     } else if (gs.phase === 'play') {
       if (!gs.anim) {
         if (gs.buffer) { const a = gs.buffer; gs.buffer = null; dungeonAct(a); }
@@ -615,14 +639,17 @@
       if (!seen(it.x, it.y)) return;
       sprites.push({ id: it.rare ? `${it.id}_${tick}` : itemSprite(it.id), x: it.x * TILE, y: it.y * TILE - (it.rare ? tick : 0), base: it.y * TILE + 1, dim: !gs.vis.has(it.y * run.w + it.x) });
     });
-    const actor = (who, o, from, extraY) => {
+    const actor = (who, o, from, extraY, shake = 0) => {
       const pos = at(o, from);
+      pos.x += shake;
       const frame = from && p < 0.75 ? 1 + (gs.steps % 2) : 0;
       sprites.push({ shadow: true, x: pos.x + 2, y: pos.y + 11, base: pos.y + 2 });
       sprites.push({ id: `${who}_${o.face}_${frame}`, x: pos.x, y: pos.y - 10 - (from ? 0 : tick) + extraY, base: pos.y + 3, head: pos });
       return pos;
     };
-    actor('ling', run.player, gs.anim && gs.anim.p, 0);
+    // 撞到東西：零溶左右抖一下
+    const bumpT = now - (gs.bumpAt || -1e9);
+    actor('ling', run.player, gs.anim && gs.anim.p, 0, bumpT < 180 ? [2, -2, 1, -1, 0][Math.floor(bumpT / 36)] : 0);
     const heads = {};
     run.guards.forEach((gd, gi) => {
       // 看不到的侍衛不畫，但記下位置：跟丟的「？」要浮在迷霧裡給玩家看
@@ -1000,7 +1027,6 @@
           : gatherResult.ended === 'quit' ? '見好就收，全身而退。' : '';
         const reAction = MINIGAME.has(gatherResult.loc) ? 'enter' : 'regather';
         sheet = `<div class="sheet-layer"><div class="sheet">
-          <p class="muted center">${g.intro}</p>
           ${caught && who.img ? `<div class="caught-guard"><img src="assets/characters/${who.img}.webp" alt="${esc(who.name)}" onerror="${IMG_FAIL}"></div>` : ''}
           <h3 class="sheet-title">${caught ? '被抓了！' : '採到了！'}</h3>
           ${endMsg ? `<p class="center ${caught ? 'ok' : 'muted'}">${endMsg}</p>` : ''}

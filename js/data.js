@@ -46,6 +46,7 @@ window.GAME_DATA = (() => {
         floor: ['grass_0', 'grass_1', 'grass_2'], hall: ['grass_0', 'grass_0', 'grass_1'], // 小徑也鋪草地，可走的地方一眼看得出來
         wallTop: 'hedge_top', wallFace: 'hedge_face', door: 'gate', big: 'pond',
         props: { F: 'flowerbed', R: 'rock', L: 'lantern' },
+        names: { '#': '樹籬', P: '荷花池', F: '花圃', R: '假山', L: '石燈籠' }, // 撞到時的提示用
       },
       // 巡邏者，依登場順序：稱呼、像素 sprite、結算立繪（assets/characters，可省略）、登場提示、抓到零溶時說的話
       guards: [
@@ -71,6 +72,7 @@ window.GAME_DATA = (() => {
         floor: ['ty_floor_0', 'ty_floor_1', 'ty_floor_2'], hall: ['ty_floor_0', 'ty_floor_0', 'ty_floor_1'], // 走廊也鋪木地板，可走的地方一眼看得出來
         wallTop: 'ty_wall_top', wallFace: 'ty_wall_face', door: 'ty_door', big: 'ty_stove',
         props: { F: 'ty_basket', R: 'ty_mortar', L: 'ty_candle' },
+        names: { '#': '百子櫃', P: '煎藥爐', F: '藥材竹簍', R: '搗藥桌', L: '燭台' },
       },
       guards: [
         { name: '藥童', sprite: 'page', note: '藥童開始巡房了', line: '小主，這裡不能亂翻，請回宮。' },
