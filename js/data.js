@@ -68,7 +68,7 @@ window.GAME_DATA = (() => {
       table: [['angelica', 3], ['croton', 1.5], ['petal', 1], ['musk', 0.6]],
       intro: '趁太醫打瞌睡，零溶偷偷拉開了百子櫃……',
       tileset: {
-        floor: ['ty_floor_0', 'ty_floor_1', 'ty_floor_2'], hall: ['ty_hall_0', 'ty_hall_1'],
+        floor: ['ty_floor_0', 'ty_floor_1', 'ty_floor_2'], hall: ['ty_floor_0', 'ty_floor_0', 'ty_floor_1'], // 走廊也鋪木地板，可走的地方一眼看得出來
         wallTop: 'ty_wall_top', wallFace: 'ty_wall_face', door: 'ty_door', big: 'ty_stove',
         props: { F: 'ty_basket', R: 'ty_mortar', L: 'ty_candle' },
       },

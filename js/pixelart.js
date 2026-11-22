@@ -34,9 +34,8 @@
     n: '#8f8a99', N: '#5e5a6b',
     // 宮牆／月洞門
     q: '#9e3a32', Q: '#6e2724', u: '#5a6170',
-    // 太醫院：木頭、青磚、太醫官服、藥童短褂
+    // 太醫院：木頭、太醫官服、藥童短褂
     t: '#d1a26a', T: '#b3824c', d: '#7c5634', D: '#4f3622',
-    m: '#93a3b5', M: '#6f8196', j: '#4f5f75',
     f: '#5f93a3', F: '#3d6b7c', x: '#9db0a8', X: '#6d8480',
   };
 
@@ -690,10 +689,6 @@
     'tttttttttttttttt',
     'TTTTTTTTTTdTTTTT',
   ]);
-  // 青磚迴廊：沿用石板路的磚縫排列，換成灰藍色
-  const brick = (rows) => rows.map((row) => row.replace(/[8902]/g, (ch) => ({ 8: 'm', 9: 'M', 0: 'j', 2: 'M' }[ch])));
-  add('ty_hall_0', 16, 16, brick(sprites.path_0.rows));
-  add('ty_hall_1', 16, 16, brick(sprites.path_1.rows));
   add('ty_wall_top', 16, 16, [
     'DDDDDDDDDDDDDDDD',
     'dddddddddddddddd',
@@ -1107,7 +1102,7 @@
     'shadow', 'jasmine', 'osmanthus', 'rose', 'itch_0', 'itch_1',
     'bubble_alert', 'bubble_lost', 'sparkle_0', 'sparkle_1', 'sparkle_2',
     // 太醫院（規範 §7）
-    'ty_floor_0', 'ty_floor_1', 'ty_floor_2', 'ty_hall_0', 'ty_hall_1', 'ty_wall_top', 'ty_wall_face', 'ty_door',
+    'ty_floor_0', 'ty_floor_1', 'ty_floor_2', 'ty_wall_top', 'ty_wall_face', 'ty_door',
     'ty_stove_0', 'ty_stove_1', 'ty_basket', 'ty_mortar', 'ty_candle',
     ...['page', 'doctor'].flatMap((who) => ['down', 'up', 'left', 'right'].flatMap((d) => [0, 1, 2].map((i) => `${who}_${d}_${i}`))),
     'angelica', 'croton', 'petal', 'musk_0', 'musk_1',
