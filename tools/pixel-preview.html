@@ -97,7 +97,7 @@
     MAP.forEach((row, y) => [...row].forEach((t, x) => {
       const h = hash(x, y);
       if (t === '#') put(tile(x, y + 1) === '#' ? 'hedge_top' : 'hedge_face', x * 16, y * 16);
-      else if (t === ',') put(`path_${h % 2}`, x * 16, y * 16);
+      else if (t === ',') put(`grass_${h % 2}`, x * 16, y * 16);
       else if (t === 'G') put('gate', x * 16, y * 16);
       else put(h < 5 ? 'grass_0' : h < 7 ? 'grass_1' : 'grass_2', x * 16, y * 16);
     }));

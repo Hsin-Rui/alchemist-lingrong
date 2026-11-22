@@ -29,7 +29,7 @@ test('pixelart：mirror 的目標存在且不是另一個 mirror', () => {
 
 test('pixelart：規範 §3 的必備 id 一個不缺，尺寸符合規格', () => {
   const need = [
-    'grass_0', 'grass_1', 'grass_2', 'path_0', 'path_1', 'hedge_top', 'hedge_face', 'gate',
+    'grass_0', 'grass_1', 'grass_2', 'hedge_top', 'hedge_face', 'gate',
     'pond_0', 'pond_1', 'flowerbed', 'rock', 'lantern', 'shadow',
     'jasmine', 'osmanthus', 'rose', 'itch_0', 'itch_1',
     'bubble_alert', 'bubble_lost', 'sparkle_0', 'sparkle_1', 'sparkle_2',
@@ -46,7 +46,7 @@ test('pixelart：規範 §3 的必備 id 一個不缺，尺寸符合規格', () 
 });
 
 test('pixelart：地面圖塊不透明（可無縫鋪滿）、角色與素材有透明底與深色外框', () => {
-  for (const id of ['grass_0', 'grass_1', 'grass_2', 'path_0', 'path_1', 'hedge_top', 'hedge_face', 'gate']) {
+  for (const id of ['grass_0', 'grass_1', 'grass_2', 'hedge_top', 'hedge_face', 'gate']) {
     assert.ok(!P.sprites[id].rows.join('').includes('.'), `${id} 不該有透明像素`);
   }
   for (const id of ['ling_down_0', 'guard_down_0', 'jasmine', 'osmanthus', 'rose', 'itch_0']) {

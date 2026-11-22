@@ -534,7 +534,7 @@ function assertDungeon(run, label) {
   for (const it of run.items) assert.ok(dist[it.y * run.w + it.x] > 0, `${label} 素材走得到`);
   // 出生點 nearItem 步內至少有 1 個素材
   assert.ok(run.items.some((it) => dist[it.y * run.w + it.x] <= DG.nearItem), `${label} 出生點 ${DG.nearItem} 格內有素材`);
-  // 稀有位置隨機，但一定在步數預算內走得到；素材只會在草地或石板路上
+  // 稀有位置隨機，但一定在步數預算內走得到；素材只會在房間地面或走廊上
   for (const it of rares) assert.ok(dist[it.y * run.w + it.x] <= DG.steps * DG.rareReach, `${label} 稀有走得到`);
   for (const it of run.items) assert.ok('.,'.includes(run.tiles[it.y][it.x]), `${label} 素材在草地或走廊`);
   // 侍衛一開始不在場

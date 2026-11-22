@@ -43,7 +43,7 @@ window.GAME_DATA = (() => {
       intro: '零溶提著小籃子，假裝在御花園賞花……',
       // 地形代號 → 像素圖（js/pixelart.js 的 id）。floor／hall 是變體清單；big 是佔 2×2 格的擺設（_0、_1 兩幀）
       tileset: {
-        floor: ['grass_0', 'grass_1', 'grass_2'], hall: ['path_0', 'path_1'],
+        floor: ['grass_0', 'grass_1', 'grass_2'], hall: ['grass_0', 'grass_0', 'grass_1'], // 小徑也鋪草地，可走的地方一眼看得出來
         wallTop: 'hedge_top', wallFace: 'hedge_face', door: 'gate', big: 'pond',
         props: { F: 'flowerbed', R: 'rock', L: 'lantern' },
       },
