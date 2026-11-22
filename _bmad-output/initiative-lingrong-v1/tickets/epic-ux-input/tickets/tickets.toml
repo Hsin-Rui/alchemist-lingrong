@@ -1,0 +1,68 @@
+# epic-ux-input 的 stories，表格順序＝建造順序。
+
+[[entry]]
+id = 1
+type = "story"
+title = "游標與焦點框"
+description = "桌機方向鍵叫出四角焦點框、照畫面方位移動，Enter 按下游標所在或畫面預設；滑鼠／觸控後隱藏，彈出視窗內限定，金縷衣 Esc 無效。本 story 建立共用的鍵盤處理（含對話／彈窗狀態判斷），之後的 story 掛在上面。"
+verify = "桌機在 Chrome 只用方向鍵與 Enter 從標題玩到結局；每個畫面的預設符合 EXPERIENCE 預設表；點一下滑鼠焦點框消失，再按方向鍵從預設重現；手機寬度看不到焦點框。"
+covers = ["R1"]
+after = ["1.5"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "快捷鍵 1–6、Esc、M"
+description = "數字鍵切畫面、Esc 返回或關視窗、M 開關聲音，在對話／彈窗／調合中／地下城中數字鍵無效。掛在 story 1 的共用鍵盤處理上。"
+verify = "主畫面與各子畫面按 1–6 到對應畫面（6 跳就寢確認），Esc 回上一層、關彈窗，M 切靜音；對話中與調合中按數字鍵沒反應。"
+covers = ["R2"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "對話速度、略過與防連按"
+description = "「快轉」改「略過」，新增「▶ 2×／瞬間」倍速按鈕與 Shift 切換，Esc 跳過整段，三句高潮台詞擋 0.6 秒。對話中的 Esc（略過）掛在 story 1 的共用鍵盤處理上。"
+verify = "對話預設 2×，Shift 或點倍速按鈕切到瞬間、重開遊戲回到 2×；Esc 跳過整段；被抓、加料得手、翻牌子三句整句出現且 0.6 秒內按鍵無效、▼ 之後才出現。"
+covers = ["R3"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "加料演出分輕中重"
+description = "加料事件依輕／中／重呈現立繪動作、零溶特寫、狠章停格與噴墨，只有重事件在結果頁晃一次，減少動態效果時不晃。另做一個測試入口（網址 hash，如同 #結局）可直接觸發各事件的演出，story 5 沿用。"
+verify = "用測試入口觸發腹瀉（輕）、麝香 n/3（中）、不孕（重）各觸發一次：章與停格長短照分級表，只有不孕晃一次；開啟系統減少動態效果後不晃；使用者試玩確認手感。"
+covers = ["R4"]
+after = [3]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 5
+type = "story"
+title = "被抓演出"
+description = "被抓時溫太醫從右側衝入、零溶後退、畫面漸暗到 45%，章落下後 62%，章／收據／按鈕不被壓暗。"
+verify = "用 story 4 的測試入口觸發被抓：溫太醫衝入、宣判句起 0.9 秒暗到 45%，重章停格加晃一次後暗到 62%，章、收據與按鈕仍是原亮度；使用者試玩確認手感。"
+covers = ["R5"]
+after = [4]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "整理程式碼（epic 2＋3）"
+description = "整理 epic 2（採集地下城）與 epic 3 新增或改動的程式碼，收掉各 story 延後的整理項目，只整理、不改行為。"
+verify = "既有測試與 tools/simulate.js、tools/gather-bot.js 全跑過；手動走一輪桌機鍵盤與手機點擊，行為與整理前相同；部署到 GitHub Pages 後可玩。"
+covers = []
+after = [1, 2, 3, 4, 5, "2.3"]
+hitl = false
+risk = "low"
+notes = ["使用者：把 epic 2 epic 3 的代碼都整理一下。"]
