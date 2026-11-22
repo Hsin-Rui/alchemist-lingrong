@@ -108,7 +108,25 @@
 
   // 防連按：在 lines 的第 idx 句加上 { lock: true }（複製，不改動資料表）
   const lockLine = (lines, idx) => lines.map((l, i) => (i === idx ? [l[0], l[1], l[2], { lock: true }] : l));
-  const SPIKE_HIT = new Set(['debuff', 'musk_dose', 'musk_miss', 'musk_infertile', 'miscarry_musk', 'miscarry_safflower', 'safflower_infertile']);
+  // 演出等級：加料得手的事件分輕／中／重（對話與結果頁共用）。被抓、收下、拒收、無效不在表內＝一般演出
+  const FX_TIER = {
+    debuff: 'light',
+    musk_dose: 'medium', musk_miss: 'medium',
+    musk_infertile: 'heavy', safflower_infertile: 'heavy', miscarry_musk: 'heavy', miscarry_safflower: 'heavy',
+  };
+  const FX_STOP = { light: 70, medium: 120, heavy: 190 }; // 結果頁狠章落到 0.9 倍時的停格（ms）
+  const fxTier = (r) => (r && !r.caught && !r.refused && !r.useless && FX_TIER[r.outcome]) || null;
+  // 對話演出標記（第 4 元素的 fx）：victim 受害者跳起來抖、tremble 受害者抖、evil 零溶奸笑特寫、slam 旁白框「砰」
+  function markFx(lines, who, tier) {
+    const fx = lines.map(() => null);
+    const vi = lines.findIndex((l) => l[0] === who);
+    if (vi >= 0 && tier !== 'medium') fx[vi] = tier === 'light' ? 'victim' : 'tremble';
+    let li = -1;
+    lines.forEach((l, i) => { if (l[0] === 'lingrong' && (l[1] === 'evil' || li < 0 || lines[li][1] !== 'evil')) li = i; });
+    if (li >= 0) fx[li] = 'evil';
+    if (tier === 'heavy') { const ni = lines.findIndex((l) => l[0] === 'narr'); if (ni >= 0) fx[ni] = 'slam'; }
+    return lines.map((l, i) => (fx[i] ? [l[0], l[1], l[2], { ...(l[3] || {}), fx: fx[i] }] : l));
+  }
   // 加料得手的那一句：旁白重擊句或受害者出糗（oops）的第一句；都沒有就取零溶奸笑那句（再沒有就零溶的那句）
   function hitIndex(lines) {
     const i = lines.findIndex((l) => l[0] === 'narr' || l[1] === 'oops');
@@ -121,7 +139,8 @@
     if (res.caught) return lockLine(fmt(D.CAUGHT, { who, spike, days: res.days }), 0); // 被抓那一句（且慢！）
     if (res.outcome === 'plain') return D.THANKS[who];
     const lines = res.outcome === 'debuff' ? D.DEBUFF_LINES[who][spike] : fmt(D.OUTCOME_LINES[res.outcome], { who, dose: res.dose });
-    return SPIKE_HIT.has(res.outcome) ? lockLine(lines, hitIndex(lines)) : lines;
+    const tier = fxTier(res);
+    return tier ? markFx(lockLine(lines, hitIndex(lines)), who, tier) : lines;
   }
 
   // 手上有好幾個同樣的成品時，用最新做好的那個
@@ -154,12 +173,25 @@
     typer.el.innerHTML = typer.full;
     stopTyper();
   }
+  // 對話演出（Web Animations；不受全域 reduce-motion CSS 規則影響——規格：減少動態只關搖晃）。對話中一律不搖晃
+  const LINE_FX = {
+    victim: [[{ transform: 'none' }, { transform: 'translateY(-22px) rotate(-3deg)' }, { transform: 'translate(-6px,0) rotate(3deg)' }, { transform: 'translate(6px,0) rotate(-3deg)' }, { transform: 'translate(-4px,0) rotate(2deg)' }, { transform: 'none' }], { duration: 520, easing: 'ease-out' }],
+    tremble: [[{ transform: 'none' }, { transform: 'translate(-5px,0) rotate(-2deg)' }, { transform: 'translate(5px,0) rotate(2deg)' }, { transform: 'translate(-4px,0) rotate(-1deg)' }, { transform: 'translate(3px,0)' }, { transform: 'none' }], { duration: 480, easing: 'ease-out' }],
+    evil: [[{ transform: 'none' }, { transform: 'translateY(-10px) scale(1.16)' }], { duration: 700, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }],
+    slam: [[{ transform: 'scale(1.12)' }, { transform: 'scale(1)' }], { duration: 160, easing: 'ease-in' }],
+  };
+  function playLineFx(fx) {
+    const el = app.querySelector(fx === 'slam' ? '.dialog-box' : '.dlg-portrait');
+    if (!el || typeof el.animate !== 'function' || !LINE_FX[fx]) return; // 假 DOM 沒有 animate()
+    el.animate(...LINE_FX[fx]);
+  }
   function startTyper() {
     stopTyper();
     const el = app.querySelector('.dlg-text');
     if (!el) return;
     const text = el.dataset.full;
     const opt = dlg.lines[dlg.i][3];
+    if (opt && opt.fx) playLineFx(opt.fx);
     if (opt && opt.lock) {
       // 高潮句：直接整句，LOCK_MS 內按鍵無效，▼ 之後才出現
       el.innerHTML = esc(text).replace(/\n/g, '<br>');
@@ -1196,6 +1228,9 @@
       else if (r.useless) { stamp = '無效'; stampCls = 'grey'; }
       else if (r.label) { stamp = r.label; stampCls = r.outcome === 'musk_dose' || r.outcome === 'musk_miss' ? 'purple' : 'red'; }
       else { stamp = '收下'; stampCls = 'gold'; }
+      const tier = fxTier(r);
+      if (tier) stampCls += ' fierce'; // 狠章（加料得手）；被抓維持一般章（story 5 再加演出）
+      const shake = tier === 'heavy' && !r.fxDone && !dlg; // 只有「重」在蓋章時晃一次；重繪不再晃
       const lines = [];
       if (r.kind === 'deliver') {
         lines.push(`<div class="rline">${tok(r.product, 'sm')}<span>${r.caught ? '東西被沒收了' : `訂單完成・${itemName(r.product)}`}${r.useless ? '<small>（味道怪怪的，賞銀減半、不加友好）</small>' : ''}</span>
@@ -1215,7 +1250,7 @@
       }
       const done = S.slot >= R.slotsPerDay;
       const hurt = r.caught ? false : r.favDelta < 0;
-      return `<div class="screen result bg-${c.bg}">
+      return `<div class="screen result bg-${c.bg}${tier ? ` fx-${tier}` : ''}${shake ? ' fx-shake' : ''}">
         <div class="result-stage">
           ${portrait(r.caught ? 'doctor' : r.who, hurt ? 'oops' : 'happy', 'result-portrait')}
           <div class="stamp ${stampCls}">${stamp}</div>
@@ -1299,6 +1334,69 @@
     },
   };
 
+  // ───────── 結果頁演出（狠章、停格、墨點、立繪） ─────────
+  // 時間軸對齊蓋章音效（render 後 350ms）：160ms 起砸、190ms 落到 0.9 倍＝350ms，停格依等級，再彈 1.07 倍回 1。
+  // 搖晃是 CSS（.result.fx-shake，延遲＝砸＋重停格），減少動態時由 CSS 關掉；其他演出用 Web Animations 照常播。
+  const FX_T0 = 160;
+  const FX_SLAM = 190;
+  const FX_BOUNCE = 240;
+  const RESULT_PORTRAIT_FX = {
+    light: [[{ transform: 'none' }, { transform: 'translateY(14px) scaleY(.92)' }, { transform: 'none' }], { duration: 380, easing: 'ease-out' }],
+    medium: [[{ transform: 'none' }, { transform: 'translateY(-8px)' }, { transform: 'none' }], { duration: 360, easing: 'ease-out' }],
+    heavy: [[{ transform: 'none' }, { transform: 'translateY(14px) scaleY(.92)' }, { transform: 'translate(-6px,0) rotate(-2deg)' }, { transform: 'translate(5px,0) rotate(2deg)' }, { transform: 'none' }], { duration: 520, easing: 'ease-out' }],
+  };
+  function playResultFx() {
+    const tier = fxTier(S.result);
+    const st = tier && app.querySelector('.stamp.fierce');
+    if (!st || typeof st.animate !== 'function') return; // 假 DOM 沒有 animate()：章維持靜態
+    const stop = FX_STOP[tier];
+    const dur = FX_SLAM + stop + FX_BOUNCE;
+    const at = (ms) => ms / dur;
+    const tf = (s, deg = -12) => `rotate(${deg}deg) scale(${s})`;
+    st.animate([
+      { offset: 0, transform: tf(4, -26), opacity: 0, easing: 'cubic-bezier(.6,0,1,1)' },
+      { offset: at(FX_SLAM), transform: tf(0.9), opacity: 1 },
+      { offset: at(FX_SLAM + stop), transform: tf(0.9), opacity: 1, easing: 'ease-out' }, // 停格
+      { offset: at(FX_SLAM + stop + FX_BOUNCE * 0.45), transform: tf(1.07), opacity: 1, easing: 'ease-out' },
+      { offset: 1, transform: tf(1), opacity: 1 },
+    ], { duration: dur, delay: FX_T0, fill: 'both' });
+    const stage = st.parentNode;
+    const pt = app.querySelector('.result-portrait');
+    const box = { x: st.offsetLeft, y: st.offsetTop, w: st.offsetWidth, h: st.offsetHeight }; // 未變形的版面位置
+    const color = getComputedStyle(st).color;
+    setTimeout(() => {
+      if (!stage.isConnected) return;
+      inkSplash(stage, box, color);
+      if (pt) pt.animate(...RESULT_PORTRAIT_FX[tier]);
+    }, FX_T0 + FX_SLAM + stop);
+  }
+  // 14 顆墨點往外噴＋一圈墨痕擴到 1.6 倍後消失（與章同色）
+  function inkSplash(stage, b, color) {
+    const ring = document.createElement('div');
+    ring.className = 'fx-ring';
+    Object.assign(ring.style, { left: `${b.x}px`, top: `${b.y}px`, width: `${b.w}px`, height: `${b.h}px`, borderColor: color });
+    stage.appendChild(ring);
+    ring.animate([{ transform: 'rotate(-12deg) scale(1)', opacity: 0.7 }, { transform: 'rotate(-12deg) scale(1.6)', opacity: 0 }], { duration: 520, easing: 'ease-out', fill: 'forwards' });
+    const cx = b.x + b.w / 2;
+    const cy = b.y + b.h / 2;
+    for (let k = 0; k < 14; k++) {
+      const d = document.createElement('div');
+      const size = 5 + rand() * 9;
+      d.className = 'fx-ink';
+      Object.assign(d.style, { width: `${size}px`, height: `${size}px`, left: `${cx}px`, top: `${cy}px`, background: color });
+      stage.appendChild(d);
+      const ang = rand() * Math.PI * 2;
+      const dist = b.w * 0.55 + rand() * 70;
+      const dx = Math.cos(ang) * dist;
+      const dy = Math.sin(ang) * dist * 0.8;
+      d.animate([
+        { transform: 'translate(-50%,-50%) scale(.4)', opacity: 1 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1)`, opacity: 1, offset: 0.6 },
+        { transform: `translate(calc(-50% + ${dx * 1.08}px), calc(-50% + ${dy + 6}px)) scale(1)`, opacity: 0 },
+      ], { duration: 700, easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
+    }
+  }
+
   const speedLabel = () => (dlgSpeed === 'instant' ? '▶ 瞬間' : '▶ 2×');
   function toggleSpeed() {
     dlgSpeed = dlgSpeed === 'instant' ? 'x2' : 'instant';
@@ -1308,13 +1406,14 @@
   }
 
   function dialogView() {
-    const [who, expr, text] = dlg.lines[dlg.i];
+    const [who, expr, text, opt] = dlg.lines[dlg.i];
     const isNarr = who === 'narr';
     const color = isNarr ? '#6b5a80' : D.CHARS[who].color;
+    const fx = opt && opt.fx ? ` fx-${opt.fx}` : ''; // 演出標記（e2e 也看這個 class）
     return `<div class="dialog-layer bg-${dlg.bg}" data-a="adv">
       <div class="dlg-ctrls"><button class="speed-btn" data-a="speed">${speedLabel()}</button><button class="skip-btn" data-a="skip">略過 ≫</button></div>
-      ${isNarr ? '' : portrait(who, expr, 'dlg-portrait')}
-      <div class="dialog-box ${isNarr ? 'narr' : ''}" style="--c:${color}">
+      ${isNarr ? '' : portrait(who, expr, `dlg-portrait${fx}`)}
+      <div class="dialog-box ${isNarr ? `narr${fx}` : ''}" style="--c:${color}">
         ${isNarr ? '' : `<div class="speaker">${D.CHARS[who].name}</div>`}
         <div class="dlg-text" data-full="${esc(text)}"></div>
         <div class="dlg-next">▼</div>
@@ -1371,6 +1470,10 @@
     if (screen === 'result' && !dlg && !S.result.sfxDone) {
       S.result.sfxDone = true;
       setTimeout(() => A.sfx(S.result.caught || S.result.label ? 'stamp' : S.result.refused ? 'fail' : 'coin'), 350);
+    }
+    if (screen === 'result' && !dlg && !S.result.fxDone) {
+      S.result.fxDone = true;
+      playResultFx();
     }
     syncCursor(true);
   }
@@ -1670,6 +1773,60 @@
     });
     S.result = computeEnding(false);
     screen = 'ending';
+  }
+  // 測試用：網址後面加 #演出 顯示事件選單，#演出=<事件> 直接播該事件的對話＋結果頁（不影響正常遊戲；story 5 沿用）。
+  // 走真的引擎（E.deliver／E.gift），只是先擺好對象狀態、用固定骰子，所以 S.result 與對話都跟正常遊玩一樣。
+  const fxHash = decodeURIComponent(location.hash);
+  if (fxHash === '#演出' || fxHash.startsWith('#演出=')) {
+    const NO_CATCH = 0.999; // 抓包骰 ≥ 機率 → 沒被抓；送禮骰 ≥ 收禮機率 → 拒收
+    // 事件 → [說明, 對象, 加料, 對象狀態, 骰子序列, 送禮?]
+    const FX_DEMO = {
+      itch: ['狂癢（輕）', 'huafei', 'itch', null, [NO_CATCH]],
+      stinky: ['口臭（輕）', 'huafei', 'stinky', null, [NO_CATCH]],
+      croton: ['腹瀉（輕）', 'huafei', 'croton', null, [NO_CATCH]],
+      musk_dose: ['麝香 2/3（中）', 'zhenhuan', 'musk', { status: 'normal', musk: 1 }, [NO_CATCH]],
+      musk_miss: ['麝香落空（中）', 'zhenhuan', 'musk', { status: 'pregnant', preg: 1, musk: 0 }, [NO_CATCH, NO_CATCH]],
+      musk_infertile: ['麝香不孕（重）', 'meizhuang', 'musk', { status: 'normal', musk: 2 }, [NO_CATCH]],
+      safflower_infertile: ['紅花不孕（重）', 'meizhuang', 'safflower', { status: 'normal' }, [NO_CATCH]],
+      miscarry_musk: ['麝香小產（重）', 'zhenhuan', 'musk', { status: 'pregnant', preg: 1, musk: 0 }, [NO_CATCH, 0]],
+      miscarry_safflower: ['紅花小產（重）', 'zhenhuan', 'safflower', { status: 'pregnant', preg: 1 }, [NO_CATCH]],
+      musk_useless: ['麝香白下（一般）', 'meizhuang', 'musk', { status: 'infertile' }, [NO_CATCH]],
+      safflower_useless: ['紅花白下（一般）', 'meizhuang', 'safflower', { status: 'infertile' }, [NO_CATCH]],
+      plain: ['收下（一般）', 'huafei', null, null, []],
+      refused: ['拒收（一般）', 'huafei', null, null, [NO_CATCH], true],
+      caught: ['被抓', 'huafei', 'croton', null, [0]],
+    };
+    window.addEventListener('hashchange', () => location.reload()); // 選單連結換 hash → 重新播
+    const key = fxHash.slice('#演出='.length);
+    S = E.newState(D);
+    screen = 'home';
+    if (fxHash === '#演出') {
+      screen = 'title';
+      modal = {
+        lock: true,
+        title: '演出測試',
+        body: `<div class="row-btns" style="flex-wrap:wrap">${Object.entries(FX_DEMO).map(([k, [label]]) => `<a class="btn ghost" href="#演出=${k}">${label}</a>`).join('')}</div>`,
+      };
+    } else if (!Object.hasOwn(FX_DEMO, key)) {
+      S = null;
+      screen = 'title'; // 未知事件 → 回標題頁
+    } else {
+      const [, who, spike, conc, dice, viaGift] = FX_DEMO[key];
+      if (conc) Object.assign(S.conc[who], conc);
+      const seq = [...dice];
+      const demoRand = () => (seq.length ? seq.shift() : NO_CATCH);
+      const product = 'incense';
+      S.hand.push({ id: 'fxdemo', product, spike });
+      let r;
+      if (viaGift) {
+        r = E.gift(D, S, who, 'fxdemo', demoRand);
+      } else {
+        S.orders.push({ id: 'fxdemo', who, product, due: S.day + 1 });
+        r = E.deliver(D, S, 'fxdemo', 'fxdemo', demoRand);
+      }
+      const lines = r.refused ? D.REFUSE[who] : outcomeLines(who, spike, r);
+      dlg = { lines, i: 0, done: () => go('result'), bg: D.CHARS[who].bg };
+    }
   }
   // 測試用：網址後面加 #e2e 時開放狀態給 tools/keyboard-e2e.js 造情境（不影響正常遊戲）
   if (location.hash === '#e2e') {

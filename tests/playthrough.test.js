@@ -45,11 +45,13 @@ function bootGame({ hash = '' } = {}) {
     setTimeout: (fn) => { try { if (typeof fn === 'function') fn(); } catch (e) { /* 忽略 */ } return 0; },
     clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
     requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},
+    performance: { now: () => Date.now() },
     Math, Date, JSON, Object, Array, String, Number, Boolean, Set, Map, RegExp, Promise, parseInt, parseFloat, isNaN,
     Image: class { set src(v) {} },
     localStorage: (() => { const s = new Map(); return { getItem: (k) => (s.has(k) ? s.get(k) : null), setItem: (k, v) => s.set(k, String(v)), removeItem: (k) => s.delete(k) }; })(),
     location: { hash, href: '' },
     navigator: {},
+    addEventListener() {}, // window.addEventListener（#演出 測試入口註冊 hashchange）
     document: { getElementById: (id) => (id === 'app' ? app : null), createElement: () => makeNode(), body: makeNode(), addEventListener() {}, querySelector: () => null },
   };
   sandbox.window = sandbox;
@@ -128,6 +130,30 @@ test('#結局 debug 路徑能算出並渲染結局（6 種隨機狀態）', () =
     assert.strictEqual(g.app.dataset.screen, 'ending', '未進入結局畫面');
     assert.ok(g.app._html.length > 500, '結局畫面內容過短');
   }
+});
+
+test('#演出 測試入口：各事件播對話＋結果頁，等級對應狠章／搖晃；沒加 hash 時不存在', () => {
+  // 事件 → [狠章?, 搖晃?]
+  const cases = {
+    croton: [true, false], itch: [true, false], musk_dose: [true, false], musk_miss: [true, false],
+    musk_infertile: [true, true], safflower_infertile: [true, true], miscarry_musk: [true, true], miscarry_safflower: [true, true],
+    musk_useless: [false, false], safflower_useless: [false, false], plain: [false, false], refused: [false, false], caught: [false, false],
+  };
+  for (const [ev, [fierce, shake]] of Object.entries(cases)) {
+    const g = bootGame({ hash: `#演出=${ev}` });
+    assert.ok(/data-a="skip"/.test(g.app._html), `${ev}：沒有直接播對話`);
+    g.click('skip');
+    assert.strictEqual(g.app.dataset.screen, 'result', `${ev}：對話後沒到結果頁`);
+    assert.strictEqual(/class="stamp [^"]*fierce/.test(g.app._html), fierce, `${ev}：狠章不符`);
+    assert.strictEqual(/fx-shake/.test(g.app._html), shake, `${ev}：搖晃不符`);
+    g.click('mute'); // 結果頁重繪不再晃
+    assert.ok(!/fx-shake/.test(g.app._html), `${ev}：重繪後又晃`);
+  }
+  assert.strictEqual(bootGame({ hash: '#演出=不存在' }).app.dataset.screen, 'title', '未知事件應回標題頁');
+  assert.strictEqual(bootGame({ hash: '#演出=constructor' }).app.dataset.screen, 'title', '原型鏈上的名字也算未知事件');
+  assert.ok(/演出測試/.test(bootGame({ hash: '#演出' }).app._html), '#演出 應顯示事件選單');
+  const plain = bootGame();
+  assert.ok(!/演出測試|fx-/.test(plain.app._html), '沒加 hash 時不應有測試入口痕跡');
 });
 
 test('引擎雙匯出、原始碼不碰 DOM/localStorage，且 computeEnding 為確定性純函式', () => {

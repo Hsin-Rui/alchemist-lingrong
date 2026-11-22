@@ -3,14 +3,14 @@ title: '加料演出分輕中重（spike-fx）'
 type: feature
 ticket: '4'
 created: '2026-11-22'
-status: ready-for-dev
-baseline_revision: ''
+status: built
+baseline_revision: '5973e55fdcf8b2ec4ad2238754cc33ca215ad06d'
 route: full
 route_source: auto
 risk: medium
-review: ''
-review_source: ''
-lenses_ran: []
+review: quick
+review_source: pinned
+lenses_ran: ['quick']
 review_loop_iteration: 0
 followup_review_recommended: false
 context: ['{project-root}/_bmad-output/initiative-lingrong-v1/tickets/epic-ux-input/ux-ux-input/EXPERIENCE.md', '{project-root}/_bmad-output/initiative-lingrong-v1/tickets/epic-ux-input/ux-ux-input/DESIGN.md', '{project-root}/_bmad-output/initiative-lingrong-v1/tickets/epic-ux-input/ux-ux-input/mockups/fx-demo.html']
@@ -73,10 +73,10 @@ deferred: []
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `js/game.js` -- 事件等級對照（輕／中／重）；`outcomeLines()` 加對話演出標記；`startTyper()`／`dialogView()` 套用立繪與旁白框動畫；`views.result()` 依等級輸出狠章、停格、立繪動作、重事件搖晃（尊重 reduce motion）；加測試入口 hash。 -- 演出邏輯集中在外殼。
-- [ ] `css/style.css` -- 狠章（`.stamp.fierce`）、墨點、墨圈、立繪動作、旁白框砰、搖晃 keyframes；移除「每個紅章都晃」；`@media (prefers-reduced-motion: reduce)` 關掉搖晃。 -- 依 DESIGN。
-- [ ] `tools/keyboard-e2e.js` -- 以測試入口觸發腹瀉（輕）、麝香 2/3（中）、不孕（重）、收下（一般）：斷言章 class／字級、重事件才有搖晃、對話中不搖晃、reduce motion（CDP `Emulation.setEmulatedMedia` `prefers-reduced-motion`）時不晃、0 console 錯誤。 -- 覆蓋 I/O 矩陣。
-- [ ] `tests/playthrough.test.js` -- 照舊全過（必要時補假 DOM 能力）。
+- [x] `js/game.js` -- 事件等級對照（輕／中／重）；`outcomeLines()` 加對話演出標記；`startTyper()`／`dialogView()` 套用立繪與旁白框動畫；`views.result()` 依等級輸出狠章、停格、立繪動作、重事件搖晃（尊重 reduce motion）；加測試入口 hash。 -- 演出邏輯集中在外殼。
+- [x] `css/style.css` -- 狠章（`.stamp.fierce`）、墨點、墨圈、立繪動作、旁白框砰、搖晃 keyframes；移除「每個紅章都晃」；`@media (prefers-reduced-motion: reduce)` 關掉搖晃。 -- 依 DESIGN。
+- [x] `tools/keyboard-e2e.js` -- 以測試入口觸發腹瀉（輕）、麝香 2/3（中）、不孕（重）、收下（一般）：斷言章 class／字級、重事件才有搖晃、對話中不搖晃、reduce motion（CDP `Emulation.setEmulatedMedia` `prefers-reduced-motion`）時不晃、0 console 錯誤。 -- 覆蓋 I/O 矩陣。
+- [x] `tests/playthrough.test.js` -- 照舊全過（必要時補假 DOM 能力）。
 
 **Acceptance Criteria:**
 - Given 測試入口，when 依序觸發腹瀉、麝香 2/3、不孕，then 三者章的大小與停格長短照分級表，只有不孕晃一次。
@@ -86,9 +86,20 @@ deferred: []
 
 ## Implementation Notes
 
+- 等級對照 `FX_TIER`／`fxTier()` 對話與結果頁共用；原 `SPIKE_HIT` 併入。對話標記由 `markFx()` 在 `lockLine()` 之後合併進第 4 元素（`fx`: victim／tremble／evil／slam）。重事件的受害者句（事發前、表情 happy）用較輕的 `tremble`，不跳。
+- 結果頁狠章、停格、墨點、立繪動作用 Web Animations（`playResultFx()`），因為既有全域 `prefers-reduced-motion` CSS 規則會把 CSS 動畫壓成 0.01ms，而規格要求減少動態時只關搖晃。搖晃是 CSS `.result.fx-shake`（延遲 0.54s＝起砸 160＋砸 190＋停格 190），reduce 時 `animation: none`。時間軸：160ms 起砸、350ms 落到 0.9 倍＝對齊既有蓋章音效。
+- 搖晃與演出只在結果頁第一次 render 播（`S.result.fxDone`），重繪（如按 M）不再晃。
+- 測試入口 `#演出`（選單）／`#演出=<事件>`：走真的 `E.deliver`／`E.gift`，先擺對象狀態＋固定骰子；事件鍵：itch、stinky、croton、musk_dose、musk_miss、musk_infertile、safflower_infertile、miscarry_musk、miscarry_safflower、musk_useless、safflower_useless、plain、refused、caught；未知 → 標題頁。
+- 假 DOM 補 `performance`、`window.addEventListener`；新增 `#演出` 回歸測試。
+
 ## Plan Change Log
 
 ## Review Triage Log
+
+### 2026-11-22 — Review pass
+- verdicts: 1 findings — high 0, medium 0, low 1, false 0, maybe-false 0
+- findings:
+  - `[low]` `[patch]` `#演出=constructor` 等原型鏈名字讓測試入口 throw、頁面空白 — 改用 Object.hasOwn；playthrough 加斷言。
 
 ## Design Notes
 
@@ -103,3 +114,11 @@ deferred: []
 
 **Manual checks (if no CLI):**
 - `node tools/keyboard-e2e.js --shots <dir>` 或另截圖：狠章、墨點、紫章 48px 外觀正確。
+
+## Auto Run Result
+
+- 摘要：加料事件分輕／中／重：對話中立繪動作、結果頁狠章＋依等級停格，只有重事件晃一次（減少動態時不晃）；移除每個紅章都晃；新增 `#演出` 測試入口。
+- 檔案：`js/game.js`（等級表、對話／結果頁演出、測試入口）、`css/style.css`（狠章、墨點、墨圈、搖晃、reduce motion）、`tests/playthrough.test.js`（演出測試）、`tools/keyboard-e2e.js`（約 40 條演出斷言）。
+- 審查：1 patch（low），0 deferred，0 reject。Follow-up review：false。
+- 驗證：node --test 69/69；simulate OK；keyboard-e2e 124/124；截圖確認輕／中／重外觀。
+- 殘留風險：手感（時間長短、誇張程度）需使用者試玩確認（hitl）。

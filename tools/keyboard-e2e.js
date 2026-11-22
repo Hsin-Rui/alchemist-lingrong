@@ -565,6 +565,122 @@ function connect(url) {
     if (await focus()) touchBox = true;
     check('手機寬度觸控玩一輪到結局', (await scr()) === 'ending', `taps=${taps}`);
     check('觸控全程看不到焦點框', !touchBox);
+
+    // ── 加料演出分輕中重（story 4）：用 #演出=<事件> 測試入口 ──
+    const fxBase = base.replace('#e2e', '');
+    async function loadFx(evName, reduce = false) {
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width: 480, height: 900, deviceScaleFactor: 1, mobile: false });
+      await cdp.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: reduce ? 'reduce' : 'no-preference' }] });
+      await cdp.send('Page.navigate', { url: 'about:blank' });
+      await sleep(100);
+      await cdp.send('Page.navigate', { url: `${fxBase}#${encodeURIComponent('演出')}${evName === null ? '' : `=${evName}`}` });
+      await waitFor('!!document.querySelector("#app .screen")', 8000);
+    }
+    const FX_PROBE = `(() => {
+      const st = document.querySelector('.stamp');
+      const res = document.querySelector('.result');
+      const a = st && st.getAnimations().find((x) => x.effect.getKeyframes().length === 5); // 狠章：砰→0.9→停格→1.07→1
+      let hold = null;
+      if (a) { const k = a.effect.getKeyframes(); hold = Math.round((k[2].computedOffset - k[1].computedOffset) * a.effect.getTiming().duration); }
+      return { cls: st ? st.className : null, font: st ? getComputedStyle(st).fontSize : null, hold,
+        shakeCls: !!(res && res.classList.contains('fx-shake')), shakeAnim: res ? getComputedStyle(res).animationName : null,
+        shakeDur: res ? getComputedStyle(res).animationDuration : null };
+    })()`;
+    const noShakeNow = () => ev("document.getAnimations().every((a) => a.animationName !== 'fxshake') && !document.querySelector('.fx-shake')");
+    const toResult = async () => { await press('Escape'); await waitFor("document.getElementById('app').dataset.screen === 'result'", 2000); };
+
+    // 輕：腹瀉（對話逐句走，確認立繪演出、對話中不晃）
+    await loadFx('croton');
+    check('演出入口：#演出=croton 直接播對話', await hasDlg());
+    check('輕：受害者那句立繪跳起來抖（fx-victim＋動畫）', await ev("!!document.querySelector('.dlg-portrait.fx-victim') && document.querySelector('.dlg-portrait').getAnimations().length > 0"));
+    check('輕：對話中不搖晃（受害者句）', await noShakeNow());
+    await sleep(650);
+    await press('Space');
+    check('輕：零溶奸笑句立繪特寫（fx-evil）', await ev("!!document.querySelector('.dlg-portrait.fx-evil') && document.querySelector('.dlg-portrait').getAnimations().length > 0"));
+    check('輕：對話中不搖晃（零溶句）', await noShakeNow());
+    await press('Space'); await press('Space');
+    await waitFor("document.getElementById('app').dataset.screen === 'result'", 2000);
+    let p = await ev(FX_PROBE);
+    check('輕：紅狠章 72px', /fierce/.test(p.cls) && /red/.test(p.cls) && p.font === '72px', JSON.stringify(p));
+    check('輕：停格約 0.07 秒', p.hold === 70, String(p.hold));
+    check('輕：結果頁不晃', !p.shakeCls && p.shakeAnim === 'none', JSON.stringify(p));
+    await sleep(500);
+    check('輕：受害者立繪被震（有動畫）', await ev("document.querySelector('.result-portrait').getAnimations().length > 0"));
+    check('輕：14 顆墨點＋1 圈墨痕', await ev("document.querySelectorAll('.fx-ink').length === 14 && document.querySelectorAll('.fx-ring').length === 1"));
+    check('輕：墨點與章同色', await ev("getComputedStyle(document.querySelector('.fx-ink')).backgroundColor === getComputedStyle(document.querySelector('.stamp')).color"));
+    await shot('fx-light-croton');
+    await press('Enter');
+    check('演出入口：結果頁 Enter 照常回炎洗宮', await waitFor("document.getElementById('app').dataset.screen === 'home'", 2000));
+
+    // 中：麝香 2/3
+    await loadFx('musk_dose');
+    check('中：零溶奸笑句特寫（不搖晃）', (await ev("document.querySelectorAll('.dlg-portrait').length === 1")) && await noShakeNow());
+    await sleep(650); await press('Space');
+    check('中：零溶那句 fx-evil', await ev("!!document.querySelector('.dlg-portrait.fx-evil')"));
+    await toResult();
+    p = await ev(FX_PROBE);
+    check('中：紫狠章 48px', /fierce/.test(p.cls) && /purple/.test(p.cls) && p.font === '48px', JSON.stringify(p));
+    check('中：停格約 0.12 秒', p.hold === 120, String(p.hold));
+    check('中：不晃', !p.shakeCls && p.shakeAnim === 'none');
+    await sleep(500);
+    await shot('fx-medium-musk');
+    // 中：麝香落空
+    await loadFx('musk_miss');
+    await toResult();
+    p = await ev(FX_PROBE);
+    check('中：麝香落空同紫狠章、0.12 秒、不晃', /fierce/.test(p.cls) && /purple/.test(p.cls) && p.hold === 120 && !p.shakeCls, JSON.stringify(p));
+
+    // 重：不孕
+    await loadFx('musk_infertile');
+    check('重：受害者句立繪抖', await ev("!!document.querySelector('.dlg-portrait.fx-tremble')"));
+    await sleep(900); await press('Space');
+    check('重：旁白重擊句文字框「砰」', await ev("!!document.querySelector('.dialog-box.narr.fx-slam') && document.querySelector('.dialog-box').getAnimations().length > 0"));
+    check('重：對話中不搖晃', await noShakeNow());
+    await sleep(650); await press('Space');
+    check('重：零溶特寫', await ev("!!document.querySelector('.dlg-portrait.fx-evil')"));
+    await press('Space'); await press('Space');
+    await waitFor("document.getElementById('app').dataset.screen === 'result'", 2000);
+    p = await ev(FX_PROBE);
+    check('重：紅狠章 72px', /fierce/.test(p.cls) && /red/.test(p.cls) && p.font === '72px', JSON.stringify(p));
+    check('重：停格約 0.19 秒', p.hold === 190, String(p.hold));
+    check('重：蓋章時晃一次（fxshake 0.76 秒、只播一次）', p.shakeCls && p.shakeAnim === 'fxshake' && p.shakeDur === '0.76s' && (await ev("getComputedStyle(document.querySelector('.result')).animationIterationCount")) === '1', JSON.stringify(p));
+    await sleep(700);
+    await shot('fx-heavy-infertile');
+    await press('m'); await press('m'); // 重繪
+    check('重：結果頁重繪後不再晃', !(await ev(FX_PROBE)).shakeCls);
+    for (const evName of ['safflower_infertile', 'miscarry_musk', 'miscarry_safflower']) {
+      await loadFx(evName);
+      await toResult();
+      p = await ev(FX_PROBE);
+      check(`重：${evName} 紅狠章、0.19 秒、晃一次`, /fierce/.test(p.cls) && /red/.test(p.cls) && p.hold === 190 && p.shakeAnim === 'fxshake', JSON.stringify(p));
+    }
+
+    // 減少動態：重事件不晃，其他照常
+    await loadFx('musk_infertile', true);
+    await sleep(900); await press('Space');
+    check('減少動態：旁白框「砰」照常', await ev("document.querySelector('.dialog-box').getAnimations().length > 0"));
+    await toResult();
+    p = await ev(FX_PROBE);
+    check('減少動態：重事件不晃', p.shakeAnim === 'none', JSON.stringify(p));
+    check('減少動態：狠章與停格照常', /fierce/.test(p.cls) && p.hold === 190, JSON.stringify(p));
+    await sleep(500);
+    check('減少動態：墨點照常', await ev("document.querySelectorAll('.fx-ink').length === 14"));
+
+    // 一般：收下／拒收／無效／麝香白下／被抓（被抓不再每個紅章都晃）
+    for (const [evName, cls] of [['plain', 'gold'], ['refused', 'grey'], ['musk_useless', 'grey'], ['safflower_useless', 'grey'], ['caught', 'red']]) {
+      await loadFx(evName);
+      await toResult();
+      p = await ev(FX_PROBE);
+      check(`一般：${evName} 一般章、不晃`, p.cls === `stamp ${cls}` && !p.shakeCls && p.shakeAnim === 'none', JSON.stringify(p));
+    }
+    await loadFx('不存在');
+    check('演出入口：未知事件 → 標題頁', (await scr()) === 'title' && !(await hasDlg()));
+    await loadFx(null);
+    check('演出入口：#演出 顯示事件選單', await ev("document.querySelectorAll('#app .sheet a[href^=\"#\"]').length >= 10"));
+    await ev("document.querySelector('#app .sheet a[href*=\"croton\"]').click()");
+    await waitFor("!!document.querySelector('.dialog-layer')", 4000);
+    check('演出入口：點選單事件 → 播該事件', await ev("!!document.querySelector('.dlg-portrait.fx-victim')"));
+    await cdp.send('Emulation.setEmulatedMedia', { features: [] });
   } catch (err) {
     check('執行過程無例外', false, err.stack || String(err));
   }
