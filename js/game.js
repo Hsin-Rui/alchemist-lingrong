@@ -17,6 +17,7 @@
   let gatherScene = null; // 採集地下城的外殼狀態（進場時建立、離場時清空）
   let giftWho = null;
   let typer = null;
+  let cursor = { on: false, key: null, sig: null }; // 鍵盤游標：是否顯示、目前停在哪個動作（data-a|data-v#第幾個）、所在畫面
 
   const MINIGAME = { has: (loc) => !!(D.GATHER[loc] && D.GATHER[loc].dungeon) }; // 資料裡有 dungeon 的地點就走地下城
   const TILE = 16;
@@ -209,7 +210,7 @@
         lock: true,
         title: '今晚侍寢，要演唱「金縷衣」嗎？',
         body: `<p>唱的話，恩寵額外 +${R.singExtraFavor}（共 +${R.serveFavor + R.singExtraFavor}）。但會累到明天早上起不來，<b>少一個時辰</b>。</p>
-          <div class="row-btns"><button class="btn ghost" data-a="sing" data-v="0">正常侍寢（+${R.serveFavor}）</button><button class="btn primary" data-a="sing" data-v="1">開唱！</button></div>`,
+          <div class="row-btns"><button class="btn ghost" data-a="sing" data-v="0">正常侍寢（+${R.serveFavor}）</button><button class="btn primary" data-a="sing" data-v="1" data-def>開唱！</button></div>`,
       };
       render();
       return;
@@ -783,7 +784,7 @@
     modal = {
       title: '要提早就寢嗎？',
       body: `<p>今天還剩 ${R.slotsPerDay - S.slot} 個時辰，就寢後會直接浪費掉。</p>
-        <div class="row-btns"><button class="btn ghost" data-a="closemodal">再想想</button><button class="btn primary" data-a="sleepyes">就寢</button></div>`,
+        <div class="row-btns"><button class="btn ghost" data-a="closemodal">再想想</button><button class="btn primary" data-a="sleepyes" data-def>就寢</button></div>`,
     };
     render();
   }
@@ -796,7 +797,7 @@
       body: `<div class="modal-tok">${tok(id, 'xl')}</div><p>${it.desc}</p>
         <p class="muted">被抓的基礎機率 ${pct(it.catch)}，被抓禁足 ${it.ground} 天。跟對方交情越好越不容易被懷疑；夾在她自己點的訂單裡交貨，風險再減半。</p>
         <h4>哪裡拿得到</h4><ul>${src}</ul>
-        <button class="btn primary wide" data-a="closemodal">知道了</button>`,
+        <button class="btn primary wide" data-a="closemodal" data-def>知道了</button>`,
     };
     render();
   }
@@ -854,9 +855,9 @@
     </header>`;
   }
 
-  function subHeader(title, sub, dark = false) {
+  function subHeader(title, sub, dark = false, backDef = false) {
     return `<div class="subhead ${dark ? 'dark' : ''}">
-      <button class="icon-btn" data-a="go" data-v="home" aria-label="返回"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <button class="icon-btn" data-a="go" data-v="home" aria-label="返回"${backDef ? ' data-def' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
       <div><div class="subhead-title">${title}</div>${sub ? `<div class="subhead-sub">${sub}</div>` : ''}</div>
       <div class="subhead-stats">${coin(S.silver)}・剩 ${R.slotsPerDay - S.slot} 時辰</div>
     </div>`;
@@ -899,15 +900,20 @@
     </section>`;
   }
 
-  function orderCard(o) {
+  // 主畫面預設：第一張訂單卡的主要按鈕（可按時）；否則導覽列「採集」
+  const orderMainOk = (o) => (readyItem(o) ? !grounded() : recipeOk(o.product));
+  const DEF = (on) => (on ? ' data-def' : '');
+
+  function orderCard(o, i) {
     const c = D.CHARS[o.who];
+    const isDef = i === 0 && orderMainOk(o);
     const left = daysLeft(o);
     const item = readyItem(o);
     let body;
     if (item) {
       body = `<div class="ready">${item.spike ? tok(item.spike) : tok(item.product)}
           <span>成品已備好・${item.spike ? `偷加了${itemName(item.spike)}` : '正正經經'}</span></div>
-        <button class="btn primary wide" data-a="deliver" data-v="${o.id}" ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中，不能出門' : `送去${c.palace}`}</button>`;
+        <button class="btn primary wide" data-a="deliver" data-v="${o.id}"${DEF(isDef)} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中，不能出門' : `送去${c.palace}`}</button>`;
     } else {
       const rows = D.PRODUCTS[o.product].recipe.map((id) => {
         const n = have(id);
@@ -917,7 +923,7 @@
       }).join('');
       const ok = recipeOk(o.product);
       body = `<div class="needs">${rows}</div>
-        <button class="btn ${ok ? 'primary' : ''} wide" data-a="craftfor" data-v="${o.id}" ${ok ? '' : 'disabled'}>${ok ? '調合' : '材料還不夠'}</button>`;
+        <button class="btn ${ok ? 'primary' : ''} wide" data-a="craftfor" data-v="${o.id}"${DEF(isDef)} ${ok ? '' : 'disabled'}>${ok ? '調合' : '材料還不夠'}</button>`;
     }
     return `<article class="ocard ${left === 1 ? 'urgent' : ''}" style="--c:${c.color}">
       <div class="ocard-head">${avatar(o.who)}
@@ -951,7 +957,7 @@
         ${portrait('lingrong', 'evil', 'title-portrait')}
         <div class="logo"><div class="logo-main">煉金術士<br>零溶</div><div class="logo-sub">逆襲a零溶</div></div>
         <div class="title-ui">
-          <button class="btn gold big" data-a="start">開始遊戲</button>
+          <button class="btn gold big" data-a="start" data-def>開始遊戲</button>
           <p class="disclaimer">同人惡搞作品<br>所有配方與效果皆為虛構<br>建議開啟聲音遊玩</p>
         </div>
       </div>`;
@@ -976,7 +982,7 @@
         ${spikeBar()}
         <nav class="bottomnav">
           <button data-a="go" data-v="shop"><b>商</b><span>小舖</span></button>
-          <button data-a="go" data-v="gather"><b>採</b><span>採集</span></button>
+          <button data-a="go" data-v="gather"${DEF(!(S.orders.length && orderMainOk(S.orders[0])))}><b>採</b><span>採集</span></button>
           <button data-a="craftfor" data-v=""><b>煉</b><span>調合</span></button>
           <button data-a="giftto" data-v=""><b>禮</b><span>送禮</span></button>
           <button data-a="go" data-v="status"><b>宮</b><span>後宮</span></button>
@@ -993,9 +999,10 @@
           <div class="pad">
           ${D.SHOP.map((id) => {
             const it = D.ITEMS[id];
+            const isDef = id === D.SHOP.find((x) => S.silver >= D.ITEMS[x].price);
             const desc = it.type === 'spike' ? it.desc : id === 'liquor' ? '加紅花瓣可以煉出紅花' : '';
             return `<div class="row">${tok(id)}<div class="row-main"><b>${it.name}</b>${it.type === 'spike' ? '<span class="tag">料</span>' : ''}<small>${desc ? `${desc}・` : ''}持有 ${have(id)}</small></div>
-              <button class="btn small ${S.silver >= it.price ? 'primary' : ''}" data-a="buy" data-v="${id}" ${S.silver < it.price ? 'disabled' : ''}>${coin(it.price)}</button></div>`;
+              <button class="btn small ${S.silver >= it.price ? 'primary' : ''}" data-a="buy" data-v="${id}"${DEF(isDef)} ${S.silver < it.price ? 'disabled' : ''}>${coin(it.price)}</button></div>`;
           }).join('')}
           <p class="muted">花草藥材、癢癢粉、巴豆、紅花瓣都得自己去採集喔。</p>
         </div></div>
@@ -1005,14 +1012,14 @@
     gather() {
       const needed = new Set();
       S.orders.forEach((o) => { if (!readyItem(o)) D.PRODUCTS[o.product].recipe.forEach((id) => { if (!have(id)) needed.add(id); }); });
-      const card = (loc) => {
+      const card = (loc, i) => {
         const g = D.GATHER[loc];
         const hits = g.table.filter(([id]) => needed.has(id)).map(([id]) => itemName(id));
         return `<article class="loc ${hits.length ? 'hot' : ''}">
           <div class="loc-banner bg-${g.bg}"><span>${g.name}</span>${hits.length ? `<em>有你缺的${hits.join('、')}</em>` : ''}</div>
           <div class="loc-body">
             <div class="drops">${g.table.map(([id, w]) => `<span class="drop ${D.ITEMS[id].type === 'spike' || id === 'petal' ? 'spike' : ''} ${needed.has(id) ? 'need' : ''} ${w < 1.5 ? 'rare' : ''}">${D.ITEMS[id].type === 'spike' ? '料：' : ''}${itemName(id)}・${rarity(w)}</span>`).join('')}</div>
-            <button class="btn ${hits.length ? 'primary' : ''} wide" data-a="${MINIGAME.has(loc) ? 'enter' : 'gather'}" data-v="${loc}" ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中' : loc === 'taiyi' ? '偷溜進太醫院' : '潛入御花園偷採'}</button>
+            <button class="btn ${hits.length ? 'primary' : ''} wide" data-a="${MINIGAME.has(loc) ? 'enter' : 'gather'}" data-v="${loc}"${DEF(i === 0)} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中' : loc === 'taiyi' ? '偷溜進太醫院' : '潛入御花園偷採'}</button>
           </div></article>`;
       };
       let sheet = '';
@@ -1037,13 +1044,13 @@
           ${gatherResult.ready.map((o) => `<p class="ok center">${charName(o.who)}的${itemName(o.product)}：材料湊齊了</p>`).join('')}
           ${done ? '' : `<button class="btn primary wide regather" data-a="${reAction}" data-v="${gatherResult.loc}">再去${g.name}採一次</button>`}
           <div class="row-btns">
-            <button class="btn ghost" data-a="gatherdone" data-v="home">${done ? '天色晚了，回宮' : '回炎洗宮'}</button>
-            ${!done && gatherResult.ready.length ? '<button class="btn primary" data-a="gatherdone" data-v="craft">直接去調合</button>' : ''}
+            <button class="btn ghost" data-a="gatherdone" data-v="home"${DEF(done || !gatherResult.ready.length)}>${done ? '天色晚了，回宮' : '回炎洗宮'}</button>
+            ${!done && gatherResult.ready.length ? '<button class="btn primary" data-a="gatherdone" data-v="craft" data-def>直接去調合</button>' : ''}
           </div></div></div>`;
       }
       return `<div class="screen theme-light">
         ${subHeader('出門採集', '潛入御花園或太醫院，躲開巡邏偷採素材')}
-        <div class="scroll pad">${card('garden')}${card('taiyi')}</div>
+        <div class="scroll pad">${card('garden', 0)}${card('taiyi', 1)}</div>
         ${sheet}
       </div>`;
     },
@@ -1059,12 +1066,13 @@
       const preview = a && b ? (result ? `→ ${itemName(result)}` : '→ ？？？（好像不太對）') : '放入兩樣素材';
       const mats = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat');
       const spikes = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === 'spike');
+      const matDef = craftSel.mats.length < 2 ? mats.find((id) => avail(id) > 0) : null;
       const spikeRow = (id) => {
         const it = D.ITEMS[id];
         const n = have(id);
         const p = who ? E.predict(D, S, who, id, order ? 'deliver' : 'gift') : null;
         const on = craftSel.spike === id;
-        return `<button class="srow ${on ? 'on' : ''}" data-a="spike" data-v="${id}" ${n && !toInv ? '' : 'disabled'}>
+        return `<button class="srow ${on ? 'on' : ''}" data-a="spike" data-v="${id}"${DEF(on && !matDef)} ${n && !toInv ? '' : 'disabled'}>
           ${tok(id)}<span class="srow-main"><b>${it.name}</b> <small>×${n}</small><small class="src">${n ? it.desc : `缺貨・${sourcesOf(id).map((s) => s.label).join('、')}`}</small></span>
           ${p ? `<span class="pred ${p.cls}">${p.txt}<small>${p.riskTxt}</small></span>` : ''}</button>`;
       };
@@ -1081,8 +1089,8 @@
           <h3 class="sheet-title">${r.product === 'junk' ? '碰！失敗了……' : `完成！${itemName(r.product)}`}</h3>
           <p class="center">${msg}</p>
           <div class="row-btns">
-            <button class="btn ghost" data-a="craftdone" data-v="home">${done ? '天色晚了，回宮' : '回炎洗宮'}</button>
-            ${canDeliver ? `<button class="btn primary" data-a="craftdone" data-v="deliver">直接送去${D.CHARS[r.order.who].palace}</button>` : ''}
+            <button class="btn ghost" data-a="craftdone" data-v="home"${DEF(!canDeliver)}>${done ? '天色晚了，回宮' : '回炎洗宮'}</button>
+            ${canDeliver ? `<button class="btn primary" data-a="craftdone" data-v="deliver" data-def>直接送去${D.CHARS[r.order.who].palace}</button>` : ''}
           </div></div></div>`;
       }
       const sub = order ? `給${charName(order.who)}（${statusShort(order.who)}）` : who ? `料的預測以今晚侍寢的${charName(who)}為準` : '試試看會做出什麼';
@@ -1100,12 +1108,12 @@
           </div>
           <div class="drawer">
             <h3>素材 <small>點一下放進鍋裡</small></h3>
-            <div class="matgrid">${mats.length ? mats.map((id) => `<button class="mat" data-a="mat" data-v="${id}" ${avail(id) <= 0 || craftSel.mats.length >= 2 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}</small></button>`).join('') : '<p class="muted">沒有素材，先去採集或小舖吧。</p>'}</div>
+            <div class="matgrid">${mats.length ? mats.map((id) => `<button class="mat" data-a="mat" data-v="${id}"${DEF(id === matDef)} ${avail(id) <= 0 || craftSel.mats.length >= 2 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}</small></button>`).join('') : '<p class="muted">沒有素材，先去採集或小舖吧。</p>'}</div>
             <h3>要加什麼料？ ${who ? `<small>依${charName(who)}目前狀態預測</small>` : ''}</h3>
             ${toInv ? '<p class="muted">正在煉製紅花，不能再加料。</p>' : ''}
             <div class="slist">
               ${spikes.map(spikeRow).join('')}
-              <button class="srow ${craftSel.spike ? '' : 'on'}" data-a="spike" data-v=""><span class="tok tok-none"><span class="tok-ch">無</span></span><span class="srow-main"><b>不加料</b><small class="src">正正經經，賞銀全拿</small></span>${who ? '<span class="pred neutral">正經</span>' : ''}</button>
+              <button class="srow ${craftSel.spike ? '' : 'on'}" data-a="spike" data-v=""${DEF(!craftSel.spike && !matDef)}><span class="tok tok-none"><span class="tok-ch">無</span></span><span class="srow-main"><b>不加料</b><small class="src">正正經經，賞銀全拿</small></span>${who ? '<span class="pred neutral">正經</span>' : ''}</button>
             </div>
             <details class="recipes"><summary>配方書</summary>
               ${Object.entries(D.PRODUCTS).filter(([, p]) => p.recipe).map(([pid, p]) => `<div class="recipe">${tok(pid, 'sm')}<b>${p.name}</b> = ${p.recipe.map(itemName).join(' + ')}</div>`).join('')}
@@ -1122,12 +1130,13 @@
       const items = S.hand.filter((h) => h.product !== 'junk');
       const targetCard = (t) => {
         const tonight = S.flip === t;
-        return `<button class="gcard ${who === t ? 'on' : ''}" data-a="giftwho" data-v="${t}" style="--c:${D.CHARS[t].color}">
+        return `<button class="gcard ${who === t ? 'on' : ''}" data-a="giftwho" data-v="${t}"${DEF(sendDef == null && t === (who || D.TARGETS[0]))} style="--c:${D.CHARS[t].color}">
           ${avatar(t)}<span class="gcard-main"><b>${charName(t)}${tonight ? '<em>今晚侍寢</em>' : ''}</b>
           <small>友好 ${S.friend[t]}・收禮機率 ${pct(E.acceptChance(D, S, t))}</small>
           <span class="bar heart"><i style="width:${S.friend[t]}%"></i></span></span></button>`;
       };
       let list = '';
+      const sendDef = who && !grounded() ? (items.find((h) => !(h.spike && who !== S.flip)) || {}).id : null;
       if (who) {
         list = items.length ? items.map((h) => {
           const blocked = h.spike && who !== S.flip;
@@ -1135,7 +1144,7 @@
           return `<div class="row gift-row ${blocked ? 'blocked' : ''}">${tok(h.product)}${h.spike ? tok(h.spike, 'sm') : ''}
             <div class="row-main"><b>${itemName(h.product)}${h.spike ? `<em class="spiked">＋${itemName(h.spike)}</em>` : ''}</b>
             <small>${blocked ? '加料的禮只能送給今晚侍寢的人' : p ? `${p.txt}・${p.riskTxt}` : `收下後友好 +${D.PRODUCTS[h.product].gift}`}</small></div>
-            <button class="btn small ${blocked ? '' : 'primary'}" data-a="gift" data-v="${h.id}" ${blocked || grounded() ? 'disabled' : ''}>送出</button></div>`;
+            <button class="btn small ${blocked ? '' : 'primary'}" data-a="gift" data-v="${h.id}"${DEF(h.id === sendDef)} ${blocked || grounded() ? 'disabled' : ''}>送出</button></div>`;
         }).join('') : '<p class="muted">手上沒有成品。先去調合一份吧！</p><button class="btn primary wide" data-a="craftfor" data-v="">去調合</button>';
       }
       return `<div class="screen theme-light">
@@ -1185,7 +1194,7 @@
           ${r.favDelta ? `<div class="float-num minus">${r.favDelta}</div>` : ''}
         </div>
         <div class="receipt">${lines.join('')}</div>
-        <div class="footer-cta"><button class="btn primary wide big" data-a="resultdone">${done ? '天色晚了，回宮' : '回炎洗宮'}</button></div>
+        <div class="footer-cta"><button class="btn primary wide big" data-a="resultdone" data-def>${done ? '天色晚了，回宮' : '回炎洗宮'}</button></div>
       </div>`;
     },
 
@@ -1203,7 +1212,7 @@
       };
       const inv = Object.keys(S.inv);
       return `<div class="screen theme-light">
-        ${subHeader('後宮', '恩寵決定誰被翻牌子；友好決定枕邊風和被懷疑的機率')}
+        ${subHeader('後宮', '恩寵決定誰被翻牌子；友好決定枕邊風和被懷疑的機率', false, true)}
         <div class="scroll pad">
           <div class="card">${D.ALL.map(row).join('')}</div>
           <h3>持有的素材與料</h3>
@@ -1222,7 +1231,7 @@
         <div class="night-table">
           ${D.ALL.map((w) => `<div style="--c:${D.CHARS[w].color}"><span>${charName(w)}</span><b>寵 ${S.favor[w]}</b><small>${isTarget(w) ? `友 ${S.friend[w]}` : ''}</small></div>`).join('')}
         </div>
-        <button class="btn amber big wide" data-a="next">${last ? '迎接命運的結局……' : '就寢，迎接明天'}</button>
+        <button class="btn amber big wide" data-a="next" data-def>${last ? '迎接命運的結局……' : '就寢，迎接明天'}</button>
       </div>`;
     },
 
@@ -1255,7 +1264,7 @@
           </section>
           <div class="row-btns">
             <button class="btn gold" data-a="share">分享</button>
-            <button class="btn ghost-gold" data-a="start">再玩一次</button>
+            <button class="btn ghost-gold" data-a="start" data-def>再玩一次</button>
           </div>
         </div>
       </div>`;
@@ -1327,7 +1336,167 @@
       S.result.sfxDone = true;
       setTimeout(() => A.sfx(S.result.caught || S.result.label ? 'stamp' : S.result.refused ? 'fail' : 'coin'), 350);
     }
+    syncCursor(true);
   }
+
+  // ───────── 鍵盤游標（焦點框） ─────────
+  // 每次 render() 整頁換掉節點，所以游標記「動作 key」而不是 DOM 節點；幾何挑選在 js/focusnav.js。
+  // 範圍＝最上層的 .sheet-layer（彈出視窗、結果單），否則 .screen；預設＝範圍內的 [data-def]。
+  const NAV_SKIP = new Set(['adv', 'noop']);
+  const NAV_DIRS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+  // 深色面：焦點框改用琥珀
+  const DARK_SURFACE = '.topbar, .subhead, .bottomnav, .theme-dark, .night, .ending, .dialog-box.narr, .dark-sheet, .title-screen';
+  // 深色畫面裡的淺色面（調合的米色素材抽屜）：仍用朱紅
+  const LIGHT_INSET = '.drawer';
+  let focusBox = null;
+
+  function navScope() {
+    const layers = app.querySelectorAll('.sheet-layer');
+    return layers.length ? layers[layers.length - 1] : app.querySelector('.screen');
+  }
+  // 範圍內可按的元素，各自帶上 key（同 a|v 出現多次時以序號區分）
+  function navItems(scope) {
+    if (!scope) return [];
+    const seen = {};
+    const out = [];
+    scope.querySelectorAll('[data-a]').forEach((el) => {
+      const a = el.dataset.a;
+      if (NAV_SKIP.has(a) || el.disabled || !el.getClientRects().length) return;
+      const base = `${a}|${el.dataset.v ?? ''}`;
+      seen[base] = (seen[base] || 0) + 1;
+      out.push({ el, key: `${base}#${seen[base]}` });
+    });
+    return out;
+  }
+  const navDefault = (scope, items) => {
+    const d = scope && scope.querySelector('[data-def]');
+    return items.find((it) => it.el === d) || null;
+  };
+  // 依 key 找目前元素；找不到就回預設（或第一個）
+  function navCurrent(items, scope) {
+    const keys = items.map((it) => it.key);
+    const def = navDefault(scope, items);
+    const k = window.FocusNav.resolve(cursor.key, keys, def && def.key);
+    return items.find((it) => it.key === k) || null;
+  }
+
+  function drawFocus(it) {
+    if (!focusBox) {
+      if (!it) return;
+      focusBox = document.createElement('div');
+      focusBox.className = 'focus-box';
+      focusBox.setAttribute('aria-hidden', 'true');
+      focusBox.innerHTML = '<i></i><i></i><i></i><i></i>';
+      document.body.appendChild(focusBox);
+    }
+    if (!it) { focusBox.classList.remove('on'); delete focusBox.dataset.key; return; }
+    const r = it.el.getBoundingClientRect();
+    // 捲軸內的元素被捲到可視範圍外（藏在頂列／導覽列後面）時先不畫，免得框浮在固定列上
+    const sc = it.el.closest('.scroll');
+    if (sc) {
+      const v = sc.getBoundingClientRect();
+      if (r.bottom <= v.top || r.top >= v.bottom) { focusBox.classList.remove('on'); return; }
+    }
+    focusBox.style.left = `${r.left - 5}px`;
+    focusBox.style.top = `${r.top - 5}px`;
+    focusBox.style.width = `${r.width + 10}px`;
+    focusBox.style.height = `${r.height + 10}px`;
+    focusBox.classList.toggle('dark', !!it.el.closest(DARK_SURFACE) && !it.el.closest(LIGHT_INSET));
+    focusBox.classList.add('on');
+    focusBox.dataset.key = it.key;
+  }
+
+  // 重繪、捲動、縮放後重新定位；對話與地下城中不畫。
+  // 換了畫面／彈出或收起視窗（或中間隔了一段對話）就回預設，同一畫面重繪才留在同一個動作上。
+  // reveal：把游標元素捲進可視範圍（重繪、叫出時；捲動事件本身不捲，免得跟滑鼠滾輪打架）
+  function syncCursor(reveal = false) {
+    if (!cursor.on || dlg || gatherScene) { cursor.sig = null; drawFocus(null); return; }
+    const sig = `${screen}|${app.querySelectorAll('.sheet-layer').length}`;
+    if (sig !== cursor.sig) { cursor.key = null; cursor.sig = sig; }
+    const scope = navScope();
+    const it = navCurrent(navItems(scope), scope);
+    cursor.key = it ? it.key : null;
+    if (it && reveal) it.el.scrollIntoView({ block: 'nearest' });
+    drawFocus(it);
+  }
+
+  // 幾何用的 rect：把畫面中的 .scroll 當作完全展開（捲軸內的元素加上 scrollTop，
+  // 捲軸下方的固定列再往下推「還沒捲到的高度」），這樣捲軸外看不到的卡片也排在固定列之前。
+  function navRect(el, sc, scBottom) {
+    const r = el.getBoundingClientRect().toJSON();
+    if (!sc) return r;
+    if (sc.contains(el)) r.top += sc.scrollTop;
+    else if (r.top >= scBottom - 1) r.top += sc.scrollHeight - sc.clientHeight;
+    return r;
+  }
+
+  function hideCursor() {
+    if (!cursor.on) return;
+    cursor.on = false;
+    cursor.key = null;
+    drawFocus(null);
+  }
+
+  function moveCursor(dir) {
+    const scope = navScope();
+    const items = navItems(scope);
+    if (!cursor.on) {
+      // 第一下只顯示，從目前畫面的預設出現
+      cursor.on = true;
+      cursor.key = null;
+      syncCursor(true);
+      return;
+    }
+    const cur = navCurrent(items, scope);
+    if (!cur) { drawFocus(null); return; }
+    const sc = scope.querySelector('.scroll');
+    const scBottom = sc ? sc.getBoundingClientRect().bottom : 0;
+    const withRect = items.map((it) => Object.assign(navRect(it.el, sc, scBottom), { it }));
+    const from = withRect.find((r) => r.it === cur);
+    const next = window.FocusNav.pick(from, withRect, dir);
+    const target = next ? next.it : cur;
+    cursor.key = target.key;
+    if (next) target.el.scrollIntoView({ block: 'nearest' });
+    drawFocus(target);
+  }
+
+  function pressEnter() {
+    const scope = navScope();
+    const items = navItems(scope);
+    const it = cursor.on ? navCurrent(items, scope) : navDefault(scope, items);
+    if (!it) return false;
+    it.el.click();
+    return true;
+  }
+
+  // 單一鍵盤處理器（之後的快捷鍵、Esc、對話速度都掛在這裡）
+  document.addEventListener('keydown', (e) => {
+    if (busy || gatherScene) return; // 地下城沿用自己的按鍵
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if (dlg) {
+      if (k === ' ' || k === 'Enter') {
+        e.preventDefault();
+        if (!e.repeat) advanceDialog();
+      }
+      return;
+    }
+    if (NAV_DIRS[k]) {
+      e.preventDefault();
+      moveCursor(NAV_DIRS[k]);
+      return;
+    }
+    if (k === 'Enter') {
+      if (e.repeat) { e.preventDefault(); return; }
+      // 用 Tab 移到某顆按鈕時，Enter 交給瀏覽器按下那顆（跟空白鍵一致）
+      const ae = document.activeElement;
+      if (!cursor.on && ae && ae !== document.body && app.contains(ae) && ae.closest('[data-a]')) return;
+      if (pressEnter()) e.preventDefault();
+    }
+  });
+  document.addEventListener('pointerdown', hideCursor, true);
+  document.addEventListener('scroll', () => { if (cursor.on) syncCursor(); }, true);
+  if (typeof window.addEventListener === 'function') window.addEventListener('resize', () => { if (cursor.on) syncCursor(); });
 
   // ───────── 事件 ─────────
   const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'dgquit', 'dgstay', 'craft', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
@@ -1413,6 +1582,10 @@
     });
     S.result = computeEnding(false);
     screen = 'ending';
+  }
+  // 測試用：網址後面加 #e2e 時開放狀態給 tools/keyboard-e2e.js 造情境（不影響正常遊戲）
+  if (location.hash === '#e2e') {
+    window.__e2e = { state: () => S, screen: () => screen, render, go, openCraft };
   }
   render();
   preloadImages();

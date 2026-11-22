@@ -480,3 +480,13 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .caught-guard { height: 120px; display: flex; justify-content: center; }
 .caught-guard img { height: 100%; object-fit: contain; }
 .caught-guard.noimg { display: none; }
+
+/* ───── 鍵盤游標：四角焦點框（固定定位覆蓋層，不動元素本身） ───── */
+.focus-box { position: fixed; z-index: 1000; pointer-events: none; display: none; --fc: var(--crimson); }
+.focus-box.on { display: block; }
+.focus-box.dark { --fc: var(--amber); }
+.focus-box i { position: absolute; width: 10px; height: 10px; border: 0 solid var(--fc); border-radius: 0; }
+.focus-box i:nth-child(1) { left: 0; top: 0; border-left-width: 3px; border-top-width: 3px; }
+.focus-box i:nth-child(2) { right: 0; top: 0; border-right-width: 3px; border-top-width: 3px; }
+.focus-box i:nth-child(3) { left: 0; bottom: 0; border-left-width: 3px; border-bottom-width: 3px; }
+.focus-box i:nth-child(4) { right: 0; bottom: 0; border-right-width: 3px; border-bottom-width: 3px; }

@@ -59,6 +59,7 @@ function bootGame({ hash = '' } = {}) {
   const ctx = vm.createContext(sandbox);
   vm.runInContext(read('js/data.js'), ctx, { filename: 'data.js' });
   vm.runInContext(read('js/engine.js'), ctx, { filename: 'engine.js' });
+  vm.runInContext(read('js/focusnav.js'), ctx, { filename: 'focusnav.js' });
   vm.runInContext(read('js/game.js'), ctx, { filename: 'game.js' });
 
   function parseButtons(html) {
