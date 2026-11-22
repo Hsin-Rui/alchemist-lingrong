@@ -60,9 +60,27 @@ test('pixelart：動畫引用的幀都存在；地下城資料指定的素材都
   const vm = require('vm');
   const ctx = { window: {} };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'js/data.js'), 'utf8'), ctx);
-  const g = ctx.window.GAME_DATA.GATHER.garden;
-  for (const [id] of g.table) assert.ok(P.sprites[id] || P.sprites[`${id}_0`], `素材 ${id} 沒有像素圖`);
-  assert.ok(P.sprites[`${g.rare}_0`] && P.sprites[`${g.rare}_1`], '稀有素材要有 2 幀閃光');
+  const size = (id) => { const sp = P.sprites[id]; const src = sp.mirror ? P.sprites[sp.mirror] : sp; return [src.w, src.h]; };
+  for (const [loc, g] of Object.entries(ctx.window.GAME_DATA.GATHER)) {
+    if (!g.dungeon) continue;
+    for (const [id] of g.table) assert.ok(P.sprites[id] || P.sprites[`${id}_0`], `${loc} 素材 ${id} 沒有像素圖`);
+    assert.ok(P.sprites[`${g.rare}_0`] && P.sprites[`${g.rare}_1`], `${loc} 稀有素材要有 2 幀閃光`);
+    // 地圖資料指定的圖塊、擺設、巡邏者 sprite 都要存在，尺寸符合規格
+    const ts = g.tileset;
+    for (const id of [...ts.floor, ...ts.hall, ts.wallTop, ts.wallFace, ts.door]) {
+      assert.ok(P.sprites[id], `${loc} 缺圖塊 ${id}`);
+      assert.deepStrictEqual(size(id), SIZE.tile, `${id} 尺寸`);
+      assert.ok(!P.sprites[id].rows.join('').includes('.'), `${id} 不該有透明像素`);
+    }
+    for (const f of [0, 1]) assert.deepStrictEqual(size(`${ts.big}_${f}`), SIZE.pond, `${ts.big}_${f} 尺寸`);
+    for (const id of Object.values(ts.props)) assert.ok(P.sprites[id] && size(id)[0] === 16 && [16, 24].includes(size(id)[1]), `${loc} 擺設 ${id}`);
+    for (const gd of g.guards) for (const dir of ['down', 'up', 'left', 'right']) for (const f of [0, 1, 2]) {
+      const id = `${gd.sprite}_${dir}_${f}`;
+      assert.ok(P.sprites[id], `${loc} 缺 ${id}`);
+      assert.deepStrictEqual(size(id), SIZE.actor, `${id} 尺寸`);
+      assert.ok(P.required.includes(id), `required 清單缺 ${id}`);
+    }
+  }
 });
 
 test('pixelart.js 是純資料：原始碼不碰 DOM／計時器', () => {

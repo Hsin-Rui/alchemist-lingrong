@@ -34,6 +34,10 @@
     n: '#8f8a99', N: '#5e5a6b',
     // 宮牆／月洞門
     q: '#9e3a32', Q: '#6e2724', u: '#5a6170',
+    // 太醫院：木頭、青磚、太醫官服、藥童短褂
+    t: '#d1a26a', T: '#b3824c', d: '#7c5634', D: '#4f3622',
+    m: '#93a3b5', M: '#6f8196', j: '#4f5f75',
+    f: '#5f93a3', F: '#3d6b7c', x: '#9db0a8', X: '#6d8480',
   };
 
   const sprites = {};
@@ -630,9 +634,468 @@
     '................',
   ]);
 
+  // ═════════ 太醫院（story 2.2；規範 §7）═════════
+  // ───────── 地形圖塊（16×16）─────────
+  add('ty_floor_0', 16, 16, [
+    'tttttttttttttttt',
+    'ttttttTttttttttt',
+    'tttttttttttTtttt',
+    'TTTTTTTdTTTTTTTT',
+    'tttttttttttttttt',
+    'tttTtttttttttttt',
+    'tttttttttttttTtt',
+    'TTTTTTTTTTTTTTdT',
+    'tttttttttttttttt',
+    'tttttttttTtttttt',
+    'tttttttttttttttt',
+    'TTTdTTTTTTTTTTTT',
+    'tttttttttttttttt',
+    'ttTttttttttttttt',
+    'ttttttttttttTttt',
+    'TTTTTTTTTTdTTTTT',
+  ]);
+  add('ty_floor_1', 16, 16, [
+    'tttttttttttttttt',
+    'tttttttttttTtttt',
+    'ttTttttttttttttt',
+    'TTTTTTTdTTTTTTTT',
+    'tttttttttttttttt',
+    'tttttTTTtttttttt',
+    'ttttTddTTttttTtt',
+    'TTTTTTTTTTTTTTdT',
+    'tttttttttttttttt',
+    'tttttttttttTTttt',
+    'ttttttttttTdTttt',
+    'TTTdTTTTTTTTTTTT',
+    'tttttttttttttttt',
+    'tttttTtttttttttt',
+    'tttttttttttttttt',
+    'TTTTTTTTTTdTTTTT',
+  ]);
+  add('ty_floor_2', 16, 16, [
+    'tttttttttttttttt',
+    'ttttttTttttttttt',
+    'tttttttttttttttt',
+    'TTTTTTTdTTTTTTTT',
+    'tttttttttttttttt',
+    'ttt2tttttttttttt',
+    'tt232ttttttttTtt',
+    'TTT3TTTTTTTTTTdT',
+    'tttttttttttttttt',
+    'ttttttttt2tttttt',
+    'tttttttt323ttttt',
+    'TTTdTTTTT2TTTTTT',
+    'tttttttttttttttt',
+    'ttTttttttttttttt',
+    'tttttttttttttttt',
+    'TTTTTTTTTTdTTTTT',
+  ]);
+  // 青磚迴廊：沿用石板路的磚縫排列，換成灰藍色
+  const brick = (rows) => rows.map((row) => row.replace(/[8902]/g, (ch) => ({ 8: 'm', 9: 'M', 0: 'j', 2: 'M' }[ch])));
+  add('ty_hall_0', 16, 16, brick(sprites.path_0.rows));
+  add('ty_hall_1', 16, 16, brick(sprites.path_1.rows));
+  add('ty_wall_top', 16, 16, [
+    'DDDDDDDDDDDDDDDD',
+    'dddddddddddddddd',
+    'ddddTddddddddddd',
+    'dddddddddddTdddd',
+    'dddddddddddddddd',
+    'DDDDDDDDDDDDDDDD',
+    'kkkkkkkkkkkkkkkk',
+    'DDDDDDDDDDDDDDDD',
+    'dddddddddddddddd',
+    'dddddddTdddddddd',
+    'dddddddddddddddd',
+    'ddTddddddddddddd',
+    'dddddddddddddddd',
+    'DDDDDDDDDDDDDDDD',
+    'kkkkkkkkkkkkkkkk',
+    'DDDDDDDDDDDDDDDD',
+  ]);
+  // 百子櫃正面：一格格小抽屜加銅拉環
+  add('ty_wall_face', 16, 16, [
+    'DDDDDDDDDDDDDDDD',
+    'DtttDtttDtttDttt',
+    'DTyTDTyTDTyTDTyT',
+    'DTTTDTTTDTTTDTTT',
+    'DDDDDDDDDDDDDDDD',
+    'DtttDtttDtttDttt',
+    'DTyTDTyTDTyTDTyT',
+    'DTTTDTTTDTTTDTTT',
+    'DDDDDDDDDDDDDDDD',
+    'DtttDtttDtttDttt',
+    'DTyTDTyTDTyTDTyT',
+    'DTTTDTTTDTTTDTTT',
+    'DDDDDDDDDDDDDDDD',
+    'dddddddddddddddd',
+    'KKKKKKKKKKKKKKKK',
+    'kkkkkkkkkkkkkkkk',
+  ]);
+  add('ty_door', 16, 16, [
+    'DDaaaaaaaaaaaaDD',
+    'DDaAaaaAaaaAaaDD',
+    'DDaaaaaaaaaaaaDD',
+    'DDaAaaaAaaaAaaDD',
+    'DDAaAaAaAaAaAaDD',
+    'DDttttttttttttDD',
+    'DDttttttttttttDD',
+    'DDtttTttttttttDD',
+    'DDttttttttttttDD',
+    'DDTTTTTTTTTTTTDD',
+    'DDttttttttttttDD',
+    'DDttttttTtttttDD',
+    'DDttttttttttttDD',
+    'DDddddddddddddDD',
+    'DDyddddddddddyDD',
+    'DDDDDDDDDDDDDDDD',
+  ]);
+
+  // ───────── 擺設 ─────────
+  // 煎藥爐台（32×32）：磚砌爐台、兩個藥壺、兩個爐口；爐火與蒸氣 2 幀
+  const STOVE = (() => {
+    const rows = [];
+    for (let y = 0; y < 32; y++) {
+      let row = '';
+      for (let x = 0; x < 32; x++) {
+        const inX = x >= 1 && x <= 30;
+        if (y < 6 || y > 29 || !inX) row += '.';
+        else if (y === 6 || y === 29 || x === 1 || x === 30) row += 'k';
+        else if (y === 18) row += 'k';
+        else if (y < 18) row += (x + y) % 7 === 0 ? 'W' : 'n';
+        else row += (y % 4 === 3 || (x + (y % 8 < 4 ? 0 : 4)) % 8 === 0) ? 'k' : 'N';
+      }
+      rows.push(row);
+    }
+    return rows;
+  })();
+  const POT = [
+    '...kkkkk...',
+    '.kkKKKKKkk.',
+    'kKKdddddKKk',
+    'kKdTdddddKk',
+    'kKdddddddKk',
+    'kKKdddddKKk',
+    '.kkKKKKKkk.',
+    '...kkkkk...',
+  ];
+  const FIRE = [
+    ['kkkkkkk', 'kkeoekk', 'keoooek', 'koowook', 'koowook', 'keoooek', 'kkeeekk', 'kkkkkkk'],
+    ['kkkkkkk', 'kkkekkk', 'kkeoekk', 'keowoek', 'koowook', 'kooooek', 'kkeoekk', 'kkkkkkk'],
+  ];
+  const STEAM = [['.w...', '..W..', '.w...', '..w..'], ['..w..', '.W...', '..w..', '.w...']];
+  [0, 1].forEach((f) => {
+    let rows = stamp(stamp(STOVE, 3, 8, POT), 18, 8, POT);
+    rows = stamp(stamp(rows, 5, 20, FIRE[f]), 20, 20, FIRE[1 - f]);
+    rows = stamp(stamp(rows, 6, 2, STEAM[f]), 21, 2, STEAM[1 - f]);
+    add(`ty_stove_${f}`, 32, 32, rows);
+  });
+  add('ty_basket', 16, 16, [
+    '................',
+    '....2..3...2....',
+    '...232.32.232...',
+    '...2323232323...',
+    '..kkkkkkkkkkkk..',
+    '..kOoOoOoOoOok..',
+    '..kkkkkkkkkkkk..',
+    '...koOoOoOoOk...',
+    '...kOoOoOoOok...',
+    '...koOoOoOoOk...',
+    '...kOoOoOoOok...',
+    '...koOoOoOoOk...',
+    '....kOoOoOok....',
+    '....kkkkkkkk....',
+    '................',
+    '................',
+  ]);
+  add('ty_mortar', 16, 24, [
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '................',
+    '...........kk...',
+    '..........kWk...',
+    '...kkkkkkkWkk...',
+    '...knnnnnWnnk...',
+    '...kNnnnnnnNk...',
+    '....kNnnnnNk....',
+    '....kkNNNNkk....',
+    '.kkkkkkkkkkkkkk.',
+    '.kttttttttttttk.',
+    '.ktTttttttTtttk.',
+    '.kTTTTTTTTTTTTk.',
+    '.kkkkkkkkkkkkkk.',
+    '..kdk......kdk..',
+    '..kdk......kdk..',
+    '..kdk......kdk..',
+    '..kdk......kdk..',
+    '..kkk......kkk..',
+    '................',
+  ]);
+  add('ty_candle', 16, 24, [
+    '................',
+    '................',
+    '................',
+    '................',
+    '.......oo.......',
+    '......owwo......',
+    '......oeeo......',
+    '.......oo.......',
+    '.......kk.......',
+    '......kwwk......',
+    '......kwWk......',
+    '......kwWk......',
+    '.....kkyykk.....',
+    '....kyyyyyYk....',
+    '.....kkyYkk.....',
+    '......kyYk......',
+    '......kyYk......',
+    '......kyYk......',
+    '......kyYk......',
+    '......kyYk......',
+    '.....kkyYkk.....',
+    '....kyyyyYYk....',
+    '....kkkkkkkk....',
+    '................',
+  ]);
+
+  // ───────── 角色 ─────────
+  // 藥童：瓜皮小帽、灰青短褂、抱著藥包；比大人矮 2 像素
+  const legs = (c, side) => (side
+    ? [[`...k${c}${c}k.k${c}${c}k....`, `...k${c}${c}k.k${c}${c}k....`, '...kkkk.kkkk....', '................'],
+      [`...k${c}${c}k.k${c}${c}k....`, `...k${c}${c}k.kkkk....`, '...kkkk.........', '................'],
+      [`...k${c}${c}k.k${c}${c}k....`, `...kkkk.k${c}${c}k....`, '........kkkk....', '................']]
+    : [[`...k${c}${c}k..k${c}${c}k...`, `...k${c}${c}k..k${c}${c}k...`, '...kkkk..kkkk...', '................'],
+      [`...k${c}${c}k..k${c}${c}k...`, `...k${c}${c}k..kkkk...`, '...kkkk.........', '................'],
+      [`...k${c}${c}k..k${c}${c}k...`, `...kkkk..k${c}${c}k...`, '.........kkkk...', '................']]);
+  frames('page_down', [
+    '................',
+    '................',
+    '.......kk.......',
+    '.....kkKKkk.....',
+    '....kKKKKKKk....',
+    '...kKKHKKKKKk...',
+    '...kkkkkkkkkk...',
+    '..khsssssssshk..',
+    '..kssssssssssk..',
+    '..kssksssskssk..',
+    '..kssksssskssk..',
+    '..ksbssssssbSk..',
+    '...kssssssSSk...',
+    '....kksssskk....',
+    '...kxxkxxkxxk...',
+    '..kxxxxXxxxxxk..',
+    '..kxswwwwwwsXk..',
+    '..kkxwwWWwwXkk..',
+    '...kxxxxxxxXk...',
+    '...kxxXkkXxXk...',
+  ], legs('X', false));
+  frames('page_up', [
+    '................',
+    '................',
+    '.......kk.......',
+    '.....kkKKkk.....',
+    '....kKKKKKKk....',
+    '...kKKKKKHKKk...',
+    '...kkkkkkkkkk...',
+    '..khhhhhhhhhhk..',
+    '..khhhhhhhhhhk..',
+    '..kshhhhhhhhsk..',
+    '..kshhhhhhhhsk..',
+    '...khhhhhhhhk...',
+    '....kkhhhhkk....',
+    '....kkshhskk....',
+    '...kxxkhhkxxk...',
+    '..kxxxxhhxxxxk..',
+    '..kxxxxhhxxxXk..',
+    '..ksxxxxxxxXsk..',
+    '...kxxxxxxxXk...',
+    '...kxxXkkXxXk...',
+  ], legs('X', false));
+  frames('page_left', [
+    '................',
+    '................',
+    '......kk........',
+    '....kkKKkk......',
+    '...kKKKKKKk.....',
+    '..kKHKKKKKKk....',
+    '..kkkkkkkkkk....',
+    '..kssssshhhhk...',
+    '..kkksssshhhk...',
+    '..kskssshhhhk...',
+    '..ksssssshhhk...',
+    '..kkksssshhk....',
+    '...kkssskkk.....',
+    '....kxxxxxk.....',
+    '...kxxxxxxXk....',
+    '..kwwsxxxxXk....',
+    '..kwWsxxxxXk....',
+    '...kkxxxxxXk....',
+    '...kxxxxxxXk....',
+    '...kxxXkXxXk....',
+  ], legs('X', true));
+
+  // 太醫溫十粗：黑官帽紅頂珠、八字鬍、藍綠官服配補子、背藥箱
+  const ROBE = [
+    ['...kfFFffFFFk...', '...kkkkkkkkkk...', '....kkk..kkk....', '................'],
+    ['...kfFFffFFFk...', '...kkkkkkkkkk...', '....kkk.........', '................'],
+    ['...kfFFffFFFk...', '...kkkkkkkkkk...', '.........kkk....', '................'],
+  ];
+  frames('doctor_down', [
+    '.......rr.......',
+    '.....kkrrkk.....',
+    '....khhhhhhk....',
+    '...khhhHhhhhk...',
+    '..kkkkkkkkkkkk..',
+    '..kKKKKKKKKKKk..',
+    '..kkkkkkkkkkkk..',
+    '..khsssssssshk..',
+    '..kskksssskksk..',
+    '..kssksssskssk..',
+    '..kssssssssSSk..',
+    '..kshhsssshhSk..',
+    '....kkssSSkk....',
+    '...kffkwwkffk...',
+    '..kffffFFffffk..',
+    '..kfffyYYyffFkkk',
+    '..ksffyYYyffskTk',
+    '..kkffffffffkkTk',
+    '...kfffffffFkkkk',
+    '...kffFffFfFk...',
+  ], ROBE);
+  frames('doctor_up', [
+    '.......rr.......',
+    '.....kkrrkk.....',
+    '....khhhhhhk....',
+    '...khhhhHhhhk...',
+    '..kkkkkkkkkkkk..',
+    '..kKKKKKKKKKKk..',
+    '..kkkkkkkkkkkk..',
+    '..khhhhhhhhhhk..',
+    '..khhhhhhhhhhk..',
+    '..kshhhhhhhhsk..',
+    '..kshhhhhhhhsk..',
+    '...kshhkkhhsk...',
+    '....kkshhskk....',
+    '...kffkhhkffk...',
+    '..kffffhhffffk..',
+    'kkkffffhhfffFk..',
+    'kTksfffffffFsk..',
+    'kTkkffffffffkk..',
+    'kkkkfffffffFk...',
+    '...kffFffFfFk...',
+  ], ROBE);
+  frames('doctor_left', [
+    '......rr........',
+    '....kkrrkk......',
+    '...khhhhhhk.....',
+    '..khhHhhhhhk....',
+    '.kkkkkkkkkkkk...',
+    '.kKKKKKKKKKKk...',
+    '.kkkkkkkkkkkk...',
+    '..kssssshhhhk...',
+    '..kkksssshhhk...',
+    '..kskssshhhhk...',
+    '..ksssssshhhk...',
+    '..khhssssshk....',
+    '...kkssskkk.....',
+    '....kfffffk.....',
+    '...kffffffFk....',
+    '...kffsfffFkkk..',
+    '...kffsfffFkTk..',
+    '...kffffffFkTk..',
+    '...kffffffFkkk..',
+    '...kffFfFfFk....',
+  ], [
+    ['...kfFFfFFFk....', '...kkkkkkkkk....', '....kkk.kkk.....', '................'],
+    ['...kfFFfFFFk....', '...kkkkkkkkk....', '....kkk.........', '................'],
+    ['...kfFFfFFFk....', '...kkkkkkkkk....', '........kkk.....', '................'],
+  ]);
+  ['page', 'doctor'].forEach((who) => [0, 1, 2].forEach((i) => { sprites[`${who}_right_${i}`] = { mirror: `${who}_left_${i}` }; }));
+
+  // ───────── 素材 ─────────
+  add('angelica', 16, 16, [
+    '................',
+    '................',
+    '.....kk..kk.....',
+    '....k8wkkw8k....',
+    '....kw8ww8wk....',
+    '.....kwwwwk.....',
+    '.....krrrrk.....',
+    '.....kwwwwk.....',
+    '....kw8ww8wk....',
+    '....kwkw8kwk....',
+    '...k8k.kwk.k8k..',
+    '...kwk.k8k.kwk..',
+    '...kk..kwk..kk..',
+    '.......kkk......',
+    '................',
+    '................',
+  ]);
+  add('croton', 16, 16, [
+    '................',
+    '................',
+    '................',
+    '.........kk.....',
+    '........k21k....',
+    '.......k2123k...',
+    '.......k223k....',
+    '....kk..kkk.....',
+    '...kdTk.........',
+    '...kddk..kk.....',
+    '....kk..kdTk....',
+    '..kk....kddk....',
+    '.kdTk....kk.....',
+    '.kddk...........',
+    '..kk............',
+    '................',
+  ]);
+  add('petal', 16, 16, [
+    '................',
+    '................',
+    '................',
+    '................',
+    '......kk........',
+    '.....keek..kk...',
+    '....keoeek.keek.',
+    '....keeEk.keoek.',
+    '.....kkk..keEk..',
+    '...kk......kk...',
+    '..keek.kkk......',
+    '..keoekeoek.....',
+    '...kEk.kEEk.....',
+    '....k...kk......',
+    '................',
+    '................',
+  ]);
+  const MUSK = [
+    '................',
+    '................',
+    '................',
+    '....k.....k.....',
+    '...kIk...kIk....',
+    '...kiIkkkIik....',
+    '....kyyyyyk.....',
+    '...kkiiiiikk....',
+    '..kiiiiiiiiIk...',
+    '..kiiwiiiiiIk...',
+    '..kiwiiyiiIIk...',
+    '..kiiiiiiiIIk...',
+    '..kiiiiiiIIIk...',
+    '...kIIIIIIIk....',
+    '....kkkkkkk.....',
+    '................',
+  ];
+  add('musk_0', 16, 16, stamp(MUSK, 12, 0, ['.w.', 'wcw', '.w.']));
+  add('musk_1', 16, 16, stamp(stamp(MUSK, 11, 5, ['..w..', '..c..', 'wcwcw', '..c..', '..w..']), 0, 4, ['w']));
+
+
   const anims = {
     water: ['pond_0', 'pond_1'],
     rare: ['itch_0', 'itch_1'],
+    stove: ['ty_stove_0', 'ty_stove_1'],
+    musk: ['musk_0', 'musk_1'],
     sparkle: ['sparkle_0', 'sparkle_1', 'sparkle_2'],
   };
 
@@ -643,6 +1106,11 @@
     ...['ling', 'guard'].flatMap((who) => ['down', 'up', 'left', 'right'].flatMap((d) => [0, 1, 2].map((i) => `${who}_${d}_${i}`))),
     'shadow', 'jasmine', 'osmanthus', 'rose', 'itch_0', 'itch_1',
     'bubble_alert', 'bubble_lost', 'sparkle_0', 'sparkle_1', 'sparkle_2',
+    // 太醫院（規範 §7）
+    'ty_floor_0', 'ty_floor_1', 'ty_floor_2', 'ty_hall_0', 'ty_hall_1', 'ty_wall_top', 'ty_wall_face', 'ty_door',
+    'ty_stove_0', 'ty_stove_1', 'ty_basket', 'ty_mortar', 'ty_candle',
+    ...['page', 'doctor'].flatMap((who) => ['down', 'up', 'left', 'right'].flatMap((d) => [0, 1, 2].map((i) => `${who}_${d}_${i}`))),
+    'angelica', 'croton', 'petal', 'musk_0', 'musk_1',
   ];
 
   const PIXEL = { palette, sprites, anims, required };

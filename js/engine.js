@@ -437,8 +437,8 @@
 
     // 庭院
     const rooms = chosen.map(({ cx, cy }) => {
-      const w = ri(4, Math.min(8, cw));
-      const h = ri(3, Math.min(5, ch - 2));
+      const w = ri(Math.min(c.roomW[0], cw), Math.min(c.roomW[1], cw));
+      const h = ri(Math.min(c.roomH[0], ch - 2), Math.min(c.roomH[1], ch - 2));
       const x = 1 + cx * (cw + 1) + ri(0, cw - w);
       const y = 1 + cy * ch + ri(0, ch - 1 - h);
       for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) grid[yy][xx] = '.';
@@ -494,7 +494,7 @@
       player: { x: gx, y: gy, face: 'up' },
       items: [], guards: [],
       maxSteps: c.steps, stepsLeft: c.steps, got: {}, picked: 0,
-      seen: new Array(W * H).fill(0), over: false, endReason: null,
+      seen: new Array(W * H).fill(0), over: false, endReason: null, caughtBy: -1,
       cfg: { guardSight: c.guardSight, playerSight: c.playerSight, searchTurns: c.searchTurns, wanderKeep: c.wanderKeep, wanderIdle: c.wanderIdle, guardSpawns: Array.from(c.guardSpawns, (sp) => ({ ...sp })) },
     };
     const sync = () => { run.tiles = grid.map((row) => row.join('')); };
@@ -633,6 +633,7 @@
         run.guards[hit].face = gFace(-dx, -dy, run.guards[hit].face);
         run.over = true;
         run.endReason = 'caught';
+        run.caughtBy = hit;
         return [{ t: 'caught', g: hit, self: true }];
       }
       ev.push({ t: 'move', from: { x: p.x, y: p.y }, to: { x: tx, y: ty } });
@@ -673,6 +674,7 @@
         gd.face = gFace(ax, ay, gd.face);
         run.over = true;
         run.endReason = 'caught';
+        run.caughtBy = gi;
         ev.push({ t: 'caught', g: gi });
         return ev;
       }

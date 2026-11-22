@@ -506,12 +506,15 @@ const roomOf = (run, o) => run.rooms.findIndex((r) => o.x >= r.x && o.x < r.x + 
 
 // 獨立於引擎 gValid 的不變式檢查（game-design §12.2）
 function assertDungeon(run, label) {
+  const G = D.GATHER[run.loc];
+  const DG = G.dungeon; // 依地圖取參數（蓋掉外層的御花園預設）
   assert.strictEqual(run.w, DG.w, `${label} 寬`);
   assert.strictEqual(run.h, DG.h, `${label} 高`);
   assert.strictEqual(run.tiles.length, DG.h);
   assert.ok(run.tiles.every((row) => row.length === DG.w), `${label} 每列等寬`);
   assert.ok(run.rooms.length >= DG.rooms[0] && run.rooms.length <= DG.rooms[1], `${label} 庭院數 ${run.rooms.length}`);
   assert.strictEqual(run.stepsLeft, DG.steps);
+  for (const r of run.rooms) assert.ok(r.w >= DG.roomW[0] && r.w <= DG.roomW[1] && r.h >= DG.roomH[0] && r.h <= DG.roomH[1], `${label} 房間大小 ${r.w}×${r.h}`);
   // 全部可走格都從出生點連得到（擺設沒有切斷連通）
   const dist = E.gatherDist(run, run.player.x, run.player.y);
   let walk = 0;
@@ -520,13 +523,13 @@ function assertDungeon(run, label) {
   assert.strictEqual(run.tiles[run.player.y][run.player.x], 'G', `${label} 出生在月洞門`);
   // 素材：每種 ≥1、稀有正好 rareCount 個、總數＝1（出生點旁）＋稀有＋常見各 1＋額外，都走得到且互不重疊
   const ids = run.items.map((it) => it.id);
-  for (const [id] of D.GATHER.garden.table) assert.ok(ids.includes(id), `${label} ${id} 至少 1 個`);
-  const base = 1 + DG.rareCount + (D.GATHER.garden.table.length - 1);
+  for (const [id] of G.table) assert.ok(ids.includes(id), `${label} ${id} 至少 1 個`);
+  const base = 1 + DG.rareCount + (G.table.length - 1);
   assert.ok(run.items.length >= base + DG.extraItems[0] && run.items.length <= base + DG.extraItems[1], `${label} 素材總數 ${run.items.length}`);
   const rares = run.items.filter((it) => it.rare);
   assert.strictEqual(rares.length, DG.rareCount, `${label} 稀有 ${DG.rareCount} 個`);
-  assert.ok(rares.every((it) => it.id === 'itch'));
-  assert.strictEqual(ids.filter((id) => id === 'itch').length, DG.rareCount);
+  assert.ok(rares.every((it) => it.id === G.rare));
+  assert.strictEqual(ids.filter((id) => id === G.rare).length, DG.rareCount);
   assert.strictEqual(new Set(run.items.map((it) => `${it.x},${it.y}`)).size, run.items.length, `${label} 素材不重疊`);
   for (const it of run.items) assert.ok(dist[it.y * run.w + it.x] > 0, `${label} 素材走得到`);
   // 出生點 nearItem 步內至少有 1 個素材
@@ -540,6 +543,53 @@ function assertDungeon(run, label) {
 
 test('buildGatherDungeon：200 個 seed 都滿足生成不變式（連通、素材、出生點旁有素材、稀有走得到、開場無侍衛）', () => {
   for (let seed = 1; seed <= 200; seed++) assertDungeon(E.buildGatherDungeon(D, fresh(), 'garden', lcg(seed)), `seed ${seed}`);
+});
+
+test('太醫院：同一套生成，200 個 seed 都滿足不變式（麝香正好 1 個、房間 6～8 且較小）；極端 rand 也合格', () => {
+  for (let seed = 1; seed <= 200; seed++) {
+    const run = E.buildGatherDungeon(D, fresh(), 'taiyi', lcg(seed));
+    assert.strictEqual(run.loc, 'taiyi');
+    assert.strictEqual(run.rare, 'musk');
+    assertDungeon(run, `taiyi seed ${seed}`);
+  }
+  for (const v of [0, 0.999, 0.5]) assertDungeon(E.buildGatherDungeon(D, fresh(), 'taiyi', () => v), `taiyi rand=${v}`);
+});
+
+test('太醫院 fuzz：300 局隨機操作都會結束、侍衛照時程登場、被抓時記下是誰抓的、收穫可套用', () => {
+  const acts = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+  let caught = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const rand = lcg(seed * 7 + 1);
+    const S = fresh();
+    const run = E.buildGatherDungeon(D, S, 'taiyi', rand);
+    let n = 0;
+    while (!run.over) {
+      E.gatherStep(run, acts[Math.floor(rand() * acts.length)], rand);
+      assert.ok(++n < 2000, `seed ${seed} 沒有結束`);
+      const used = run.maxSteps - run.stepsLeft;
+      assert.ok(run.guards.length <= (used >= 30 ? 2 : used >= 10 ? 1 : 0));
+    }
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(run)), run);
+    if (run.endReason === 'caught') { caught++; assert.ok(run.caughtBy >= 0 && run.caughtBy < run.guards.length); } else assert.strictEqual(run.caughtBy, -1);
+    const haul = E.applyGatherHaul(D, S, 'taiyi', run.got);
+    assert.strictEqual(haul.loc, 'taiyi');
+    for (const [id, c] of Object.entries(run.got)) assert.ok(S.inv[id] >= c);
+  }
+  assert.ok(caught > 0, '至少有幾局被抓');
+});
+
+test('採集地圖資料：每張地下城地圖都有 tileset 與每名巡邏者的稱呼／sprite／提示／台詞', () => {
+  for (const [loc, g] of Object.entries(D.GATHER)) {
+    if (!g.dungeon) continue;
+    for (const k of ['floor', 'hall']) assert.ok(Array.isArray(g.tileset[k]) && g.tileset[k].length, `${loc} tileset.${k}`);
+    for (const k of ['wallTop', 'wallFace', 'door', 'big']) assert.ok(g.tileset[k], `${loc} tileset.${k}`);
+    assert.strictEqual(Object.keys(g.tileset.props).sort().join(''), 'FLR', `${loc} 擺設`);
+    assert.strictEqual(g.guards.length, g.dungeon.guardSpawns.length, `${loc} 巡邏者數＝登場時程數`);
+    for (const gd of g.guards) for (const k of ['name', 'sprite', 'note', 'line']) assert.ok(gd[k], `${loc} guards.${k}`);
+    assert.ok(g.table.some(([id]) => id === g.rare), `${loc} 稀有在素材表裡`);
+  }
+  assert.strictEqual(D.GATHER.taiyi.dungeon.rareCount, 1);
+  assert.strictEqual(D.GATHER.taiyi.guards.map((gd) => gd.note).join('｜'), '藥童開始巡房了｜溫太醫睡醒了');
 });
 
 test('buildGatherDungeon：素材位置隨機——走廊上也會有素材、稀有不一定在最深的庭院', () => {
