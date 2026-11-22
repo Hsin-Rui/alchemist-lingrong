@@ -115,6 +115,9 @@ function connect(url) {
     ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 },
     ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 },
     ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 },
+    Shift: { key: 'Shift', code: 'ShiftLeft', windowsVirtualKeyCode: 16 },
+    m: { key: 'm', code: 'KeyM', windowsVirtualKeyCode: 77, text: 'm' },
+    ...Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [String(n), { key: String(n), code: `Digit${n}`, windowsVirtualKeyCode: 48 + n, text: String(n) }])),
   };
   const press = async (name, { modifiers = 0, wait = 40 } = {}) => {
     const k = KEYS[name];
@@ -366,9 +369,48 @@ function connect(url) {
     await press('Enter');
     check('結果單 Enter 離開', await waitFor("!document.querySelector('#app .sheet-layer')", 2000));
 
+    // ── 快捷鍵（story 2）：1–6、Esc、M ──
+    await hideByMouse();
+    const toScr = async (key, want) => { await press(key); return (await scr()) === want; };
+    check('主畫面按 1 → 小舖', await toScr('1', 'shop'));
+    check('子畫面按 Esc → 主畫面', await toScr('Escape', 'home'));
+    check('按 2 → 採集', await toScr('2', 'gather'));
+    check('子畫面按 3 → 調合', await toScr('3', 'craft'));
+    await G('const ids = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === "mat"); S.inv[ids[0]] = (S.inv[ids[0]] || 0) + 2; __e2e.render();');
+    await ev("document.querySelector('[data-a=mat]:not([disabled])').click()");
+    const slotsBefore = await ev("document.querySelectorAll('.cslot.filled').length");
+    await press('3');
+    check('調合畫面再按 3 不清掉已放的素材', slotsBefore > 0 && (await ev("document.querySelectorAll('.cslot.filled').length")) === slotsBefore, String(slotsBefore));
+    check('子畫面按 4 → 送禮', await toScr('4', 'gift'));
+    check('子畫面按 5 → 後宮', await toScr('5', 'status'));
+    check('後宮按 1 → 小舖', await toScr('1', 'shop'));
+    await press('Escape');
+    await press('6');
+    check('按 6 → 就寢確認視窗', await hasModal('sleepyes'));
+    await press('2');
+    check('彈出視窗開著時數字鍵無效', (await hasModal('sleepyes')) && (await scr()) === 'home');
+    await press('Escape');
+    check('Esc 關閉彈出視窗', !(await hasModal('sleepyes')) && (await scr()) === 'home');
+    const muted0 = await ev("localStorage.getItem('lingrong-muted')");
+    await press('m');
+    const muted1 = await ev("localStorage.getItem('lingrong-muted')");
+    await press('m');
+    const muted2 = await ev("localStorage.getItem('lingrong-muted')");
+    check('M 開關聲音', muted1 === (muted0 === '1' ? '0' : '1') && muted2 === (muted1 === '1' ? '0' : '1'), `${muted0}/${muted1}/${muted2}`);
+    await ev("__e2e.playDialog([['narr','','測試對話一'],['narr','','測試對話二']], () => __e2e.go('home'))");
+    await press('1');
+    check('對話中數字鍵無效', (await hasDlg()) && (await scr()) === 'home');
+    await press('Enter'); // 補完整句
+    const fullBefore = await ev("document.querySelector('.dlg-text').innerHTML");
+    await press('m');
+    check('對話中按 M 不會讓目前這句重打', (await ev("document.querySelector('.dlg-text').innerHTML")) === fullBefore);
+    await press('m');
+    for (let i = 0; i < 20 && await hasDlg(); i++) await press('Space', { wait: 15 });
+
     // ── 純鍵盤玩到結局 ──
     let craftedOnDay = 0;
     let singChecked = false;
+    let resultEscChecked = false;
     let craftChecked = false;
     let stuck = 0;
     let last = '';
@@ -387,6 +429,10 @@ function connect(url) {
         await press('ArrowLeft'); const k2 = (await focus())?.key;
         await press('ArrowRight'); const k3 = (await focus())?.key;
         if (!singChecked) {
+          await press('Escape');
+          check('金縷衣（鎖定）視窗 Esc 無效', await hasModal('sing'));
+          await press('1');
+          check('金縷衣視窗開著時數字鍵無效', await hasModal('sing'));
           check('金縷衣視窗預設＝唱；←→ 選', k1 === 'sing|1#1' && k2 === 'sing|0#1' && k3 === 'sing|1#1', `${k1} ${k2} ${k3}`);
           singChecked = true;
         }
@@ -394,6 +440,12 @@ function connect(url) {
         continue;
       }
       if (await hasModal('sleepyes')) { await press('Enter'); continue; }
+      if (s === 'result' && !resultEscChecked) {
+        resultEscChecked = true;
+        await press('Escape');
+        check('交貨／送禮結果頁按 Esc → 回炎洗宮', await waitFor("document.getElementById('app').dataset.screen !== 'result' || !!document.querySelector('.dialog-layer') || !!document.querySelector('#app > .sheet-layer')", 2000));
+        continue;
+      }
       if (s === 'home') {
         // 造情境：讓今晚翻到零溶（且未禁足），保證會遇到金縷衣視窗
         if (!singChecked) await G('S.flip = "lingrong"; S.groundUntil = 0; __e2e.render();');
@@ -433,6 +485,7 @@ function connect(url) {
     }
     check('純鍵盤從標題玩到結局', (await scr()) === 'ending' && !(await hasDlg()));
     check('玩的過程中遇到金縷衣視窗並以 ←→ 操作', singChecked);
+    check('玩的過程中有檢查到結果頁 Esc', resultEscChecked);
     check('玩的過程中純鍵盤調合過一次', craftedOnDay > 0);
     f = await focus();
     if (!f) { await press('ArrowDown'); f = await focus(); }

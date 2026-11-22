@@ -1469,11 +1469,31 @@
     return true;
   }
 
+  // 數字鍵 1～6 → 導覽列六個動作；只在主畫面與子畫面、沒有彈出視窗時有效
+  const HOTKEYS = { 1: ['go', 'shop'], 2: ['go', 'gather'], 3: ['craftfor', ''], 4: ['giftto', ''], 5: ['go', 'status'], 6: ['sleep'] };
+  const HOTKEY_TARGET = { 1: 'shop', 2: 'gather', 3: 'craft', 4: 'gift', 5: 'status' }; // 已在該畫面就不重開（免得清掉調合／送禮的選擇）
+  const HOTKEY_SCREENS = new Set(['home', 'shop', 'gather', 'craft', 'gift', 'status']);
+  const SUB_SCREENS = new Set(['shop', 'gather', 'craft', 'gift', 'status']);
+
+  // Esc（非對話）：關彈出視窗（鎖定視窗如金縷衣無效）；結果單與交貨／送禮結果頁＝回炎洗宮；子畫面＝回主畫面
+  function escBack() {
+    if (modal) { if (!modal.lock) act('closemodal'); return; }
+    if (screen === 'gather' && gatherResult) { act('gatherdone', 'home'); return; }
+    if (screen === 'craft' && craftResult) { act('craftdone', 'home'); return; }
+    if (screen === 'result') { act('resultdone'); return; }
+    if (SUB_SCREENS.has(screen)) act('go', 'home');
+  }
+
   // 單一鍵盤處理器（之後的快捷鍵、Esc、對話速度都掛在這裡）
   document.addEventListener('keydown', (e) => {
     if (busy || gatherScene) return; // 地下城沿用自己的按鍵
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key;
+    if ((k === 'm' || k === 'M') && !e.repeat) {
+      e.preventDefault();
+      if (dlg) A.toggleMute(); else act('mute'); // 對話中不重繪，免得目前這句重新打字
+      return;
+    }
     if (dlg) {
       if (k === ' ' || k === 'Enter') {
         e.preventDefault();
@@ -1484,6 +1504,17 @@
     if (NAV_DIRS[k]) {
       e.preventDefault();
       moveCursor(NAV_DIRS[k]);
+      return;
+    }
+    if (k === 'Escape') {
+      if (e.repeat) return;
+      e.preventDefault();
+      escBack();
+      return;
+    }
+    if (HOTKEYS[k] && !e.repeat && HOTKEY_SCREENS.has(screen) && !app.querySelector('.sheet-layer')) {
+      e.preventDefault();
+      if (HOTKEY_TARGET[k] !== screen) act(...HOTKEYS[k]);
       return;
     }
     if (k === 'Enter') {
@@ -1506,6 +1537,11 @@
     const a = el.dataset.a;
     const v = el.dataset.v;
     if (a === 'noop') { e.stopPropagation(); return; }
+    act(a, v);
+  });
+
+  // 所有按鈕動作的單一入口：點擊與鍵盤快捷鍵都走這裡
+  function act(a, v) {
     if (!QUIET.has(a)) A.sfx('click');
     switch (a) {
       case 'adv': advanceDialog(); break;
@@ -1556,7 +1592,7 @@
       case 'share': share(); break;
       case 'seal': { const t = D.TITLES.find((x) => x.id === v); const got = S.result.book.includes(v); toast(got ? `${t.name}：${t.comment}` : `？？？：${t.hint}`, 3200); break; }
     }
-  });
+  }
 
   // 開場先在背景把圖片都載進快取，之後換畫面就不用等
   function preloadImages() {
@@ -1585,7 +1621,7 @@
   }
   // 測試用：網址後面加 #e2e 時開放狀態給 tools/keyboard-e2e.js 造情境（不影響正常遊戲）
   if (location.hash === '#e2e') {
-    window.__e2e = { state: () => S, screen: () => screen, render, go, openCraft };
+    window.__e2e = { state: () => S, screen: () => screen, render, go, openCraft, playDialog };
   }
   render();
   preloadImages();
