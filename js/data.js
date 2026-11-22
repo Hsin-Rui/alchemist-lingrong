@@ -65,7 +65,7 @@ window.GAME_DATA = (() => {
     },
     taiyi: {
       name: '太醫院', bg: 'taiyi', rare: 'musk',
-      table: [['angelica', 3], ['croton', 2], ['petal', 1], ['musk', 0.6]],
+      table: [['angelica', 3], ['croton', 1.5], ['petal', 1], ['musk', 0.6]],
       intro: '趁太醫打瞌睡，零溶偷偷拉開了百子櫃……',
       tileset: {
         floor: ['ty_floor_0', 'ty_floor_1', 'ty_floor_2'], hall: ['ty_hall_0', 'ty_hall_1'],
