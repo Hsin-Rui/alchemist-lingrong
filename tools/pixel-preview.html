@@ -25,8 +25,8 @@
   <label>放大 <select id="zoom"><option>1</option><option>2</option><option selected>4</option><option>6</option></select> 倍</label>
   <label><input type="checkbox" id="dark"> 深色底</label></p>
 
-<h2>示範房間（11×13 視窗，含動畫）</h2>
-<div class="row"><canvas id="room" width="176" height="208"></canvas></div>
+<h2>示範房間（含動畫）：御花園／太醫院</h2>
+<div class="row"><canvas id="room" width="176" height="208"></canvas> <canvas id="room2" width="176" height="208"></canvas></div>
 
 <h2>全部 sprite</h2>
 <div class="grid" id="all"></div>
@@ -65,8 +65,10 @@
       fig.append(cv, cap);
       all.appendChild(fig);
     });
-    const room = document.getElementById('room');
-    room.style.width = `${176 * Math.max(2, z)}px`; room.style.height = `${208 * Math.max(2, z)}px`;
+    ['room', 'room2'].forEach((rid) => {
+      const room = document.getElementById(rid);
+      room.style.width = `${176 * Math.max(2, z)}px`; room.style.height = `${208 * Math.max(2, z)}px`;
+    });
   }
   zoomSel.onchange = list; darkBox.onchange = list;
   list();
@@ -87,29 +89,38 @@
     '###G#######',
     '###########',
   ];
-  const ctx = document.getElementById('room').getContext('2d');
+  // 兩張地圖的圖塊（對應 js/data.js 的 GATHER.<loc>.tileset）、素材與巡邏者
+  const THEMES = [
+    { canvas: 'room', wallTop: 'hedge_top', wallFace: 'hedge_face', door: 'gate', floor: ['grass_0', 'grass_1', 'grass_2'], big: 'pond',
+      props: { F: 'flowerbed', R: 'rock', L: 'lantern' }, items: ['jasmine', 'osmanthus', 'rose', 'itch'], guards: ['guard', 'guard'] },
+    { canvas: 'room2', wallTop: 'ty_wall_top', wallFace: 'ty_wall_face', door: 'ty_door', floor: ['ty_floor_0', 'ty_floor_1', 'ty_floor_2'], big: 'ty_stove',
+      props: { F: 'ty_basket', R: 'ty_mortar', L: 'ty_candle' }, items: ['angelica', 'croton', 'petal', 'musk'], guards: ['page', 'doctor'] },
+  ];
   const hash = (x, y) => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 8;
   const tile = (x, y) => (MAP[y] && MAP[y][x]) || '#';
-  function frame(now) {
+  function drawRoom(th, now) {
+    const ctx = document.getElementById(th.canvas).getContext('2d');
     const tick = Math.floor(now / 500) % 2;
     const walk = [0, 1, 0, 2][Math.floor(now / 160) % 4];
     const put = (id, x, y) => ctx.drawImage(atlas[id], x, y);
     MAP.forEach((row, y) => [...row].forEach((t, x) => {
       const h = hash(x, y);
-      if (t === '#') put(tile(x, y + 1) === '#' ? 'hedge_top' : 'hedge_face', x * 16, y * 16);
-      else if (t === ',') put(`grass_${h % 2}`, x * 16, y * 16);
-      else if (t === 'G') put('gate', x * 16, y * 16);
-      else put(h < 5 ? 'grass_0' : h < 7 ? 'grass_1' : 'grass_2', x * 16, y * 16);
+      if (t === '#') put(tile(x, y + 1) === '#' ? th.wallTop : th.wallFace, x * 16, y * 16);
+      else if (t === 'G') put(th.door, x * 16, y * 16);
+      else put(th.floor[h < 5 ? 0 : h < 7 ? 1 : 2], x * 16, y * 16); // 走廊（','）和房間同一種地面
     }));
-    MAP.forEach((row, y) => [...row].forEach((t, x) => { if (t === 'P') put(`pond_${tick}`, x * 16, y * 16); }));
+    MAP.forEach((row, y) => [...row].forEach((t, x) => { if (t === 'P') put(`${th.big}_${tick}`, x * 16, y * 16); }));
     ctx.fillStyle = 'rgba(210,69,63,.2)';
     for (let y = 2; y <= 5; y++) for (let x = 6; x <= 9; x++) ctx.fillRect(x * 16, y * 16, 16, 16);
+    const tall = (id) => atlas[id].height - 16;
+    const [i0, i1, i2, rare] = th.items;
     const things = [
-      ['flowerbed', 7, 4, 0], ['rock', 2, 6, -8], ['lantern', 9, 6, -8],
-      ['jasmine', 1, 2, 0], ['osmanthus', 5, 4, 0], ['rose', 8, 7, 0], [`itch_${tick}`, 2, 8, -tick],
+      [th.props.F, 7, 4], [th.props.R, 2, 6], [th.props.L, 9, 6],
+      [i0, 1, 2], [i1, 5, 4], [i2, 8, 7], [`${rare}_${tick}`, 2, 8],
     ];
-    things.forEach(([id, x, y, dy]) => put(id, x * 16, y * 16 + dy));
-    const actors = [['ling_down', 5, 7, walk], ['ling_left', 4, 5, 0], ['guard_left', 8, 3, walk], ['guard_down', 6, 2, 0], ['guard_up', 9, 8, 0], ['ling_up', 3, 9, walk]];
+    things.forEach(([id, x, y]) => put(id, x * 16, y * 16 - tall(id) - (id.endsWith(`_${tick}`) && id.startsWith(rare) ? tick : 0)));
+    const [g0, g1] = th.guards;
+    const actors = [['ling_down', 5, 7, walk], ['ling_left', 4, 5, 0], [`${g0}_left`, 8, 3, walk], [`${g1}_down`, 6, 2, 0], [`${g0}_up`, 9, 8, 0], ['ling_up', 3, 9, walk]];
     actors.sort((a, b) => a[2] - b[2]).forEach(([id, x, y, f]) => {
       ctx.globalAlpha = 0.35; put('shadow', x * 16 + 2, y * 16 + 11); ctx.globalAlpha = 1;
       put(`${id}_${f}`, x * 16, y * 16 - 10 - (f ? 0 : tick));
@@ -117,6 +128,9 @@
     put('bubble_alert', 8 * 16 + 4, 3 * 16 - 21);
     put('bubble_lost', 6 * 16 + 4, 2 * 16 - 21);
     put(`sparkle_${Math.floor(now / 110) % 3}`, 5 * 16, 4 * 16 - 6);
+  }
+  function frame(now) {
+    THEMES.forEach((th) => drawRoom(th, now));
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
