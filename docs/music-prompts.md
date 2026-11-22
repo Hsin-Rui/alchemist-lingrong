@@ -92,7 +92,35 @@ played for laughs, 72 BPM, loopable, instrumental
 
 ---
 
-## 6. 短音效／過場（選做，3～8 秒）
+## 6. `bgm_gather.mp3`：採集小遊戲（御花園／太醫院地下城）（選做）
+
+沒有這個檔案時，遊戲會用內建的 8-bit 合成曲。畫面是超任像素風、回合制潛行，所以要「躡手躡腳、有點緊張、但很俏皮」。一步一回合，節奏不要太快；會循環很多次，旋律要簡單、不刺耳。
+
+```
+16-bit SNES style chiptune stealth music for a palace sneaking game,
+tiptoeing pizzicato bass line, soft square-wave lead with Chinese pentatonic melody,
+light woodblock ticks, playful but slightly tense, 96 BPM,
+seamless loop, retro game background music, instrumental, no vocals
+```
+排除：`vocals, EDM drop, heavy distortion, dubstep, epic orchestral`
+
+**備選風格**（不要電子味、改用國樂潛行）：
+```
+Sneaky Chinese court instrumental, plucked guzheng and pipa staccato,
+muted xiao flute phrases, soft temple block ticks, comedic stealth tiptoe mood,
+95 BPM, minimal and loopable, no vocals
+```
+
+- 兩張地圖預設共用這一首。想讓太醫院用不同的曲子，就再做一首 `bgm_gather_taiyi.mp3`，並把 `js/data.js` 裡太醫院的 `bgm: 'gather'` 改成 `bgm: 'gather_taiyi'`。
+- 遊戲實際讀的是壓縮版 `bgm_gather.lite.mp3`。檔案放進來後告訴我，或自己在專案資料夾執行：
+  ```
+  ffmpeg -i assets/audio/bgm_gather.mp3 -af loudnorm=I=-15:TP=-1.5 -ac 2 -b:a 128k assets/audio/bgm_gather.lite.mp3
+  ```
+  （音量對齊主畫面音樂，約 -15 LUFS。）
+
+---
+
+## 7. 短音效／過場（選做，3～8 秒）
 
 | 檔名 | 用途 | Prompt |
 |---|---|---|
@@ -104,7 +132,7 @@ played for laughs, 72 BPM, loopable, instrumental
 
 ---
 
-## 7. 金縷衣（選做，有人聲）
+## 8. 金縷衣（選做，有人聲）
 
 零溶侍寢時演唱的那首。歌詞是唐詩〈金縷衣〉，已是公版，可以直接用。
 

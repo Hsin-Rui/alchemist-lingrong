@@ -39,6 +39,7 @@ window.GAME_DATA = (() => {
   const GATHER = {
     garden: {
       name: '御花園', bg: 'garden', rare: 'itch',
+      bgm: 'gather', // 採集音樂：assets/audio/bgm_gather.lite.mp3（沒有就用 8-bit 合成曲）
       table: [['jasmine', 3], ['osmanthus', 3], ['rose', 3], ['itch', 2]],
       intro: '零溶提著小籃子，假裝在御花園賞花……',
       // 地形代號 → 像素圖（js/pixelart.js 的 id）。floor／hall 是變體清單；big 是佔 2×2 格的擺設（_0、_1 兩幀）
@@ -66,6 +67,7 @@ window.GAME_DATA = (() => {
     },
     taiyi: {
       name: '太醫院', bg: 'taiyi', rare: 'musk',
+      bgm: 'gather', // 想讓太醫院用不同曲子：改成 'gather_taiyi'，放 bgm_gather_taiyi.lite.mp3
       table: [['angelica', 3], ['croton', 1.5], ['petal', 1], ['musk', 0.6]],
       intro: '趁太醫打瞌睡，零溶偷偷拉開了百子櫃……',
       tileset: {

@@ -565,7 +565,7 @@
         gs.el.root.classList.add('on');
         fitDungeon(gs);
         A.sfx('enterDungeon');
-        if (A.dungeonBgm) A.dungeonBgm(true);
+        if (A.dungeonBgm) A.dungeonBgm(true, D.GATHER[gs.loc].bgm);
       }
     } else if (gs.phase === 'reveal') {
       gs.mosaic = 8 - 7 * Math.min(1, t / 400);

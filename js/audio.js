@@ -178,17 +178,33 @@ window.GameAudio = (() => {
     chipTimer = null;
   }
 
-  // 進地下城：主 BGM 暫停、換 8-bit 曲；出來再換回去
-  function dungeonBgm(on) {
+  // 採集地下城的音樂：有 assets/audio/bgm_<name>.lite.mp3 就播檔案，沒有（或載入失敗）就用 8-bit 合成曲
+  let dgEl = null;
+  function startDungeonTrack() {
+    if (muted) return;
+    if (dgEl) { const p = dgEl.play(); if (p && p.catch) p.catch(() => {}); } else startChip();
+  }
+
+  // 進地下城：主 BGM 暫停、換採集曲；出來再換回去。name＝GATHER.<loc>.bgm
+  function dungeonBgm(on, name) {
     if (on === inDungeon) return;
     inDungeon = on;
     if (on) {
       wasSynth = !!synthTimer;
       stopSynth();
       if (bgmEl) bgmEl.pause();
-      startChip();
+      dgEl = null;
+      if (name) {
+        const el = new Audio(`assets/audio/bgm_${name}.lite.mp3`);
+        el.loop = true;
+        el.volume = 0.6;
+        dgEl = el;
+        el.addEventListener('error', () => { if (dgEl === el) { dgEl = null; if (inDungeon) startDungeonTrack(); } });
+      }
+      startDungeonTrack();
     } else {
       stopChip();
+      if (dgEl) { dgEl.pause(); dgEl = null; }
       if (muted) return;
       if (bgmEl) { const p = bgmEl.play(); if (p && p.catch) p.catch(() => {}); } else if (wasSynth) startSynth();
     }
@@ -219,8 +235,9 @@ window.GameAudio = (() => {
       stopSynth();
       stopChip();
       if (bgmEl) bgmEl.pause();
+      if (dgEl) dgEl.pause();
     } else if (inDungeon) {
-      startChip();
+      startDungeonTrack();
     } else {
       const name = bgmName;
       bgmName = null;
