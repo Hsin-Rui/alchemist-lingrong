@@ -68,7 +68,7 @@ window.GAME_DATA = (() => {
     taiyi: {
       name: '太醫院', bg: 'taiyi', rare: 'musk',
       bgm: 'gather', // 想讓太醫院用不同曲子：改成 'gather_taiyi'，放 bgm_gather_taiyi.lite.mp3
-      table: [['angelica', 3], ['croton', 1.5], ['petal', 1], ['musk', 0.6]],
+      table: [['angelica', 3], ['croton', 1.5], ['petal', 0.8], ['musk', 0.6]],
       intro: '趁太醫打瞌睡，零溶偷偷拉開了百子櫃……',
       tileset: {
         floor: ['ty_floor_0', 'ty_floor_1', 'ty_floor_2'], hall: ['ty_floor_0', 'ty_floor_0', 'ty_floor_1'], // 走廊也鋪木地板，可走的地方一眼看得出來
