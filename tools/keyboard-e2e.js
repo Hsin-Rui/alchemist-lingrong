@@ -1,5 +1,6 @@
 // 鍵盤游標真瀏覽器檢查：起本機靜態 server，用 headless Chrome（CDP over Node 內建 WebSocket）
-// 送鍵盤／滑鼠／觸控事件，逐條斷言 story「游標與焦點框」的 I/O 矩陣，並純鍵盤玩完一輪到結局。
+// 送鍵盤／滑鼠／觸控事件，逐條斷言 Epic 3 各 story（游標與焦點框、快捷鍵、對話速度、加料與被抓演出）的 I/O 矩陣，
+// 並純鍵盤、純觸控各玩完一輪到結局。
 // 用法：node tools/keyboard-e2e.js [--shots <dir>]   （全部通過 exit 0）
 // 需要：Node ≥ 22（內建 WebSocket）、/Applications/Google Chrome.app（或環境變數 CHROME 指定路徑）
 const http = require('http');
@@ -169,6 +170,7 @@ function connect(url) {
     };`;
   const focus = () => ev('__t.focus()');
   const scr = () => ev("document.getElementById('app').dataset.screen");
+  const waitScr = (name, ms = 2000) => waitFor(`document.getElementById('app').dataset.screen === '${name}'`, ms);
   const hasDlg = () => ev("!!document.querySelector('.dialog-layer')");
   const hasModal = (a) => ev(`!!document.querySelector('#app > .sheet-layer [data-a="${a}"]')`);
   const G = (code) => ev(`(() => { const S = __e2e.state(); const D = window.GAME_DATA; ${code} })()`);
@@ -369,7 +371,7 @@ function connect(url) {
     await press('Enter');
     check('結果單 Enter 離開', await waitFor("!document.querySelector('#app .sheet-layer')", 2000));
 
-    // ── 快捷鍵（story 2）：1–6、Esc、M ──
+    // ── 快捷鍵（story 3.2）：1–6、Esc、M ──
     await hideByMouse();
     const toScr = async (key, want) => { await press(key); return (await scr()) === want; };
     check('主畫面按 1 → 小舖', await toScr('1', 'shop'));
@@ -407,7 +409,7 @@ function connect(url) {
     await press('m');
     for (let i = 0; i < 20 && await hasDlg(); i++) await press('Space', { wait: 15 });
 
-    // ── 對話速度、略過、防連按（story 3） ──
+    // ── 對話速度、略過、防連按（story 3.3） ──
     const txt = () => ev("document.querySelector('.dlg-text')?.innerHTML || ''");
     const full = () => ev("document.querySelector('.dlg-text')?.dataset.full || ''");
     const LONG = '這是一句很長很長的測試台詞，用來確認逐字顯示的速度是不是兩倍速，大概每秒七十個字左右。';
@@ -566,7 +568,7 @@ function connect(url) {
     check('手機寬度觸控玩一輪到結局', (await scr()) === 'ending', `taps=${taps}`);
     check('觸控全程看不到焦點框', !touchBox);
 
-    // ── 加料演出分輕中重（story 4）：用 #演出=<事件> 測試入口 ──
+    // ── 加料演出分輕中重（story 3.4）：用 #演出=<事件> 測試入口 ──
     const fxBase = base.replace('#e2e', '');
     async function loadFx(evName, reduce = false) {
       await cdp.send('Emulation.setDeviceMetricsOverride', { width: 480, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -587,7 +589,7 @@ function connect(url) {
         shakeDur: res ? getComputedStyle(res).animationDuration : null };
     })()`;
     const noShakeNow = () => ev("document.getAnimations().every((a) => a.animationName !== 'fxshake') && !document.querySelector('.fx-shake')");
-    const toResult = async () => { await press('Escape'); await waitFor("document.getElementById('app').dataset.screen === 'result'", 2000); };
+    const toResult = async () => { await press('Escape'); await waitScr('result'); };
 
     // 輕：腹瀉（對話逐句走，確認立繪演出、對話中不晃）
     await loadFx('croton');
@@ -599,7 +601,7 @@ function connect(url) {
     check('輕：零溶奸笑句立繪特寫（fx-evil）', await ev("!!document.querySelector('.dlg-portrait.fx-evil') && document.querySelector('.dlg-portrait').getAnimations().length > 0"));
     check('輕：對話中不搖晃（零溶句）', await noShakeNow());
     await press('Space'); await press('Space');
-    await waitFor("document.getElementById('app').dataset.screen === 'result'", 2000);
+    await waitScr('result');
     let p = await ev(FX_PROBE);
     check('輕：紅狠章 72px', /fierce/.test(p.cls) && /red/.test(p.cls) && p.font === '72px', JSON.stringify(p));
     check('輕：停格約 0.07 秒', p.hold === 70, String(p.hold));
@@ -610,7 +612,7 @@ function connect(url) {
     check('輕：墨點與章同色', await ev("getComputedStyle(document.querySelector('.fx-ink')).backgroundColor === getComputedStyle(document.querySelector('.stamp')).color"));
     await shot('fx-light-croton');
     await press('Enter');
-    check('演出入口：結果頁 Enter 照常回炎洗宮', await waitFor("document.getElementById('app').dataset.screen === 'home'", 2000));
+    check('演出入口：結果頁 Enter 照常回炎洗宮', await waitScr('home'));
 
     // 中：麝香 2/3
     await loadFx('musk_dose');
@@ -639,7 +641,7 @@ function connect(url) {
     await sleep(650); await press('Space');
     check('重：零溶特寫', await ev("!!document.querySelector('.dlg-portrait.fx-evil')"));
     await press('Space'); await press('Space');
-    await waitFor("document.getElementById('app').dataset.screen === 'result'", 2000);
+    await waitScr('result');
     p = await ev(FX_PROBE);
     check('重：紅狠章 72px', /fierce/.test(p.cls) && /red/.test(p.cls) && p.font === '72px', JSON.stringify(p));
     check('重：停格約 0.19 秒', p.hold === 190, String(p.hold));
@@ -673,7 +675,7 @@ function connect(url) {
       p = await ev(FX_PROBE);
       check(`一般：${evName} 一般章、不晃`, p.cls === `stamp ${cls}` && !p.shakeCls && p.shakeAnim === 'none', JSON.stringify(p));
     }
-    // ── 被抓演出（story 5）：溫太醫衝入、受害者抖、零溶後退、宣判暗幕；結果頁重級狠章＋暗幕 0.45→0.62 ──
+    // ── 被抓演出（story 3.5）：溫太醫衝入、受害者抖、零溶後退、宣判暗幕；結果頁重級狠章＋暗幕 0.45→0.62 ──
     const veilOp = (sel) => ev(`(() => { const v = document.querySelector('${sel}'); return v ? Math.round(parseFloat(getComputedStyle(v).opacity) * 100) / 100 : null; })()`);
     // 暗幕有 pointer-events: none，elementFromPoint 會略過它；檢查時暫時打開，看該點最上層是不是暗幕（＝被壓暗）
     const UNDER_VEIL = `(() => {
@@ -707,7 +709,7 @@ function connect(url) {
     check('被抓：旁白框在暗幕之上', await ev("(() => { const v = document.querySelector('.dialog-layer > .fx-veil'); v.style.pointerEvents = 'auto'; const r = document.querySelector('.dialog-box').getBoundingClientRect(); const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); v.style.pointerEvents = ''; return t !== v; })()"));
     await shot('fx-caught-verdict');
     await press('Space');
-    check('被抓：宣判後到結果頁', await waitFor("document.getElementById('app').dataset.screen === 'result'", 2000));
+    check('被抓：宣判後到結果頁', await waitScr('result'));
     const vStart = await veilOp('.result > .fx-veil');
     p = await ev(FX_PROBE);
     check('被抓結果頁：暗幕一開始約 0.45', vStart === 0.45, String(vStart));
@@ -728,11 +730,11 @@ function connect(url) {
     const fc = await focus();
     check('被抓結果頁：鍵盤游標落在按鈕上', !!fc && /^resultdone/.test(fc.key), JSON.stringify(fc));
     await press('Enter');
-    check('被抓結果頁：Enter 回炎洗宮', await waitFor("document.getElementById('app').dataset.screen === 'home'", 2000));
+    check('被抓結果頁：Enter 回炎洗宮', await waitScr('home'));
     // 略過：被抓對話「且慢！」鎖句中按 Esc → 直接結果頁，演出照常
     await loadFx('caught');
     await press('Escape');
-    check('被抓略過：Esc 直接到結果頁（不受防連按影響）', await waitFor("document.getElementById('app').dataset.screen === 'result'", 2000));
+    check('被抓略過：Esc 直接到結果頁（不受防連按影響）', await waitScr('result'));
     p = await ev(FX_PROBE);
     check('被抓略過：結果頁狠章、0.19 秒、晃一次、暗幕 0.45', /fierce/.test(p.cls) && p.hold === 190 && p.shakeAnim === 'fxshake' && (await veilOp('.result > .fx-veil')) === 0.45, JSON.stringify(p));
     await sleep(2200);
@@ -740,7 +742,7 @@ function connect(url) {
     await ev(HELPERS);
     const btn = await ev("__t.center('.footer-cta .btn')");
     await click(btn[0], btn[1]);
-    check('被抓結果頁：按鈕可用滑鼠點（暗幕不擋）', await waitFor("document.getElementById('app').dataset.screen === 'home'", 2000));
+    check('被抓結果頁：按鈕可用滑鼠點（暗幕不擋）', await waitScr('home'));
     // 減少動態：不晃，其他照常
     await loadFx('caught', true);
     check('被抓＋減少動態：溫太醫衝入照常', await ev("document.querySelector('.dlg-portrait.fx-enter').getAnimations().length > 0"));

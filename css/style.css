@@ -371,7 +371,6 @@ h3 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .btn.ghost-gold { background: transparent; border: 2px solid var(--amber); color: var(--amber); border-radius: 999px; min-height: 56px; font-size: 16px; }
 .ending .btn.gold { min-height: 56px; }
 @keyframes unroll { from { transform: scaleY(.05); opacity: 0; } }
-@keyframes stamp { from { transform: scale(2.4) rotate(-12deg); opacity: 0; } }
 
 .toast { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); background: rgba(46,34,40,.92); color: #fff; padding: 8px 16px; border-radius: 999px; font-size: 14px; z-index: 50; animation: fade .2s; white-space: nowrap; }
 .toast.long { white-space: normal; width: max-content; max-width: calc(100% - 40px); border-radius: 14px; line-height: 1.6; text-align: left; }

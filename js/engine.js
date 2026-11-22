@@ -336,7 +336,9 @@
   // 全部是純函式：隨機只走注入的 rand，run state 可 JSON 序列化。
   // 地形字元：'#' 樹籬（擋路、擋視線）｜'.' 房間地面｜',' 走廊（外觀依地圖 tileset，目前兩張圖都和房間同一種地面）｜'G' 月洞門（可走）
   //          'P' 荷花池左上格、'p' 荷花池其餘格、'F' 花圃、'R' 假山、'L' 石燈籠（擋路、不擋視線）
-  const G_DIRS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+  // 八方向動作 → 位移（也匯出成 GATHER_DIRS，給外殼的撞牆提示與 tools/gather-bot.js 共用）
+  // 凍結：對外匯出（GATHER_DIRS）給外殼與機器人共用，不能讓外面改到引擎的移動規則
+  const G_DIRS = Object.freeze(Object.fromEntries(Object.entries({ n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] }).map(([k, v]) => [k, Object.freeze(v)])));
   // 尋路／巡邏的固定方向順序（直向優先，平手時走直的比較自然）
   const G_ORDER = [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]];
   const gTile = (run, x, y) => (x < 0 || y < 0 || x >= run.w || y >= run.h ? '#' : run.tiles[y][x]);
@@ -860,7 +862,7 @@
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
     findRecipe, acceptChance,
-    buy, bribe, rejectOrder, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
+    buy, bribe, rejectOrder, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof window !== 'undefined') window.GameEngine = API;

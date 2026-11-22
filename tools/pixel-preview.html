@@ -32,20 +32,11 @@
 <div class="grid" id="all"></div>
 
 <script src="../js/pixelart.js"></script>
+<script src="../js/dungeon-draw.js"></script>
 <script>
 (() => {
   const P = window.PIXEL_ART;
-  const paint = (id) => {
-    const sp = P.sprites[id];
-    const src = sp.mirror ? P.sprites[sp.mirror] : sp;
-    const cv = document.createElement('canvas');
-    cv.width = src.w; cv.height = src.h;
-    const c = cv.getContext('2d');
-    src.rows.forEach((row, y) => { for (let x = 0; x < row.length; x++) { const col = P.palette[row[x]]; if (col) { c.fillStyle = col; c.fillRect(sp.mirror ? src.w - 1 - x : x, y, 1, 1); } } });
-    return cv;
-  };
-  const atlas = {};
-  Object.keys(P.sprites).forEach((id) => { atlas[id] = paint(id); });
+  const atlas = window.DungeonDraw.buildAtlas(); // 與遊戲同一份圖集（sprite id → canvas）
 
   const all = document.getElementById('all');
   const zoomSel = document.getElementById('zoom');

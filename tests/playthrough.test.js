@@ -26,7 +26,7 @@ function makeNode() {
   };
 }
 
-// 載入 data.js → engine.js → game.js，回傳一個可驅動的遊戲實例
+// 載入 data.js → engine.js → focusnav.js → dungeon-draw.js → game.js（不載 pixelart.js，採集走快速採集），回傳一個可驅動的遊戲實例
 function bootGame({ hash = '' } = {}) {
   const app = makeNode();
   let clickHandler = null;
@@ -62,6 +62,7 @@ function bootGame({ hash = '' } = {}) {
   vm.runInContext(read('js/data.js'), ctx, { filename: 'data.js' });
   vm.runInContext(read('js/engine.js'), ctx, { filename: 'engine.js' });
   vm.runInContext(read('js/focusnav.js'), ctx, { filename: 'focusnav.js' });
+  vm.runInContext(read('js/dungeon-draw.js'), ctx, { filename: 'dungeon-draw.js' });
   vm.runInContext(read('js/game.js'), ctx, { filename: 'game.js' });
 
   function parseButtons(html) {
