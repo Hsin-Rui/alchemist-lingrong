@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>像素素材預覽</title>
+<style>
+  body { margin: 0; padding: 16px; background: #1b1424; color: #fbf7ef; font-family: -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 24px 0 8px; color: #f2c14e; }
+  p { margin: 0 0 12px; color: #a9cdec; font-size: 13px; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
+  .grid { display: flex; flex-wrap: wrap; gap: 12px; }
+  figure { margin: 0; padding: 8px; background: #5e9e4e; border: 2px solid #fbf7ef; border-radius: 4px; }
+  figure.dark { background: #2a2236; }
+  figcaption { margin-top: 6px; font-size: 11px; color: #1b1424; font-weight: 700; text-align: center; }
+  figure.dark figcaption { color: #fbf7ef; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  label { font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>採集地下城・像素素材預覽</h1>
+<p>資料來源：<code>js/pixelart.js</code>（規範：<code>docs/pixel-art-spec.md</code>）。直接用瀏覽器開這個檔案就能看。
+  <label>放大 <select id="zoom"><option>1</option><option>2</option><option selected>4</option><option>6</option></select> 倍</label>
+  <label><input type="checkbox" id="dark"> 深色底</label></p>
+
+<h2>示範房間（11×13 視窗，含動畫）</h2>
+<div class="row"><canvas id="room" width="176" height="208"></canvas></div>
+
+<h2>全部 sprite</h2>
+<div class="grid" id="all"></div>
+
+<script src="../js/pixelart.js"></script>
+<script>
+(() => {
+  const P = window.PIXEL_ART;
+  const paint = (id) => {
+    const sp = P.sprites[id];
+    const src = sp.mirror ? P.sprites[sp.mirror] : sp;
+    const cv = document.createElement('canvas');
+    cv.width = src.w; cv.height = src.h;
+    const c = cv.getContext('2d');
+    src.rows.forEach((row, y) => { for (let x = 0; x < row.length; x++) { const col = P.palette[row[x]]; if (col) { c.fillStyle = col; c.fillRect(sp.mirror ? src.w - 1 - x : x, y, 1, 1); } } });
+    return cv;
+  };
+  const atlas = {};
+  Object.keys(P.sprites).forEach((id) => { atlas[id] = paint(id); });
+
+  const all = document.getElementById('all');
+  const zoomSel = document.getElementById('zoom');
+  const darkBox = document.getElementById('dark');
+  function list() {
+    const z = Number(zoomSel.value);
+    all.innerHTML = '';
+    Object.keys(atlas).forEach((id) => {
+      const fig = document.createElement('figure');
+      if (darkBox.checked) fig.className = 'dark';
+      const cv = document.createElement('canvas');
+      cv.width = atlas[id].width; cv.height = atlas[id].height;
+      cv.getContext('2d').drawImage(atlas[id], 0, 0);
+      cv.style.width = `${cv.width * z}px`; cv.style.height = `${cv.height * z}px`;
+      const cap = document.createElement('figcaption');
+      cap.textContent = `${id}${P.required.includes(id) ? '' : '（額外）'}`;
+      fig.append(cv, cap);
+      all.appendChild(fig);
+    });
+    const room = document.getElementById('room');
+    room.style.width = `${176 * Math.max(2, z)}px`; room.style.height = `${208 * Math.max(2, z)}px`;
+  }
+  zoomSel.onchange = list; darkBox.onchange = list;
+  list();
+
+  // 示範房間
+  const MAP = [
+    '###########',
+    '#####,#####',
+    '#.........#',
+    '#..Pp.....#',
+    '#..pp..F..#',
+    '#.....,...#',
+    '#.R...,..L#',
+    '#.....,...#',
+    '#.....,...#',
+    '###,,,,####',
+    '###,#######',
+    '###G#######',
+    '###########',
+  ];
+  const ctx = document.getElementById('room').getContext('2d');
+  const hash = (x, y) => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 8;
+  const tile = (x, y) => (MAP[y] && MAP[y][x]) || '#';
+  function frame(now) {
+    const tick = Math.floor(now / 500) % 2;
+    const walk = [0, 1, 0, 2][Math.floor(now / 160) % 4];
+    const put = (id, x, y) => ctx.drawImage(atlas[id], x, y);
+    MAP.forEach((row, y) => [...row].forEach((t, x) => {
+      const h = hash(x, y);
+      if (t === '#') put(tile(x, y + 1) === '#' ? 'hedge_top' : 'hedge_face', x * 16, y * 16);
+      else if (t === ',') put(`path_${h % 2}`, x * 16, y * 16);
+      else if (t === 'G') put('gate', x * 16, y * 16);
+      else put(h < 5 ? 'grass_0' : h < 7 ? 'grass_1' : 'grass_2', x * 16, y * 16);
+    }));
+    MAP.forEach((row, y) => [...row].forEach((t, x) => { if (t === 'P') put(`pond_${tick}`, x * 16, y * 16); }));
+    ctx.fillStyle = 'rgba(210,69,63,.2)';
+    for (let y = 2; y <= 5; y++) for (let x = 6; x <= 9; x++) ctx.fillRect(x * 16, y * 16, 16, 16);
+    const things = [
+      ['flowerbed', 7, 4, 0], ['rock', 2, 6, -8], ['lantern', 9, 6, -8],
+      ['jasmine', 1, 2, 0], ['osmanthus', 5, 4, 0], ['rose', 8, 7, 0], [`itch_${tick}`, 2, 8, -tick],
+    ];
+    things.forEach(([id, x, y, dy]) => put(id, x * 16, y * 16 + dy));
+    const actors = [['ling_down', 5, 7, walk], ['ling_left', 4, 5, 0], ['guard_left', 8, 3, walk], ['guard_down', 6, 2, 0], ['guard_up', 9, 8, 0], ['ling_up', 3, 9, walk]];
+    actors.sort((a, b) => a[2] - b[2]).forEach(([id, x, y, f]) => {
+      ctx.globalAlpha = 0.35; put('shadow', x * 16 + 2, y * 16 + 11); ctx.globalAlpha = 1;
+      put(`${id}_${f}`, x * 16, y * 16 - 10 - (f ? 0 : tick));
+    });
+    put('bubble_alert', 8 * 16 + 4, 3 * 16 - 21);
+    put('bubble_lost', 6 * 16 + 4, 2 * 16 - 21);
+    put(`sparkle_${Math.floor(now / 110) % 3}`, 5 * 16, 4 * 16 - 6);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

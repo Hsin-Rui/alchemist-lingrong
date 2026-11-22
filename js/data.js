@@ -41,6 +41,13 @@ window.GAME_DATA = (() => {
       name: '御花園', bg: 'garden', rare: 'itch',
       table: [['jasmine', 3], ['osmanthus', 3], ['rose', 3], ['itch', 2]],
       intro: '零溶提著小籃子，假裝在御花園賞花……',
+      // 採集地下城參數（game-design §12.5）。引擎一律從這裡讀，不寫死。
+      dungeon: {
+        w: 25, h: 31, rooms: [5, 7], steps: 60, guards: 2,
+        guardSight: 4.5, playerSight: 5.5, extraItems: [4, 6],
+        guardMinDist: 8, searchTurns: 3, wanderKeep: 0.7, wanderIdle: 0.1,
+        loops: 2, rareReach: 0.7,
+      },
     },
     taiyi: {
       name: '太醫院', bg: 'taiyi',

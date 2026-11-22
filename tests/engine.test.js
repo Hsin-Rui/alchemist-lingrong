@@ -494,50 +494,310 @@ test('advanceDay：day++、slot 歸零', () => {
   assert.strictEqual(S.slot, 0);
 });
 
-// ───────── 採集小遊戲：場景生成 buildGatherScene ─────────
+// ───────── 採集地下城：生成 buildGatherDungeon ─────────
 // 可重現的 seeded rand（LCG），讓「同 rand 兩次呼叫」能逐一比對。
 function lcg(seed) {
   let s = seed >>> 0;
   return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
+const DG = D.GATHER.garden.dungeon;
+const WALK = '.,G';
+const roomOf = (run, o) => run.rooms.findIndex((r) => o.x >= r.x && o.x < r.x + r.w && o.y >= r.y && o.y < r.y + r.h);
 
-test('buildGatherScene：每種素材≥1、稀有正好 1 個且=地圖指定、座標皆 0..1', () => {
-  const scene = E.buildGatherScene(D, fresh(), 'garden', lcg(1));
-  assert.strictEqual(scene.loc, 'garden');
-  assert.strictEqual(scene.seconds, 30);
-  assert.strictEqual(scene.rare, 'itch'); // data.js GATHER.garden.rare
-  // 每種素材（茉莉、桂花、玫瑰、癢癢粉）至少各 1
-  const ids = scene.items.map((it) => it.id);
-  for (const [id] of D.GATHER.garden.table) assert.ok(ids.includes(id), `${id} 至少出現 1 個`);
-  // 稀有正好 1 個，且標記 rare 的就是 itch
-  const rares = scene.items.filter((it) => it.rare);
-  assert.strictEqual(rares.length, 1, '稀有正好 1 個');
+// 獨立於引擎 gValid 的不變式檢查（game-design §12.2）
+function assertDungeon(run, label) {
+  assert.strictEqual(run.w, DG.w, `${label} 寬`);
+  assert.strictEqual(run.h, DG.h, `${label} 高`);
+  assert.strictEqual(run.tiles.length, DG.h);
+  assert.ok(run.tiles.every((row) => row.length === DG.w), `${label} 每列等寬`);
+  assert.ok(run.rooms.length >= DG.rooms[0] && run.rooms.length <= DG.rooms[1], `${label} 庭院數 ${run.rooms.length}`);
+  assert.strictEqual(run.stepsLeft, DG.steps);
+  // 全部可走格都從出生點連得到（擺設沒有切斷連通）
+  const dist = E.gatherDist(run, run.player.x, run.player.y);
+  let walk = 0;
+  for (let y = 0; y < run.h; y++) for (let x = 0; x < run.w; x++) if (WALK.includes(run.tiles[y][x])) walk++;
+  assert.strictEqual(dist.filter((d) => d >= 0).length, walk, `${label} 全圖連通`);
+  assert.strictEqual(run.tiles[run.player.y][run.player.x], 'G', `${label} 出生在月洞門`);
+  // 素材：每種 ≥1、總數 8～10、稀有正好 1 個、都在可走格且互不重疊
+  const ids = run.items.map((it) => it.id);
+  for (const [id] of D.GATHER.garden.table) assert.ok(ids.includes(id), `${label} ${id} 至少 1 個`);
+  assert.ok(run.items.length >= 8 && run.items.length <= 10, `${label} 素材總數 ${run.items.length}`);
+  const rares = run.items.filter((it) => it.rare);
+  assert.strictEqual(rares.length, 1, `${label} 稀有正好 1 個`);
   assert.strictEqual(rares[0].id, 'itch');
-  assert.strictEqual(ids.filter((id) => id === 'itch').length, 1, '稀有素材只撒 1 個');
-  // 總數約 7～9
-  assert.ok(scene.items.length >= 7 && scene.items.length <= 9, `總數 ${scene.items.length} 落在 7～9`);
-  // 所有座標在 0..1
-  for (const it of scene.items) {
-    assert.ok(it.x >= 0 && it.x <= 1 && it.y >= 0 && it.y <= 1, '素材座標 0..1');
-  }
-  assert.ok(scene.guard.x >= 0 && scene.guard.x <= 1 && scene.guard.y >= 0 && scene.guard.y <= 1, '侍衛起點 0..1');
-  assert.ok(scene.guard.waypoints.length >= 1, '至少 1 個巡邏點');
-  for (const w of scene.guard.waypoints) assert.ok(w.x >= 0 && w.x <= 1 && w.y >= 0 && w.y <= 1, '巡邏點 0..1');
-  assert.strictEqual(scene.guard.speed, 0.16);
+  assert.strictEqual(ids.filter((id) => id === 'itch').length, 1);
+  assert.strictEqual(new Set(run.items.map((it) => `${it.x},${it.y}`)).size, run.items.length, `${label} 素材不重疊`);
+  for (const it of run.items) assert.ok(dist[it.y * run.w + it.x] > 0, `${label} 素材走得到`);
+  // 稀有在離入口最遠的庭院（庭院距離＝進到該庭院任一格的最少步數）
+  const entry = run.rooms.map((r) => {
+    let best = Infinity;
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const d = dist[y * run.w + x]; if (d >= 0 && d < best) best = d; }
+    return best;
+  });
+  const deepest = Math.max(...entry.slice(1));
+  assert.strictEqual(entry[roomOf(run, rares[0])], deepest, `${label} 稀有在最深的庭院`);
+  // 侍衛：2 名、不同的非入口庭院、離玩家 ≥8 步
+  assert.strictEqual(run.guards.length, DG.guards, `${label} 侍衛數`);
+  const posts = run.guards.map((gd) => roomOf(run, gd));
+  assert.ok(posts.every((p) => p > 0), `${label} 侍衛不在入口庭院`);
+  assert.strictEqual(new Set(posts).size, posts.length, `${label} 侍衛在不同庭院`);
+  for (const gd of run.guards) assert.ok(dist[gd.y * run.w + gd.x] >= DG.guardMinDist, `${label} 侍衛離玩家 ≥${DG.guardMinDist} 步`);
+}
+
+test('buildGatherDungeon：200 個 seed 都滿足生成不變式（連通、素材、稀有最深、侍衛距離）', () => {
+  for (let seed = 1; seed <= 200; seed++) assertDungeon(E.buildGatherDungeon(D, fresh(), 'garden', lcg(seed)), `seed ${seed}`);
 });
 
-test('buildGatherScene：同 rand（同種子）兩次呼叫 → items/guard 逐一相同（決定性）', () => {
-  const a = E.buildGatherScene(D, fresh(), 'garden', lcg(42));
-  const b = E.buildGatherScene(D, fresh(), 'garden', lcg(42));
+test('buildGatherDungeon：極端 rand（恆 0／恆 0.999／恆 0.5）也會回傳合格地圖（重骰或保底布局）', () => {
+  for (const v of [0, 0.999, 0.5]) assertDungeon(E.buildGatherDungeon(D, fresh(), 'garden', () => v), `rand=${v}`);
+});
+
+test('buildGatherDungeon：同 seed 兩次呼叫 → run state 完全相同；不同 seed → 地圖不同', () => {
+  const a = E.buildGatherDungeon(D, fresh(), 'garden', lcg(42));
+  const b = E.buildGatherDungeon(D, fresh(), 'garden', lcg(42));
   assert.deepStrictEqual(a, b);
+  const c = E.buildGatherDungeon(D, fresh(), 'garden', lcg(43));
+  assert.notDeepStrictEqual(a.tiles, c.tiles);
 });
 
-test('buildGatherScene：地圖無 rare 欄位 → 取權重最低者為稀有（太醫院→麝香）', () => {
-  // data.js 目前只有 garden 設了 rare；taiyi 走 fallback = 權重最低（musk 0.6）
-  const scene = E.buildGatherScene(D, fresh(), 'taiyi', lcg(7));
-  assert.strictEqual(scene.rare, 'musk');
-  assert.strictEqual(scene.items.filter((it) => it.id === 'musk').length, 1, '稀有只 1 個');
-  assert.strictEqual(scene.items.filter((it) => it.rare).length, 1);
+// ───────── 採集地下城：回合規則 gatherStep ─────────
+// 手工小地圖：'Z' 玩家、'@' 侍衛、小寫 j/o/r 素材、'*' 稀有（癢癢粉），其餘是地形字元。
+function mini(rows, opts = {}) {
+  const run = {
+    loc: 'garden', w: rows[0].length, h: rows.length, tiles: null, rooms: [], rare: 'itch',
+    player: null, items: [], guards: [], maxSteps: 60, stepsLeft: 60, got: {}, picked: 0,
+    seen: new Array(rows[0].length * rows.length).fill(0), over: false, endReason: null,
+    cfg: { guardSight: 4.5, playerSight: 5.5, searchTurns: 3, wanderKeep: 0.7, wanderIdle: 0.1 },
+    ...opts,
+  };
+  const ITEM = { j: 'jasmine', o: 'osmanthus', r: 'rose', '*': 'itch' };
+  run.tiles = rows.map((row, y) => [...row].map((ch, x) => {
+    if (ch === 'Z') { run.player = { x, y, face: 'down' }; return '.'; }
+    if (ch === '@') { run.guards.push({ x, y, face: 'down', state: 'wander', dir: null, last: null, searchLeft: 0 }); return '.'; }
+    if (ITEM[ch]) { run.items.push({ id: ITEM[ch], rare: ch === '*', x, y }); return '.'; }
+    return ch;
+  }).join(''));
+  return run;
+}
+const types = (ev) => ev.map((e) => e.t);
+
+test('gatherStep 移動：8 方向各走一格、步數 -1、事件 move', () => {
+  const dirs = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+  for (const [a, [dx, dy]] of Object.entries(dirs)) {
+    const run = mini(['#####', '#...#', '#.Z.#', '#...#', '#####']);
+    const ev = E.gatherStep(run, a, ZERO);
+    assert.deepStrictEqual(types(ev), ['move'], a);
+    assert.deepStrictEqual([run.player.x, run.player.y], [2 + dx, 2 + dy], a);
+    assert.strictEqual(run.stepsLeft, 59, a);
+    assert.deepStrictEqual(ev[0], { t: 'move', from: { x: 2, y: 2 }, to: { x: 2 + dx, y: 2 + dy } });
+  }
+});
+
+test('gatherStep 撞牆／擺設／侍衛／斜切牆角：位置與步數不變、事件 bump、侍衛不動', () => {
+  // 牆
+  let run = mini(['#####', '#Z..#', '#...#', '#####']);
+  assert.deepStrictEqual(types(E.gatherStep(run, 'n', ZERO)), ['bump']);
+  assert.deepStrictEqual([run.player.x, run.player.y, run.stepsLeft], [1, 1, 60]);
+  // 擺設（荷花池、花圃、假山、石燈籠都擋路）
+  for (const prop of ['P', 'p', 'F', 'R', 'L']) {
+    run = mini(['#####', `#Z${prop}.#`, '#...#', '#####']);
+    assert.deepStrictEqual(types(E.gatherStep(run, 'e', ZERO)), ['bump'], prop);
+    assert.strictEqual(run.stepsLeft, 60);
+  }
+  // 斜切牆角：往右下走，但右邊是牆
+  run = mini(['#####', '#Z#.#', '#...#', '#####']);
+  assert.deepStrictEqual(types(E.gatherStep(run, 'se', ZERO)), ['bump']);
+  assert.deepStrictEqual([run.player.x, run.player.y, run.stepsLeft], [1, 1, 60]);
+  // 侍衛站的格子（隔著牆角，侍衛抓不到也看得到，但玩家不能走上去）
+  run = mini(['#######', '#Z@...#', '#######']);
+  const before = JSON.stringify(run.guards);
+  assert.deepStrictEqual(types(E.gatherStep(run, 'e', ZERO)), ['bump']);
+  assert.strictEqual(run.stepsLeft, 60);
+  assert.strictEqual(JSON.stringify(run.guards), before, 'bump 不會讓侍衛行動');
+});
+
+test('gatherStep 等待：步數 -1、侍衛照常行動', () => {
+  const run = mini(['#########', '#Z#....@#', '#########']); // 中間有牆，侍衛看不到玩家
+  const ev = E.gatherStep(run, 'wait', lcg(5));
+  assert.strictEqual(ev[0].t, 'wait');
+  assert.strictEqual(run.stepsLeft, 59);
+  assert.ok(ev.some((e) => e.t === 'gmove'), '侍衛巡邏走了一格');
+  assert.deepStrictEqual([run.player.x, run.player.y], [1, 1]);
+});
+
+test('gatherStep 撿取：走到素材上 → got++、素材移除、事件 pick（帶 rare），同一格不會重複計算', () => {
+  const run = mini(['######', '#Zj*.#', '######']);
+  let ev = E.gatherStep(run, 'e', ZERO);
+  assert.deepStrictEqual(ev.find((e) => e.t === 'pick'), { t: 'pick', id: 'jasmine', rare: false, x: 2, y: 1 });
+  assert.deepStrictEqual(run.got, { jasmine: 1 });
+  assert.strictEqual(run.items.length, 1);
+  ev = E.gatherStep(run, 'e', ZERO);
+  assert.deepStrictEqual(ev.find((e) => e.t === 'pick'), { t: 'pick', id: 'itch', rare: true, x: 3, y: 1 });
+  // 走回原格：已經沒有素材
+  ev = E.gatherStep(run, 'w', ZERO);
+  assert.ok(!ev.some((e) => e.t === 'pick'));
+  assert.deepStrictEqual(run.got, { jasmine: 1, itch: 1 });
+  assert.strictEqual(run.picked, 2);
+});
+
+test('gatherStep 發現與追擊：視野內且沒被樹籬擋 → alert 只在轉換時發一次、侍衛往玩家走一步', () => {
+  const run = mini(['#########', '#Z...@..#', '#########']); // 距離 4 ≤ 4.5
+  let ev = E.gatherStep(run, 'wait', ONE);
+  assert.strictEqual(ev.filter((e) => e.t === 'alert').length, 1);
+  assert.strictEqual(run.guards[0].state, 'chase');
+  assert.deepStrictEqual(ev.find((e) => e.t === 'gmove'), { t: 'gmove', g: 0, from: { x: 5, y: 1 }, to: { x: 4, y: 1 } });
+  assert.deepStrictEqual(run.guards[0].last, { x: 1, y: 1 });
+  ev = E.gatherStep(run, 'wait', ONE);
+  assert.strictEqual(ev.filter((e) => e.t === 'alert').length, 0, '已在追擊，不重複發 alert');
+  assert.strictEqual(run.guards[0].x, 3);
+});
+
+test('gatherStep 發現：超出半徑或被樹籬擋住 → 不發現', () => {
+  // 距離 5 > 4.5
+  let run = mini(['##########', '#Z....@..#', '##########']);
+  run.guards[0].dir = null;
+  let ev = E.gatherStep(run, 'wait', () => 0.05); // 0.05：不沿原方向（沒有原方向）、第二擲 <0.1 → 原地停
+  assert.ok(!ev.some((e) => e.t === 'alert'));
+  assert.strictEqual(run.guards[0].state, 'wander');
+  // 距離 2 但中間是樹籬
+  run = mini(['#####', '#Z#@#', '#.#.#', '#####']);
+  ev = E.gatherStep(run, 'wait', () => 0.05);
+  assert.ok(!ev.some((e) => e.t === 'alert'));
+  assert.strictEqual(run.guards[0].state, 'wander');
+  // 擺設不擋視線
+  run = mini(['######', '#ZF.@#', '######']);
+  ev = E.gatherStep(run, 'wait', ONE);
+  assert.ok(ev.some((e) => e.t === 'alert'), '花圃不擋視線');
+});
+
+test('gatherStep 跟丟：追到最後看見的位置仍看不到 → lost、張望 searchTurns 回合後回巡邏（calm）', () => {
+  // 玩家躲進牆後；侍衛已在追擊、正站在最後看見的位置
+  const run = mini(['#######', '#Z#...#', '#.#.@.#', '#...#.#', '#######']);
+  Object.assign(run.guards[0], { state: 'chase', last: { x: 4, y: 2 } });
+  let ev = E.gatherStep(run, 'wait', ONE);
+  assert.ok(ev.some((e) => e.t === 'lost'));
+  assert.strictEqual(run.guards[0].state, 'search');
+  assert.strictEqual(run.guards[0].searchLeft, 3);
+  assert.ok(!ev.some((e) => e.t === 'gmove'), '張望時不移動');
+  E.gatherStep(run, 'wait', ONE);
+  E.gatherStep(run, 'wait', ONE);
+  assert.strictEqual(run.guards[0].state, 'search');
+  ev = E.gatherStep(run, 'wait', ONE);
+  assert.ok(ev.some((e) => e.t === 'calm'));
+  assert.strictEqual(run.guards[0].state, 'wander');
+});
+
+test('gatherStep 被抓：侍衛回合開始時能合法一步走到玩家 → caught；剛走到相鄰格那回合不算', () => {
+  // 距離 2：這回合侍衛走到相鄰格，不抓
+  const run = mini(['######', '#Z.@.#', '######']);
+  let ev = E.gatherStep(run, 'wait', ONE);
+  assert.ok(!ev.some((e) => e.t === 'caught'), '剛貼上來的那回合不算抓');
+  assert.strictEqual(run.guards[0].x, 2);
+  assert.strictEqual(run.over, false);
+  // 下一回合還待在原地 → 被抓
+  ev = E.gatherStep(run, 'wait', ONE);
+  assert.deepStrictEqual(ev[ev.length - 1], { t: 'caught', g: 0 });
+  assert.strictEqual(run.over, true);
+  assert.strictEqual(run.endReason, 'caught');
+});
+
+test('gatherStep 被抓：玩家有一回合可以逃；斜向隔著牆角不算相鄰可抓', () => {
+  // 貼上來之後玩家往反方向走 → 侍衛追一格，仍只是相鄰、沒被抓
+  let run = mini(['#######', '#..Z@.#', '#######']);
+  // 侍衛已相鄰：玩家先走開
+  let ev = E.gatherStep(run, 'w', ONE);
+  assert.ok(!ev.some((e) => e.t === 'caught'), '走開就逃掉');
+  assert.strictEqual(run.over, false);
+  // 斜向相鄰但被牆角卡住（侍衛不能斜切過去）→ 不算抓
+  run = mini(['#####', '#Z#.#', '#.@.#', '#####']);
+  // 玩家 (1,1)、侍衛 (2,2)：斜走要經過 (2,1) 牆，不合法
+  ev = E.gatherStep(run, 'wait', ONE);
+  assert.ok(!ev.some((e) => e.t === 'caught'), '斜切牆角抓不到');
+  assert.strictEqual(run.over, false);
+});
+
+test('gatherStep 步數用完：第 60 步結算後 timeout；同一回合被抓優先', () => {
+  let run = mini(['#####', '#Z..#', '#####'], { stepsLeft: 1 });
+  let ev = E.gatherStep(run, 'e', ZERO);
+  assert.deepStrictEqual(types(ev), ['move', 'timeout']);
+  assert.strictEqual(run.endReason, 'timeout');
+  assert.strictEqual(run.stepsLeft, 0);
+  // 最後一步同時被抓 → caught
+  run = mini(['#####', '#Z@.#', '#####'], { stepsLeft: 1 });
+  ev = E.gatherStep(run, 'wait', ZERO);
+  assert.strictEqual(run.endReason, 'caught');
+  assert.ok(!ev.some((e) => e.t === 'timeout'));
+});
+
+test('gatherStep 收工：endReason quit、不扣步、侍衛不動；結束後再呼叫不產生變化', () => {
+  const run = mini(['######', '#Z..@#', '######']);
+  const guards = JSON.stringify(run.guards);
+  assert.deepStrictEqual(E.gatherStep(run, 'quit', ZERO), [{ t: 'quit' }]);
+  assert.strictEqual(run.endReason, 'quit');
+  assert.strictEqual(run.stepsLeft, 60);
+  assert.strictEqual(JSON.stringify(run.guards), guards);
+  const snap = JSON.stringify(run);
+  assert.deepStrictEqual(E.gatherStep(run, 'e', ZERO), []);
+  assert.deepStrictEqual(E.gatherStep(run, 'wait', ZERO), []);
+  assert.strictEqual(JSON.stringify(run), snap);
+});
+
+test('gatherFov：樹籬擋視線（牆面本身看得到、牆後看不到）、半徑外看不到', () => {
+  const run = mini(['#########', '#Z..#...#', '#########']);
+  const fov = new Set(E.gatherFov(run, 1, 1, 5.5));
+  const k = (x, y) => y * run.w + x;
+  assert.ok(fov.has(k(3, 1)), '空地看得到');
+  assert.ok(fov.has(k(4, 1)), '牆面看得到');
+  assert.ok(!fov.has(k(5, 1)), '牆後看不到');
+  const open = mini(['##########', '#Z.......#', '##########']);
+  const far = new Set(E.gatherFov(open, 1, 1, 5.5));
+  assert.ok(far.has(1 * open.w + 6) && !far.has(1 * open.w + 7), '半徑 5.5 → 看到 5 格外、看不到 6 格外');
+});
+
+test('視線是對稱的：侍衛看得到玩家 ⇔ 玩家看得到侍衛（同半徑；含牆角的不對稱案例與 100 張隨機地圖）', () => {
+  // Bresenham 從 (2,1)→(0,0) 與 (0,0)→(2,1) 經過的格子不同；兩個方向的結果必須一致
+  const run = mini(['.#.', '.#.']);
+  const k = (x, y) => y * run.w + x;
+  assert.strictEqual(E.gatherFov(run, 2, 1, 4.5).includes(k(0, 0)), E.gatherFov(run, 0, 0, 4.5).includes(k(2, 1)));
+  for (let seed = 1; seed <= 100; seed++) {
+    const rand = lcg(seed * 17 + 3);
+    const d = E.buildGatherDungeon(D, fresh(), 'garden', rand);
+    const open = [];
+    for (let y = 0; y < d.h; y++) for (let x = 0; x < d.w; x++) if (WALK.includes(d.tiles[y][x])) open.push([x, y]);
+    for (let i = 0; i < 30; i++) {
+      const [ax, ay] = open[Math.floor(rand() * open.length)];
+      for (const kb of E.gatherFov(d, ax, ay, 4.5)) {
+        const bx = kb % d.w;
+        const by = Math.floor(kb / d.w);
+        if (!WALK.includes(d.tiles[by][bx])) continue;
+        assert.ok(E.gatherFov(d, bx, by, 4.5).includes(ay * d.w + ax), `seed ${seed}: (${ax},${ay}) 看得到 (${bx},${by})，反過來卻看不到`);
+      }
+    }
+  }
+});
+
+test('採集地下城 fuzz：500 局隨機操作都在 ≤60 步內結束、不丟例外、state 可 JSON 來回，收穫可套用', () => {
+  const acts = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw', 'wait'];
+  const reasons = new Set();
+  for (let seed = 1; seed <= 500; seed++) {
+    const rand = lcg(seed * 31 + 7);
+    const S = fresh();
+    const run = E.buildGatherDungeon(D, S, 'garden', rand);
+    let calls = 0;
+    while (!run.over) {
+      E.gatherStep(run, acts[Math.floor(rand() * acts.length)], rand);
+      assert.ok(++calls < 5000, `seed ${seed} 沒有結束`);
+    }
+    assert.ok(run.maxSteps - run.stepsLeft <= 60, `seed ${seed} 超過 60 步`);
+    assert.ok(run.stepsLeft >= 0);
+    assert.ok(['caught', 'timeout'].includes(run.endReason));
+    reasons.add(run.endReason);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(run)), run, `seed ${seed} state 可序列化`);
+    const haul = E.applyGatherHaul(D, S, 'garden', run.got);
+    assert.strictEqual(S.slot, 1);
+    assert.strictEqual(Object.values(haul.got).reduce((a, b) => a + b, 0), run.picked);
+  }
+  assert.strictEqual(reasons.size, 2, 'fuzz 應同時涵蓋被抓與步數用完');
 });
 
 // ───────── 採集小遊戲：收穫套用 applyGatherHaul ─────────

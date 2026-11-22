@@ -10,11 +10,6 @@
   const clamp = (n) => Math.max(0, Math.min(100, n));
   const charName = (D, who) => D.CHARS[who].name;
 
-  // 採集小遊戲場景生成的預設值（可調；即時層的半徑常數在外殼 js/game.js）。
-  const GATHER_SECONDS = 30; // 每場倒數秒數
-  const GUARD_SPEED = 0.16; // 侍衛巡邏速度（正規化座標／秒）
-  const SCENE_MARGIN = 0.08; // 場景邊界留白（正規化）
-
   function addFavor(S, who, n) {
     const before = S.favor[who];
     S.favor[who] = clamp(before + n);
@@ -337,30 +332,377 @@
     return { loc, got, ready };
   }
 
-  // 採集小遊戲・場景生成（純函式、隨機走注入 rand、不碰 DOM／計時器）。
-  // 回 { loc, seconds, rare, items:[{id,rare,x,y}], guard:{x,y,waypoints,speed} }。
-  // 保證該地圖每種素材至少各 1 個（含稀有），再從非稀有常見素材多撒幾個；座標皆正規化 0..1。
-  // rand 擲骰順序：逐一素材座標 → 額外數量 → 逐一（weightedPick＋座標）→ 侍衛起點 → 巡邏點數量 → 逐一巡邏點。
-  function buildGatherScene(D, S, loc, rand) {
-    const g = D.GATHER[loc];
-    const coord = () => SCENE_MARGIN + rand() * (1 - 2 * SCENE_MARGIN);
-    // 稀有素材：地圖指定；未指定則取權重最低者
-    const rare = g.rare || g.table.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
-    const commons = g.table.filter(([id]) => id !== rare);
-    const items = [];
-    // 每種素材先放 1 個（保證每種≥1、含稀有正好 1 個）
-    for (const [id] of g.table) items.push({ id, rare: id === rare, x: coord(), y: coord() });
-    // 再從「非稀有」常見素材多撒幾個（稀有維持 1 個、總數約 7～9）
-    const extra = 3 + Math.floor(rand() * 3); // 3～5
-    for (let i = 0; i < extra; i++) {
-      const id = weightedPick(commons, rand);
-      items.push({ id, rare: false, x: coord(), y: coord() });
+  // ───────── 採集地下城（回合制潛行；game-design §12）─────────
+  // 全部是純函式：隨機只走注入的 rand，run state 可 JSON 序列化。
+  // 地形字元：'#' 樹籬（擋路、擋視線）｜'.' 草地｜',' 石板路｜'G' 月洞門（可走）
+  //          'P' 荷花池左上格、'p' 荷花池其餘格、'F' 花圃、'R' 假山、'L' 石燈籠（擋路、不擋視線）
+  const G_DIRS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+  // 尋路／巡邏的固定方向順序（直向優先，平手時走直的比較自然）
+  const G_ORDER = [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]];
+  const gTile = (run, x, y) => (x < 0 || y < 0 || x >= run.w || y >= run.h ? '#' : run.tiles[y][x]);
+  const gWalk = (run, x, y) => { const t = gTile(run, x, y); return t === '.' || t === ',' || t === 'G'; };
+  const gOpaque = (run, x, y) => gTile(run, x, y) === '#';
+  const gFace = (dx, dy, prev) => (dx < 0 ? 'left' : dx > 0 ? 'right' : dy < 0 ? 'up' : dy > 0 ? 'down' : prev);
+
+  // 能不能從 (x,y) 往 (dx,dy) 走一格：目標可走，且斜走時兩個直向鄰格都可走（不能斜切牆角）。只看地形。
+  function gatherCanStep(run, x, y, dx, dy) {
+    if (!gWalk(run, x + dx, y + dy)) return false;
+    if (dx && dy && (!gWalk(run, x + dx, y) || !gWalk(run, x, y + dy))) return false;
+    return true;
+  }
+
+  // 從 (sx,sy) 出發的 8 方向 BFS 步數表（走不到 = -1）。blocked：額外視為擋路的格子索引集合。
+  function gatherDist(run, sx, sy, blocked) {
+    const dist = new Array(run.w * run.h).fill(-1);
+    dist[sy * run.w + sx] = 0;
+    const queue = [[sx, sy]];
+    for (let i = 0; i < queue.length; i++) {
+      const [x, y] = queue[i];
+      const d = dist[y * run.w + x];
+      for (const [dx, dy] of G_ORDER) {
+        const k = (y + dy) * run.w + x + dx;
+        if (!gatherCanStep(run, x, y, dx, dy) || dist[k] >= 0 || (blocked && blocked.has(k))) continue;
+        dist[k] = d + 1;
+        queue.push([x + dx, y + dy]);
+      }
     }
-    // 侍衛：起點＋數個巡邏點＋速度（起點落在上半，遠離玩家入場點）
-    const guard = { x: coord(), y: SCENE_MARGIN + rand() * (0.5 - SCENE_MARGIN), speed: GUARD_SPEED, waypoints: [] };
-    const wp = 3 + Math.floor(rand() * 2); // 3～4 個巡邏點
-    for (let i = 0; i < wp; i++) guard.waypoints.push({ x: coord(), y: coord() });
-    return { loc, seconds: GATHER_SECONDS, rare, items, guard };
+    return dist;
+  }
+
+  // 視線（Bresenham）：中途的格子不能是樹籬；斜穿時兩側都是樹籬也算擋住。終點本身不檢查（看得到牆面）。
+  function gLos(run, x0, y0, x1, y1) {
+    const dx = Math.abs(x1 - x0);
+    const dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    let x = x0;
+    let y = y0;
+    for (;;) {
+      if (x === x1 && y === y1) return true;
+      if ((x !== x0 || y !== y0) && gOpaque(run, x, y)) return false;
+      const e2 = 2 * err;
+      const stepX = e2 > -dy;
+      const stepY = e2 < dx;
+      if (stepX && stepY && gOpaque(run, x + sx, y) && gOpaque(run, x, y + sy)) return false;
+      if (stepX) { err -= dy; x += sx; }
+      if (stepY) { err += dx; y += sy; }
+    }
+  }
+  // 互相看得到才算看得到：Bresenham 兩個方向經過的格子不一定相同，兩邊都試，確保「侍衛看得到我 ⇔ 我看得到侍衛」
+  const gSees = (run, x0, y0, x1, y1, r) => (x1 - x0) ** 2 + (y1 - y0) ** 2 <= r * r && (gLos(run, x0, y0, x1, y1) || gLos(run, x1, y1, x0, y0));
+
+  // 從 (x,y) 以半徑 r 看得到的格子索引（y*w+x）陣列，含牆面。玩家視野與侍衛視野共用。
+  function gatherFov(run, x, y, r) {
+    const out = [];
+    const R = Math.ceil(r);
+    for (let yy = Math.max(0, y - R); yy <= Math.min(run.h - 1, y + R); yy++) {
+      for (let xx = Math.max(0, x - R); xx <= Math.min(run.w - 1, x + R); xx++) {
+        if (gSees(run, x, y, xx, yy, r)) out.push(yy * run.w + xx);
+      }
+    }
+    return out;
+  }
+  function gMarkSeen(run) {
+    for (const k of gatherFov(run, run.player.x, run.player.y, run.cfg.playerSight)) run.seen[k] = 1;
+  }
+
+  // 生成一張地下城（一次嘗試）。格局：2 欄 × 4 列的區塊，每個選中的區塊放一個庭院，
+  // 入口庭院在最下列、上半部至少 2 個庭院（確保侍衛離入口夠遠），再用 L 形走廊串成樹＋1 條環路。
+  function gGenerate(D, loc, rand) {
+    const g = D.GATHER[loc];
+    const c = g.dungeon;
+    const W = c.w;
+    const H = c.h;
+    const ri = (a, b) => a + Math.floor(rand() * (b - a + 1));
+    const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+    const grid = Array.from({ length: H }, () => new Array(W).fill('#'));
+
+    // 區塊
+    const COLS = 2;
+    const ROWS = 4;
+    const cw = Math.floor((W - 1) / COLS) - 1; // 區塊內寬（25 → 11）
+    const ch = Math.floor((H - 3) / ROWS); // 區塊高（31 → 7）
+    const cell = (cx, cy) => ({ cx, cy });
+    const n = Math.max(3, Math.min(COLS * ROWS, ri(c.rooms[0], c.rooms[1])));
+    const entrance = cell(ri(0, COLS - 1), ROWS - 1);
+    const tops = shuffle([cell(0, 0), cell(1, 0), cell(0, 1), cell(1, 1)]);
+    const chosen = [entrance, tops[0], tops[1]];
+    const rest = [];
+    for (let cy = 0; cy < ROWS; cy++) for (let cx = 0; cx < COLS; cx++) {
+      if (!chosen.some((q) => q.cx === cx && q.cy === cy)) rest.push(cell(cx, cy));
+    }
+    shuffle(rest);
+    while (chosen.length < n) chosen.push(rest.pop());
+
+    // 庭院
+    const rooms = chosen.map(({ cx, cy }) => {
+      const w = ri(4, Math.min(8, cw));
+      const h = ri(3, Math.min(5, ch - 2));
+      const x = 1 + cx * (cw + 1) + ri(0, cw - w);
+      const y = 1 + cy * ch + ri(0, ch - 1 - h);
+      for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) grid[yy][xx] = '.';
+      return { x, y, w, h };
+    });
+    const center = (r) => [r.x + r.w / 2, r.y + r.h / 2];
+    const gap = (a, b) => Math.abs(center(a)[0] - center(b)[0]) + Math.abs(center(a)[1] - center(b)[1]);
+
+    // 走廊：L 形、1 格寬，只挖樹籬
+    const carve = (a, b) => {
+      const ax = ri(a.x, a.x + a.w - 1);
+      const ay = ri(a.y, a.y + a.h - 1);
+      const bx = ri(b.x, b.x + b.w - 1);
+      const by = ri(b.y, b.y + b.h - 1);
+      const dig = (x, y) => { if (grid[y][x] === '#') grid[y][x] = ','; };
+      const hFirst = rand() < 0.5;
+      const cornerX = hFirst ? bx : ax;
+      const cornerY = hFirst ? ay : by;
+      for (let x = Math.min(ax, cornerX); x <= Math.max(ax, cornerX); x++) dig(x, ay);
+      for (let y = Math.min(ay, cornerY); y <= Math.max(ay, cornerY); y++) dig(ax === cornerX ? ax : cornerX, y);
+      for (let x = Math.min(cornerX, bx); x <= Math.max(cornerX, bx); x++) dig(x, by);
+      for (let y = Math.min(cornerY, by); y <= Math.max(cornerY, by); y++) dig(bx, y);
+    };
+    const linked = [0];
+    const links = new Set();
+    const todo = rooms.map((_, i) => i).slice(1);
+    while (todo.length) {
+      let best = null;
+      for (const t of todo) for (const l of linked) {
+        const d = gap(rooms[t], rooms[l]);
+        if (!best || d < best.d) best = { t, l, d };
+      }
+      carve(rooms[best.l], rooms[best.t]);
+      links.add(`${Math.min(best.t, best.l)}-${Math.max(best.t, best.l)}`);
+      linked.push(best.t);
+      todo.splice(todo.indexOf(best.t), 1);
+    }
+    const spare = [];
+    for (let i = 0; i < rooms.length; i++) for (let j = i + 1; j < rooms.length; j++) if (!links.has(`${i}-${j}`)) spare.push([i, j]);
+    // 環路：再接 loops 組最近但還沒直接相連的庭院，讓路線有得選、深處不會遠到走不到
+    spare.sort((a, b) => gap(rooms[a[0]], rooms[a[1]]) - gap(rooms[b[0]], rooms[b[1]]));
+    spare.slice(0, c.loops).forEach(([i, j]) => carve(rooms[i], rooms[j]));
+
+    // 月洞門：入口庭院底牆，玩家出生點
+    const er = rooms[0];
+    const gx = ri(er.x, er.x + er.w - 1);
+    const gy = er.y + er.h;
+    grid[gy][gx] = 'G';
+
+    const run = {
+      loc, w: W, h: H, tiles: null, rooms,
+      rare: g.rare || g.table.reduce((a, b) => (b[1] < a[1] ? b : a))[0],
+      player: { x: gx, y: gy, face: 'up' },
+      items: [], guards: [],
+      maxSteps: c.steps, stepsLeft: c.steps, got: {}, picked: 0,
+      seen: new Array(W * H).fill(0), over: false, endReason: null,
+      cfg: { guardSight: c.guardSight, playerSight: c.playerSight, searchTurns: c.searchTurns, wanderKeep: c.wanderKeep, wanderIdle: c.wanderIdle },
+    };
+    const sync = () => { run.tiles = grid.map((row) => row.join('')); };
+    sync();
+    const walkCount = () => grid.reduce((s, row) => s + row.filter((t) => t === '.' || t === ',' || t === 'G').length, 0);
+    const connected = () => gatherDist(run, gx, gy).filter((d) => d >= 0).length === walkCount();
+
+    // 擺設：只放庭院內圈（不貼庭院邊緣），放完若切斷連通就拿掉
+    for (const r of rooms) {
+      const count = ri(0, 2);
+      for (let i = 0; i < count; i++) {
+        if (r.w < 3 || r.h < 3) continue;
+        const px = ri(r.x + 1, r.x + r.w - 2);
+        const py = ri(r.y + 1, r.y + r.h - 2);
+        const kind = rand();
+        const pond = kind < 0.3 && px + 1 <= r.x + r.w - 2 && py + 1 <= r.y + r.h - 2;
+        const cells = pond ? [[px, py, 'P'], [px + 1, py, 'p'], [px, py + 1, 'p'], [px + 1, py + 1, 'p']] : [[px, py, kind < 0.55 ? 'F' : kind < 0.8 ? 'R' : 'L']];
+        if (cells.some(([x, y]) => grid[y][x] !== '.')) continue;
+        cells.forEach(([x, y, t]) => { grid[y][x] = t; });
+        sync();
+        if (!connected()) { cells.forEach(([x, y]) => { grid[y][x] = '.'; }); sync(); }
+      }
+    }
+
+    // 各庭院的空地、離入口的步數
+    const dist = gatherDist(run, gx, gy);
+    const free = rooms.map((r) => {
+      const cells = [];
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (grid[y][x] === '.') cells.push([x, y]);
+      return cells;
+    });
+    const entry = free.map((cells) => Math.min(...cells.map(([x, y]) => dist[y * W + x])));
+    const take = (ri_, ok) => {
+      const pool = free[ri_].map((cell_, i) => i).filter((i) => !ok || ok(free[ri_][i]));
+      if (!pool.length) return null;
+      return free[ri_].splice(pool[Math.floor(rand() * pool.length)], 1)[0];
+    };
+    const takeAny = () => {
+      const open = free.map((cells, i) => i).filter((i) => free[i].length);
+      return open.length ? take(open[Math.floor(rand() * open.length)]) : null;
+    };
+
+    // 素材：稀有 1 個放最深的庭院，其餘每種至少 1 個，再多撒幾個常見的
+    let deep = 1;
+    for (let i = 1; i < rooms.length; i++) if (entry[i] > entry[deep]) deep = i;
+    const put = (id, cell_) => { if (cell_) run.items.push({ id, rare: id === run.rare, x: cell_[0], y: cell_[1] }); };
+    put(run.rare, take(deep));
+    const commons = g.table.filter(([id]) => id !== run.rare);
+    for (const [id] of commons) put(id, takeAny());
+    const extra = ri(c.extraItems[0], c.extraItems[1]);
+    for (let i = 0; i < extra; i++) put(weightedPick(commons, rand), takeAny());
+
+    // 侍衛：不同的非入口庭院，離玩家至少 guardMinDist 步
+    const far = ([x, y]) => dist[y * W + x] >= c.guardMinDist;
+    const posts = shuffle(rooms.map((_, i) => i).filter((i) => i > 0 && free[i].some(far)));
+    for (let i = 0; i < c.guards && posts.length; i++) {
+      const spot = take(posts[i % posts.length], far);
+      if (spot) run.guards.push({ x: spot[0], y: spot[1], face: 'down', state: 'wander', dir: null, last: null, searchLeft: 0 });
+    }
+
+    gMarkSeen(run);
+    return run;
+  }
+
+  // 生成結果是否滿足 §12.2 的不變式（重試與保底用；測試另有一份獨立的檢查）
+  function gValid(D, run) {
+    const g = D.GATHER[run.loc];
+    const c = g.dungeon;
+    const dist = gatherDist(run, run.player.x, run.player.y);
+    const at = (o) => dist[o.y * run.w + o.x];
+    let walk = 0;
+    for (let y = 0; y < run.h; y++) for (let x = 0; x < run.w; x++) if (gWalk(run, x, y)) walk++;
+    if (dist.filter((d) => d >= 0).length !== walk) return false;
+    if (g.table.some(([id]) => !run.items.some((it) => it.id === id))) return false;
+    if (run.items.filter((it) => it.rare).length !== 1) return false;
+    if (run.items.some((it) => at(it) < 0)) return false;
+    // 稀有素材要在步數預算內走得到（留一點餘裕），不然「往深處走」就不是選項
+    if (at(run.items.find((it) => it.rare)) > c.steps * c.rareReach) return false;
+    if (run.guards.length !== c.guards) return false;
+    if (run.guards.some((gd) => at(gd) < c.guardMinDist)) return false;
+    const roomOf = (o) => run.rooms.findIndex((r) => o.x >= r.x && o.x < r.x + r.w && o.y >= r.y && o.y < r.y + r.h);
+    const posts = run.guards.map(roomOf);
+    if (posts.some((p) => p <= 0) || new Set(posts).size !== posts.length) return false;
+    return true;
+  }
+
+  // 採集地下城・生成：回 run state（見 gGenerate）。不合格就用同一個 rand 重骰，
+  // 最後退回內建固定種子的保底布局（同樣要過不變式）。
+  function buildGatherDungeon(D, S, loc, rand) {
+    for (let i = 0; i < 20; i++) {
+      const run = gGenerate(D, loc, rand);
+      if (gValid(D, run)) return run;
+    }
+    for (let seed = 1; ; seed++) {
+      let s = seed * 2654435761 >>> 0;
+      const fixed = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+      const run = gGenerate(D, loc, fixed);
+      if (gValid(D, run) || seed >= 200) return run;
+    }
+  }
+
+  // 採集地下城・推進一回合。action：'n','ne','e','se','s','sw','w','nw'（走一格）、'wait'（原地等）、'quit'（收工）。
+  // 直接改 run，回傳事件清單給外殼播動畫／音效：
+  //   {t:'bump'}｜{t:'move',from,to}｜{t:'wait'}｜{t:'pick',id,rare,x,y}
+  //   {t:'gmove',g,from,to}｜{t:'alert',g}｜{t:'lost',g}｜{t:'calm',g}｜{t:'caught',g}｜{t:'timeout'}｜{t:'quit'}
+  // 順序：玩家行動 → 撿取 → 扣步、更新已探索 → 每名侍衛（抓人判定 → 感知 → 走一格）→ 步數用完。
+  function gatherStep(run, action, rand) {
+    if (run.over) return [];
+    const ev = [];
+    const p = run.player;
+    if (action === 'quit') {
+      run.over = true;
+      run.endReason = 'quit';
+      return [{ t: 'quit' }];
+    }
+    if (action === 'wait') {
+      ev.push({ t: 'wait' });
+    } else {
+      const d = G_DIRS[action];
+      if (!d) return [];
+      const [dx, dy] = d;
+      p.face = gFace(dx, dy, p.face);
+      const tx = p.x + dx;
+      const ty = p.y + dy;
+      if (!gatherCanStep(run, p.x, p.y, dx, dy) || run.guards.some((gd) => gd.x === tx && gd.y === ty)) return [{ t: 'bump' }];
+      ev.push({ t: 'move', from: { x: p.x, y: p.y }, to: { x: tx, y: ty } });
+      p.x = tx;
+      p.y = ty;
+      const i = run.items.findIndex((it) => it.x === tx && it.y === ty);
+      if (i >= 0) {
+        const [it] = run.items.splice(i, 1);
+        run.got[it.id] = (run.got[it.id] || 0) + 1;
+        run.picked++;
+        ev.push({ t: 'pick', id: it.id, rare: it.rare, x: tx, y: ty });
+      }
+    }
+    run.stepsLeft--;
+    gMarkSeen(run);
+
+    const sight = run.cfg.guardSight;
+    const spot = (gd, gi) => {
+      if (!gSees(run, gd.x, gd.y, p.x, p.y, sight)) return false;
+      if (gd.state !== 'chase') ev.push({ t: 'alert', g: gi });
+      gd.state = 'chase';
+      gd.last = { x: p.x, y: p.y };
+      return true;
+    };
+    const walkTo = (gd, gi, dx, dy) => {
+      ev.push({ t: 'gmove', g: gi, from: { x: gd.x, y: gd.y }, to: { x: gd.x + dx, y: gd.y + dy } });
+      gd.x += dx;
+      gd.y += dy;
+      gd.dir = [dx, dy];
+      gd.face = gFace(dx, dy, gd.face);
+    };
+    for (let gi = 0; gi < run.guards.length; gi++) {
+      const gd = run.guards[gi];
+      const ax = p.x - gd.x;
+      const ay = p.y - gd.y;
+      // 抓人：回合開始時能合法一步走到玩家身上
+      if (Math.max(Math.abs(ax), Math.abs(ay)) === 1 && gatherCanStep(run, gd.x, gd.y, ax, ay)) {
+        gd.face = gFace(ax, ay, gd.face);
+        run.over = true;
+        run.endReason = 'caught';
+        ev.push({ t: 'caught', g: gi });
+        return ev;
+      }
+      spot(gd, gi);
+      const taken = (x, y) => (x === p.x && y === p.y) || run.guards.some((o) => o !== gd && o.x === x && o.y === y);
+      if (gd.state === 'chase') {
+        if (gd.x === gd.last.x && gd.y === gd.last.y) {
+          // 走到最後看見的位置還是沒人 → 跟丟，原地張望
+          gd.state = 'search';
+          gd.searchLeft = run.cfg.searchTurns;
+          gd.dir = null;
+          ev.push({ t: 'lost', g: gi });
+        } else {
+          const blocked = new Set(run.guards.filter((o) => o !== gd).map((o) => o.y * run.w + o.x));
+          const dist = gatherDist(run, gd.last.x, gd.last.y, blocked);
+          let best = null;
+          for (const [dx, dy] of G_ORDER) {
+            const k = (gd.y + dy) * run.w + gd.x + dx;
+            if (!gatherCanStep(run, gd.x, gd.y, dx, dy) || dist[k] < 0 || taken(gd.x + dx, gd.y + dy)) continue;
+            if (!best || dist[k] < best.d) best = { dx, dy, d: dist[k] };
+          }
+          const here = dist[gd.y * run.w + gd.x];
+          if (best && (here < 0 || best.d < here)) walkTo(gd, gi, best.dx, best.dy);
+        }
+      } else if (gd.state === 'search') {
+        gd.face = ['down', 'left', 'up', 'right'][Math.floor(rand() * 4)];
+        if (--gd.searchLeft <= 0) { gd.state = 'wander'; ev.push({ t: 'calm', g: gi }); }
+      } else {
+        // 巡邏：多半沿原方向，否則隨機換方向，偶爾停一下
+        const open = G_ORDER.filter(([dx, dy]) => gatherCanStep(run, gd.x, gd.y, dx, dy) && !taken(gd.x + dx, gd.y + dy));
+        const keep = gd.dir && open.find(([dx, dy]) => dx === gd.dir[0] && dy === gd.dir[1]);
+        const roll = rand();
+        if (keep && roll < run.cfg.wanderKeep) walkTo(gd, gi, keep[0], keep[1]);
+        else if (open.length && rand() >= run.cfg.wanderIdle) { const [dx, dy] = open[Math.floor(rand() * open.length)]; walkTo(gd, gi, dx, dy); }
+        else gd.dir = null;
+      }
+      // 走完再看一次：剛好走進視野就立刻警戒（下一回合才抓得到人）
+      if (gd.state !== 'search' || gd.searchLeft < run.cfg.searchTurns) spot(gd, gi);
+    }
+    if (run.stepsLeft <= 0) {
+      run.over = true;
+      run.endReason = 'timeout';
+      ev.push({ t: 'timeout' });
+    }
+    return ev;
   }
 
   // 採集小遊戲・收穫套用（純函式，無 rand）：把這趟撿到的 got 加進包包、slot++、推 dayLog、回 ready。
@@ -493,7 +835,7 @@
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
     findRecipe, acceptChance,
-    buy, bribe, rejectOrder, gather, buildGatherScene, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
+    buy, bribe, rejectOrder, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof window !== 'undefined') window.GameEngine = API;

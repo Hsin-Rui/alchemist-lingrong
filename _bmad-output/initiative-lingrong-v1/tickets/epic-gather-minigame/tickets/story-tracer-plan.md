@@ -3,14 +3,14 @@ title: '御花園像素潛行地下城（tracer）'
 type: feature
 ticket: '1'
 created: '2026-11-22'
-status: ready-for-dev
-baseline_revision: ''
+status: built
+baseline_revision: '5b54bfc788de79ae543448c3e7c6ec1827c056ae'
 route: full
 route_source: pinned
 risk: high
-review: ''
-review_source: ''
-lenses_ran: []
+review: quick
+review_source: pinned
+lenses_ran: ['quick']
 review_loop_iteration: 0
 context: ['docs/game-design.md', 'docs/pixel-art-spec.md']
 ---
@@ -76,14 +76,14 @@ context: ['docs/game-design.md', 'docs/pixel-art-spec.md']
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `js/data.js`：加 `GATHER.garden.dungeon` 參數，讓規則可調並為 2.2 資料化鋪路。
-- [ ] `js/engine.js`：移除 `buildGatherScene`，實作 `buildGatherDungeon`、`gatherStep`、`gatherFov`，讓全部規則進純引擎、可 seeded 測。
-- [ ] `js/pixelart.js`：依規範 §3／§6 繪製全部御花園 sprite，這是美術本體。
-- [ ] `tools/pixel-preview.html`：做成人工驗收美術用的預覽頁。
-- [ ] `js/game.js` + `index.html`：用地下城外殼取代即時外殼，接上引擎、圖集、轉場、HUD 與輸入。
-- [ ] `js/audio.js`：加音效與場景 BGM。
-- [ ] `css/style.css`：清掉舊樣式，加上像素 HUD、方向盤與轉場樣式。
-- [ ] `tests/engine.test.js` + `tests/pixelart.test.js`：涵蓋 I/O 矩陣每一列；生成不變式跑 ≥200 個 seed；隨機策略 fuzz ≥500 局，必定在 ≤60 步內結束、不丟例外、state 可 JSON 化。
+- [x] `js/data.js`：加 `GATHER.garden.dungeon` 參數，讓規則可調並為 2.2 資料化鋪路。
+- [x] `js/engine.js`：移除 `buildGatherScene`，實作 `buildGatherDungeon`、`gatherStep`、`gatherFov`，讓全部規則進純引擎、可 seeded 測。
+- [x] `js/pixelart.js`：依規範 §3／§6 繪製全部御花園 sprite，這是美術本體。
+- [x] `tools/pixel-preview.html`：做成人工驗收美術用的預覽頁。
+- [x] `js/game.js` + `index.html`：用地下城外殼取代即時外殼，接上引擎、圖集、轉場、HUD 與輸入。
+- [x] `js/audio.js`：加音效與場景 BGM。
+- [x] `css/style.css`：清掉舊樣式，加上像素 HUD、方向盤與轉場樣式。
+- [x] `tests/engine.test.js` + `tests/pixelart.test.js`：涵蓋 I/O 矩陣每一列；生成不變式跑 ≥200 個 seed；隨機策略 fuzz ≥500 局，必定在 ≤60 步內結束、不丟例外、state 可 JSON 化。
 
 **Acceptance Criteria:**
 - Given 瀏覽器開御花園，when 點入口，then 經百葉加馬賽克轉場進入像素地下城並換 BGM；結束後反向轉場回結果 sheet。
@@ -96,11 +96,37 @@ context: ['docs/game-design.md', 'docs/pixel-art-spec.md']
 
 ## Implementation Notes
 
+- 沒有另開實作 subagent，由主 session 直接照 plan 實作。
+- 引擎：`buildGatherDungeon`／`gatherStep(run, action, rand)`／`gatherFov`，另匯出 `gatherCanStep`、`gatherDist` 給測試用。生成用 2 欄 × 4 列的區塊放庭院（入口在最下列、上半部至少 2 個庭院，確保侍衛離入口夠遠）。
+- 規格外加的兩條生成規則（已補進 game-design §12.5 與 `GATHER.garden.dungeon`）：環路走廊 `loops: 2`（Design Notes 原本寫 1 條）、稀有素材離入口不超過步數上限的 `rareReach: 0.7`（42 步）。原因：只有 1 條環路時，稀有素材的距離中位數 37 步、最遠 65 步（走不到）；改完後中位數 34、最遠 42。
+- 侍衛走完一格後會再看一次，剛好走進視野就立刻警戒（但仍要到下一回合才抓得到人）。
+- 外殼：像素資料掛在 `window.PIXEL_ART`（比照 `GAME_DATA` 的命名）；沒載到時 `enterGather` 會退回舊的快速採集。按住連走的第一次間隔是 260ms（之後 150ms），避免一按走兩步。最後 15 步畫面會慢慢變暗。
+- 小螢幕放不下 2 倍的 11×13 格時，維持 2 倍、少顯示幾格（320×568 實測是 10×9 格），不做非整數縮放。
+- 繪製順序調整過（`docs/pixel-art-spec.md` §2 已同步）：侍衛視野色畫在地上、不蓋到角色；看得到的 sprite 在迷霧之後才畫，角色的頭和假山不會被上一格的迷霧切掉。
+- 驗證：`node --test tests/` 54 項全過（回歸網 20/20）；headless Chrome 實跑進場、鍵盤與方向盤移動、撿取、收工、步數用完、被抓（把侍衛強制放到玩家旁邊）、320×568 小螢幕，console 無錯誤。
+- 難度參考（機器人直奔最近素材、完全不躲侍衛，400 趟）：被抓 91%、平均撿 3.5 個、拿到稀有 8%。真人會躲，實際難度要等試玩。
+
 ## Plan Change Log
 
 - 2026-11-22（人工重新協商）：整份 plan 重寫。舊版（即時閃避 tracer，status `built`，commit `33afa90`，review 已處理長寬比問題）被取代。KEEP：引擎／外殼分工、`enter`/`leavegather` action 與回歸網安全作法、`applyGatherHaul`、結果 sheet＋`finishAction` 路由、禁足守衛。DROP：`buildGatherScene`、即時 rAF 位移、搖桿、30 秒倒數、aspect 校正、`.pf-*` 樣式、「不引入 canvas」的限制。
 
 ## Review Triage Log
+
+### Pass 1（quick lens，2026-11-22）
+
+Verdicts: high 0｜medium 3｜low 7｜false 1｜maybe-false 0。無 intent_gap／bad_plan，不 loopback；patch 由主 session 直接修（沒有實作 subagent 可交回）。
+
+- **medium／patch — 小螢幕用非整數倍縮放**（`js/game.js` `fitDungeon`）。確認：放不下 2 倍時用了小數倍率，違反「整數倍放大」；一般手機瀏覽器可視高度就會遇到。→ 改成固定整數倍、最小 2 倍，放不下就少顯示幾格。
+- **medium／patch — 視線不對稱，看不到的侍衛會發現玩家**（`js/engine.js` `gSees`）。確認：Bresenham 兩個方向經過的格子不同。→ 兩個方向都試，視線對稱；加對稱性測試（牆角案例＋100 張地圖）。
+- **medium／patch — 高的 sprite 被上一格的迷霧切掉**（`js/game.js` `drawDungeon`）。確認：迷霧在所有 sprite 之後畫。→ 記憶中的 sprite 先畫、蓋迷霧、再畫看得到的 sprite。
+- **low／patch — 「？」氣泡幾乎看不到**。確認：只畫在看得到的侍衛頭上，而跟丟時通常看不到侍衛。→ 氣泡改成不管看不看得到侍衛都畫（浮在迷霧裡）。
+- **low／patch — 調校數值寫死在引擎**。部分確認：§12.5 的值都從資料讀；但巡邏停頓機率、環路數、稀有距離上限是寫死的調校值。→ 搬到 `GATHER.garden.dungeon`（`wanderIdle`、`loops`、`rareReach`）並補進 §12.5。區塊格局、庭院尺寸、擺設比例屬演算法結構，不搬。
+- **low／patch — 按鍵沒排除組合鍵**（Cmd/Ctrl+C 等會被當成移動）。→ 有 ctrl/meta/alt 時不處理。
+- **low／patch — mp3 載入失敗若發生在地下城內，主旋律會疊在場景曲上**（`js/audio.js`）。→ 在地下城內只記下來，出場再播。
+- **low／patch — 轉場時間小偏差**：「！」氣泡 900ms（規範 0.6 秒）、偶數百葉延遲 40ms 被提早切掉。→ 氣泡改 600ms、拿掉延遲。
+- **low／回報使用者 — 本次 diff 改了 `docs/pixel-art-spec.md` 的繪製順序與放大規則**。屬實；是實作後發現原順序會讓紅色視野蓋到角色、迷霧切到頭。已在 Implementation Notes 記錄，並在完成報告請使用者確認。
+- **low／reject — 保底布局在第 200 個種子仍可能回傳未驗證的地圖**。屬實但實務上到不了（200 個 seed 與恆 0／0.5／0.999 的 rand 都一次過）；要保證得另外手工做一張固定地圖，修法超過直接修正，依規則不修。
+- **false — 全域名稱是 `PIXEL_ART` 不是 `PIXEL`**。檔內常數就是 `PIXEL`；掛到 window 的名稱比照 `GAME_DATA`，三處使用一致、沒有東西壞掉，修法只會是改 plan 的用字。
 
 ## Design Notes
 
