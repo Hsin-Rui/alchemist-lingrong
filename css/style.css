@@ -445,6 +445,8 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .dg-stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
 .dg-canvas { image-rendering: pixelated; image-rendering: crisp-edges; display: block; box-shadow: 0 0 0 2px #fbf7ef, 0 0 0 3px #0d0a14; }
 .dg-confirm { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(280px, 86%); padding: 14px; text-align: center; z-index: 2; }
+.dg-note { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); padding: 6px 12px; font-size: 14px; font-weight: 700; white-space: nowrap; z-index: 2; pointer-events: none; }
+.dg-note[hidden] { display: none; }
 .dg-confirm p { margin: 0 0 12px; line-height: 1.6; }
 .dg-confirm div { display: flex; gap: 10px; justify-content: center; }
 .dg-confirm[hidden] { display: none; }

@@ -408,7 +408,7 @@
   }
 
   // 生成一張地下城（一次嘗試）。格局：2 欄 × 4 列的區塊，每個選中的區塊放一個庭院，
-  // 入口庭院在最下列、上半部至少 2 個庭院（確保侍衛離入口夠遠），再用 L 形走廊串成樹＋1 條環路。
+  // 入口庭院在最下列、上半部至少 2 個庭院（地圖有縱深），再用 L 形走廊串成樹＋1 條環路。
   function gGenerate(D, loc, rand) {
     const g = D.GATHER[loc];
     const c = g.dungeon;
@@ -495,7 +495,7 @@
       items: [], guards: [],
       maxSteps: c.steps, stepsLeft: c.steps, got: {}, picked: 0,
       seen: new Array(W * H).fill(0), over: false, endReason: null,
-      cfg: { guardSight: c.guardSight, playerSight: c.playerSight, searchTurns: c.searchTurns, wanderKeep: c.wanderKeep, wanderIdle: c.wanderIdle },
+      cfg: { guardSight: c.guardSight, playerSight: c.playerSight, searchTurns: c.searchTurns, wanderKeep: c.wanderKeep, wanderIdle: c.wanderIdle, guardSpawns: Array.from(c.guardSpawns, (sp) => ({ ...sp })) },
     };
     const sync = () => { run.tiles = grid.map((row) => row.join('')); };
     sync();
@@ -537,24 +537,19 @@
       return open.length ? take(open[Math.floor(rand() * open.length)]) : null;
     };
 
-    // 素材：稀有 1 個放最深的庭院，其餘每種至少 1 個，再多撒幾個常見的
-    let deep = 1;
-    for (let i = 1; i < rooms.length; i++) if (entry[i] > entry[deep]) deep = i;
+    // 素材：出生點附近先保證 1 個常見素材；稀有放最深的幾個庭院（一間一個）；
+    // 其餘每種至少 1 個，再多撒幾個常見的
     const put = (id, cell_) => { if (cell_) run.items.push({ id, rare: id === run.rare, x: cell_[0], y: cell_[1] }); };
-    put(run.rare, take(deep));
     const commons = g.table.filter(([id]) => id !== run.rare);
+    const near = ([x, y]) => { const d = dist[y * W + x]; return d >= 1 && d <= c.nearItem; };
+    put(weightedPick(commons, rand), take(0, near));
+    const depth = rooms.map((_, i) => i).slice(1).sort((a, b) => entry[b] - entry[a]);
+    for (let i = 0; i < c.rareCount; i++) put(run.rare, take(depth[i % depth.length]));
     for (const [id] of commons) put(id, takeAny());
     const extra = ri(c.extraItems[0], c.extraItems[1]);
     for (let i = 0; i < extra; i++) put(weightedPick(commons, rand), takeAny());
 
-    // 侍衛：不同的非入口庭院，離玩家至少 guardMinDist 步
-    const far = ([x, y]) => dist[y * W + x] >= c.guardMinDist;
-    const posts = shuffle(rooms.map((_, i) => i).filter((i) => i > 0 && free[i].some(far)));
-    for (let i = 0; i < c.guards && posts.length; i++) {
-      const spot = take(posts[i % posts.length], far);
-      if (spot) run.guards.push({ x: spot[0], y: spot[1], face: 'down', state: 'wander', dir: null, last: null, searchLeft: 0 });
-    }
-
+    // 侍衛不在這裡生成：走滿指定步數後才由 gatherStep 放進場（見 gSpawnCell）
     gMarkSeen(run);
     return run;
   }
@@ -569,15 +564,11 @@
     for (let y = 0; y < run.h; y++) for (let x = 0; x < run.w; x++) if (gWalk(run, x, y)) walk++;
     if (dist.filter((d) => d >= 0).length !== walk) return false;
     if (g.table.some(([id]) => !run.items.some((it) => it.id === id))) return false;
-    if (run.items.filter((it) => it.rare).length !== 1) return false;
+    if (run.items.filter((it) => it.rare).length !== c.rareCount) return false;
     if (run.items.some((it) => at(it) < 0)) return false;
-    // 稀有素材要在步數預算內走得到（留一點餘裕），不然「往深處走」就不是選項
-    if (at(run.items.find((it) => it.rare)) > c.steps * c.rareReach) return false;
-    if (run.guards.length !== c.guards) return false;
-    if (run.guards.some((gd) => at(gd) < c.guardMinDist)) return false;
-    const roomOf = (o) => run.rooms.findIndex((r) => o.x >= r.x && o.x < r.x + r.w && o.y >= r.y && o.y < r.y + r.h);
-    const posts = run.guards.map(roomOf);
-    if (posts.some((p) => p <= 0) || new Set(posts).size !== posts.length) return false;
+    // 出生點附近要有素材；稀有素材要在步數預算內走得到（留一點餘裕），不然「往深處走」就不是選項
+    if (!run.items.some((it) => at(it) >= 1 && at(it) <= c.nearItem)) return false;
+    if (run.items.some((it) => it.rare && at(it) > c.steps * c.rareReach)) return false;
     return true;
   }
 
@@ -596,11 +587,33 @@
     }
   }
 
+  // 幫新登場的侍衛挑位置：離玩家至少 minDist 格（直線格數，所以走路也至少這麼遠）、走得到玩家。
+  // 優先挑不超過 maxDist 且玩家當下看不到的格子（不要憑空冒在眼前、也不要遠到整趟遇不到），挑不到再放寬。
+  function gSpawnCell(run, spec, rand) {
+    const p = run.player;
+    const dist = gatherDist(run, p.x, p.y);
+    const inView = new Set(gatherFov(run, p.x, p.y, run.cfg.playerSight));
+    const far = [];
+    const ok = [];
+    const best = [];
+    for (let y = 0; y < run.h; y++) for (let x = 0; x < run.w; x++) {
+      const k = y * run.w + x;
+      const d = Math.max(Math.abs(x - p.x), Math.abs(y - p.y));
+      if (dist[k] < 0 || d < spec.minDist || run.guards.some((gd) => gd.x === x && gd.y === y)) continue;
+      far.push([x, y]);
+      if (spec.maxDist && d > spec.maxDist) continue;
+      ok.push([x, y]);
+      if (!inView.has(k)) best.push([x, y]);
+    }
+    const pool = best.length ? best : ok.length ? ok : far;
+    return pool.length ? pool[Math.floor(rand() * pool.length)] : null;
+  }
+
   // 採集地下城・推進一回合。action：'n','ne','e','se','s','sw','w','nw'（走一格）、'wait'（原地等）、'quit'（收工）。
   // 直接改 run，回傳事件清單給外殼播動畫／音效：
   //   {t:'bump'}｜{t:'move',from,to}｜{t:'wait'}｜{t:'pick',id,rare,x,y}
-  //   {t:'gmove',g,from,to}｜{t:'alert',g}｜{t:'lost',g}｜{t:'calm',g}｜{t:'caught',g}｜{t:'timeout'}｜{t:'quit'}
-  // 順序：玩家行動 → 撿取 → 扣步、更新已探索 → 每名侍衛（抓人判定 → 感知 → 走一格）→ 步數用完。
+  //   {t:'spawn',g,x,y}｜{t:'gmove',g,from,to}｜{t:'alert',g}｜{t:'lost',g}｜{t:'calm',g}｜{t:'caught',g}｜{t:'timeout'}｜{t:'quit'}
+  // 順序：玩家行動 → 撿取 → 扣步、更新已探索 → 每名侍衛（抓人判定 → 感知 → 走一格）→ 新侍衛登場 → 步數用完。
   function gatherStep(run, action, rand) {
     if (run.over) return [];
     const ev = [];
@@ -696,6 +709,14 @@
       }
       // 走完再看一次：剛好走進視野就立刻警戒（下一回合才抓得到人）
       if (gd.state !== 'search' || gd.searchLeft < run.cfg.searchTurns) spot(gd, gi);
+    }
+    // 侍衛登場：走滿指定步數後，出現在離玩家當下位置夠遠的地方（登場那回合不行動）
+    const spawns = run.cfg.guardSpawns || [];
+    while (run.guards.length < spawns.length && run.maxSteps - run.stepsLeft >= spawns[run.guards.length].step) {
+      const cell_ = gSpawnCell(run, spawns[run.guards.length], rand);
+      if (!cell_) break;
+      run.guards.push({ x: cell_[0], y: cell_[1], face: 'down', state: 'wander', dir: null, last: null, searchLeft: 0 });
+      ev.push({ t: 'spawn', g: run.guards.length - 1, x: cell_[0], y: cell_[1] });
     }
     if (run.stepsLeft <= 0) {
       run.over = true;

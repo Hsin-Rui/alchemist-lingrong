@@ -374,7 +374,7 @@
 
   function grabDungeonEls(gs) {
     const q = (sel) => app.querySelector(sel);
-    gs.el = { root: q('.dg'), stage: q('.dg-stage'), canvas: q('.dg-canvas'), steps: q('.dg-steps b'), sun: q('.dg-sun'), got: q('.dg-got'), confirm: q('.dg-confirm') };
+    gs.el = { root: q('.dg'), stage: q('.dg-stage'), canvas: q('.dg-canvas'), steps: q('.dg-steps b'), sun: q('.dg-sun'), got: q('.dg-got'), confirm: q('.dg-confirm'), note: q('.dg-note') };
     gs.ctx = gs.el.canvas.getContext('2d');
     fitDungeon(gs);
     updateDungeonHud(gs);
@@ -388,9 +388,10 @@
     const scale = Math.max(2, Math.floor(Math.min(sw / (VIEW_W * TILE), sh / (VIEW_H * TILE))));
     const cols = Math.max(5, Math.min(VIEW_W, Math.floor(sw / (TILE * scale))));
     const rows = Math.max(5, Math.min(VIEW_H, Math.floor(sh / (TILE * scale))));
-    if (canvas.width !== cols * TILE || canvas.height !== rows * TILE) {
-      canvas.width = gs.buf.width = cols * TILE;
-      canvas.height = gs.buf.height = rows * TILE;
+    // 離屏緩衝和畫面上的 canvas 一定要同尺寸：鏡頭是用緩衝的寬高算的，兩者不一致時零溶會被算到畫面外
+    for (const cv of [canvas, gs.buf]) {
+      if (cv.width !== cols * TILE) cv.width = cols * TILE;
+      if (cv.height !== rows * TILE) cv.height = rows * TILE;
     }
     canvas.style.width = `${canvas.width * scale}px`;
     canvas.style.height = `${canvas.height * scale}px`;
@@ -453,6 +454,7 @@
   function stopGatherRuntime(gs) {
     if (!gs) return;
     if (gs.raf) cancelAnimationFrame(gs.raf);
+    clearTimeout(gs.noteTimer);
     document.removeEventListener('keydown', gs.onKeyDown);
     document.removeEventListener('keyup', gs.onKeyUp);
     app.removeEventListener('pointerdown', gs.onPadDown);
@@ -460,6 +462,17 @@
     document.removeEventListener('pointercancel', gs.onPadUp);
     window.removeEventListener('blur', gs.onBlur);
     window.removeEventListener('resize', gs.onResize);
+  }
+
+  // 畫面上方的短提示（侍衛登場等）
+  function dungeonNote(text) {
+    const gs = gatherScene;
+    const el = gs && gs.el.note;
+    if (!el) return;
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(gs.noteTimer);
+    gs.noteTimer = setTimeout(() => { el.hidden = true; }, 1800);
   }
 
   function toggleDungeonConfirm(show) {
@@ -486,6 +499,7 @@
         case 'move': anim.p = ev.from; A.sfx('step'); break;
         case 'pick': gs.fx.push({ x: ev.x, y: ev.y, t0: now + STEP_MS * 0.6 }); A.sfx(ev.rare ? 'pickRare' : 'pick'); break;
         case 'gmove': anim.g[ev.g] = ev.from; break;
+        case 'spawn': dungeonNote(ev.g === 0 ? '侍衛進園巡邏了！' : '又來了一名侍衛！'); A.sfx('guardIn'); break;
         case 'alert': gs.bubbles[ev.g] = { id: 'bubble_alert', until: now + 600 }; A.sfx('alert'); break;
         case 'lost': gs.bubbles[ev.g] = { id: 'bubble_lost', until: now + 1400 }; A.sfx('lost'); break;
         case 'caught':
@@ -550,12 +564,13 @@
       ? { x: Math.round((from.x + (o.x - from.x) * p) * TILE), y: Math.round((from.y + (o.y - from.y) * p) * TILE) }
       : { x: o.x * TILE, y: o.y * TILE });
     const me = at(run.player, gs.anim && gs.anim.p);
-    const camX = Math.max(0, Math.min(run.w * TILE - BUF_W, me.x + TILE / 2 - BUF_W / 2));
-    const camY = Math.max(0, Math.min(run.h * TILE - BUF_H, me.y + TILE / 2 - BUF_H / 2));
-    const x0 = Math.floor(camX / TILE);
-    const y0 = Math.floor(camY / TILE);
-    const x1 = Math.min(run.w - 1, x0 + BUF_W / TILE);
-    const y1 = Math.min(run.h - 1, y0 + BUF_H / TILE);
+    // 鏡頭永遠把零溶放在畫面正中央（走到地圖邊緣也一樣，地圖外就是黑的）
+    const camX = me.x + TILE / 2 - BUF_W / 2;
+    const camY = me.y + TILE / 2 - BUF_H / 2;
+    const x0 = Math.max(0, Math.floor(camX / TILE));
+    const y0 = Math.max(0, Math.floor(camY / TILE));
+    const x1 = Math.min(run.w - 1, Math.floor((camX + BUF_W) / TILE));
+    const y1 = Math.min(run.h - 1, Math.floor((camY + BUF_H) / TILE));
     const tick = Math.floor(now / 500) % 2; // 2Hz 待機動畫
     const hash = (x, y) => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 8;
     const put = (id, x, y) => b.drawImage(atlas[id], x - camX, y - camY);
@@ -1244,6 +1259,7 @@
       </div>
       <div class="dg-stage">
         <canvas class="dg-canvas" width="${VIEW_W * TILE}" height="${VIEW_H * TILE}"></canvas>
+        <div class="dg-note snes" hidden></div>
         <div class="dg-confirm snes" ${gs.confirm ? '' : 'hidden'}>
           <p>現在收工嗎？撿到的都會帶走。</p>
           <div><button data-a="leavegather">收工</button><button data-a="dgstay">繼續採</button></div>

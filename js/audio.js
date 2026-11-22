@@ -100,6 +100,7 @@ window.GameAudio = (() => {
     lost() { const t = ctx.currentTime; blip(659, t, 0.09, 0.09); blip(523, t + 0.13, 0.18, 0.09); },
     caught() { const t = ctx.currentTime; [784, 622, 494, 370, 262].forEach((f, i) => blip(f, t + i * 0.09, 0.14, 0.14, 'sawtooth')); noise(t, 0.2, 0.3, 500); },
     timeout() { const t = ctx.currentTime; [98, 147, 196].forEach((f) => pluck(f, t, 2, 0.25, 'sine')); blip(392, t, 0.3, 0.06); },
+    guardIn() { const t = ctx.currentTime; blip(196, t, 0.12, 0.12); blip(147, t + 0.14, 0.22, 0.12); },
     enterDungeon() { const t = ctx.currentTime; [262, 330, 392, 523, 659].forEach((f, i) => blip(f, t + i * 0.06, 0.09, 0.1)); },
     exitDungeon() { const t = ctx.currentTime; [659, 523, 392, 330, 262].forEach((f, i) => blip(f, t + i * 0.06, 0.09, 0.1)); },
     gong() { const t = ctx.currentTime; [98, 147, 196].forEach((f) => pluck(f, t, 2.5, 0.25, 'sine')); },

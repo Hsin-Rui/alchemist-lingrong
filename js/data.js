@@ -43,9 +43,12 @@ window.GAME_DATA = (() => {
       intro: '零溶提著小籃子，假裝在御花園賞花……',
       // 採集地下城參數（game-design §12.5）。引擎一律從這裡讀，不寫死。
       dungeon: {
-        w: 25, h: 31, rooms: [5, 7], steps: 60, guards: 2,
-        guardSight: 4.5, playerSight: 5.5, extraItems: [4, 6],
-        guardMinDist: 8, searchTurns: 3, wanderKeep: 0.7, wanderIdle: 0.1,
+        w: 25, h: 31, rooms: [5, 7], steps: 60,
+        guardSight: 4.5, playerSight: 5.5,
+        // 侍衛不是一開始就在場：走滿 step 步後登場，離零溶當下位置至少 minDist 格、盡量不超過 maxDist 格
+        guardSpawns: [{ step: 10, minDist: 8, maxDist: 14 }, { step: 30, minDist: 5, maxDist: 11 }],
+        rareCount: 2, extraItems: [7, 9], nearItem: 4, // 出生點 nearItem 格內保證有 1 個素材
+        searchTurns: 3, wanderKeep: 0.7, wanderIdle: 0.1,
         loops: 2, rareReach: 0.7,
       },
     },

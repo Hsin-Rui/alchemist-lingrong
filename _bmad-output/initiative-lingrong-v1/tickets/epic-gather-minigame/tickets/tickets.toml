@@ -5,7 +5,7 @@
 id = 1
 type = "story"
 title = "御花園像素潛行地下城（tracer）"
-description = "（2026-11-22 改方向，取代第一版即時閃避外殼）點『御花園』轉場進入超任像素風的回合制隨機地下城：25×31 格、5～7 個庭院＋走廊、迷霧與視野；零溶 8 方向一次一格（不可斜切牆角）、可原地等，踩到素材自動撿；2 名侍衛隨機出生、巡邏／發現（！）／追擊／跟丟（？）、侍衛回合能一步走到零溶即被抓；60 步用完、被抓或收工結束，收穫全保留、花 1 時辰。電腦 W/A/D/X＋方向鍵、Q/E/Z/C、S 等、Esc 收工；手機 3×3 方向盤。引擎純函式：buildGatherDungeon／gatherStep／gatherFov＋沿用 applyGatherHaul；外殼 canvas 繪製、補間、轉場、音效與 8-bit BGM。像素美術全套依 docs/pixel-art-spec.md 以 js/pixelart.js 內嵌資料製作，附 tools/pixel-preview.html。"
+description = "（2026-11-22 改方向，取代第一版即時閃避外殼）點『御花園』轉場進入超任像素風的回合制隨機地下城：25×31 格、5～7 個庭院＋走廊、迷霧與視野；零溶 8 方向一次一格（不可斜切牆角）、可原地等，踩到素材自動撿；2 名侍衛陸續登場（第 10 步／第 30 步，離零溶 ≥8／≥5 格）、巡邏／發現（！）／追擊／跟丟（？）、侍衛回合能一步走到零溶即被抓；60 步用完、被抓或收工結束，收穫全保留、花 1 時辰。電腦 W/A/D/X＋方向鍵、Q/E/Z/C、S 等、Esc 收工；手機 3×3 方向盤。引擎純函式：buildGatherDungeon／gatherStep／gatherFov＋沿用 applyGatherHaul；外殼 canvas 繪製、補間、轉場、音效與 8-bit BGM。像素美術全套依 docs/pixel-art-spec.md 以 js/pixelart.js 內嵌資料製作，附 tools/pixel-preview.html。"
 verify = "瀏覽器實玩御花園：轉場進出明顯、地圖每次不同、能 8 方向走與等、撿素材、侍衛會發現並追擊、被抓／60 步／收工皆正確結束且收穫進包包、花 1 時辰；像素圖 1 倍可辨識、整數倍銳利；node --test 生成不變式（多 seed）、回合規則、侍衛 AI、像素資料格式全通過；既有回歸網一輪 10 天仍 20/20、0 錯誤。"
 covers = ["R3"]
 after = ["epic-engine-refactor"]

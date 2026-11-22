@@ -518,33 +518,33 @@ function assertDungeon(run, label) {
   for (let y = 0; y < run.h; y++) for (let x = 0; x < run.w; x++) if (WALK.includes(run.tiles[y][x])) walk++;
   assert.strictEqual(dist.filter((d) => d >= 0).length, walk, `${label} 全圖連通`);
   assert.strictEqual(run.tiles[run.player.y][run.player.x], 'G', `${label} 出生在月洞門`);
-  // 素材：每種 ≥1、總數 8～10、稀有正好 1 個、都在可走格且互不重疊
+  // 素材：每種 ≥1、稀有正好 rareCount 個、總數＝1（出生點旁）＋稀有＋常見各 1＋額外，都走得到且互不重疊
   const ids = run.items.map((it) => it.id);
   for (const [id] of D.GATHER.garden.table) assert.ok(ids.includes(id), `${label} ${id} 至少 1 個`);
-  assert.ok(run.items.length >= 8 && run.items.length <= 10, `${label} 素材總數 ${run.items.length}`);
+  const base = 1 + DG.rareCount + (D.GATHER.garden.table.length - 1);
+  assert.ok(run.items.length >= base + DG.extraItems[0] && run.items.length <= base + DG.extraItems[1], `${label} 素材總數 ${run.items.length}`);
   const rares = run.items.filter((it) => it.rare);
-  assert.strictEqual(rares.length, 1, `${label} 稀有正好 1 個`);
-  assert.strictEqual(rares[0].id, 'itch');
-  assert.strictEqual(ids.filter((id) => id === 'itch').length, 1);
+  assert.strictEqual(rares.length, DG.rareCount, `${label} 稀有 ${DG.rareCount} 個`);
+  assert.ok(rares.every((it) => it.id === 'itch'));
+  assert.strictEqual(ids.filter((id) => id === 'itch').length, DG.rareCount);
   assert.strictEqual(new Set(run.items.map((it) => `${it.x},${it.y}`)).size, run.items.length, `${label} 素材不重疊`);
   for (const it of run.items) assert.ok(dist[it.y * run.w + it.x] > 0, `${label} 素材走得到`);
-  // 稀有在離入口最遠的庭院（庭院距離＝進到該庭院任一格的最少步數）
+  // 出生點 nearItem 步內至少有 1 個素材
+  assert.ok(run.items.some((it) => dist[it.y * run.w + it.x] <= DG.nearItem), `${label} 出生點 ${DG.nearItem} 格內有素材`);
+  // 稀有放在離入口最遠的幾個庭院、一間一個，而且在步數預算內走得到
   const entry = run.rooms.map((r) => {
     let best = Infinity;
     for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const d = dist[y * run.w + x]; if (d >= 0 && d < best) best = d; }
     return best;
   });
-  const deepest = Math.max(...entry.slice(1));
-  assert.strictEqual(entry[roomOf(run, rares[0])], deepest, `${label} 稀有在最深的庭院`);
-  // 侍衛：2 名、不同的非入口庭院、離玩家 ≥8 步
-  assert.strictEqual(run.guards.length, DG.guards, `${label} 侍衛數`);
-  const posts = run.guards.map((gd) => roomOf(run, gd));
-  assert.ok(posts.every((p) => p > 0), `${label} 侍衛不在入口庭院`);
-  assert.strictEqual(new Set(posts).size, posts.length, `${label} 侍衛在不同庭院`);
-  for (const gd of run.guards) assert.ok(dist[gd.y * run.w + gd.x] >= DG.guardMinDist, `${label} 侍衛離玩家 ≥${DG.guardMinDist} 步`);
+  const deepest = entry.slice(1).sort((a, b) => b - a).slice(0, DG.rareCount);
+  assert.deepStrictEqual(rares.map((it) => entry[roomOf(run, it)]).sort((a, b) => b - a), deepest, `${label} 稀有在最深的庭院`);
+  for (const it of rares) assert.ok(dist[it.y * run.w + it.x] <= DG.steps * DG.rareReach, `${label} 稀有走得到`);
+  // 侍衛一開始不在場
+  assert.strictEqual(run.guards.length, 0, `${label} 開場沒有侍衛`);
 }
 
-test('buildGatherDungeon：200 個 seed 都滿足生成不變式（連通、素材、稀有最深、侍衛距離）', () => {
+test('buildGatherDungeon：200 個 seed 都滿足生成不變式（連通、素材、出生點旁有素材、稀有最深、開場無侍衛）', () => {
   for (let seed = 1; seed <= 200; seed++) assertDungeon(E.buildGatherDungeon(D, fresh(), 'garden', lcg(seed)), `seed ${seed}`);
 });
 
@@ -752,6 +752,34 @@ test('gatherFov：樹籬擋視線（牆面本身看得到、牆後看不到）�
   const open = mini(['##########', '#Z.......#', '##########']);
   const far = new Set(E.gatherFov(open, 1, 1, 5.5));
   assert.ok(far.has(1 * open.w + 6) && !far.has(1 * open.w + 7), '半徑 5.5 → 看到 5 格外、看不到 6 格外');
+});
+
+test('侍衛登場：前 10 步不在場；走滿 10 步來第一名（離玩家 ≥8 格）、走滿 30 步來第二名（≥5 格），登場那回合不行動', () => {
+  const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  const [first, second] = DG.guardSpawns;
+  assert.deepStrictEqual([first.step, first.minDist, second.step, second.minDist], [10, 8, 30, 5]);
+  for (let seed = 1; seed <= 100; seed++) {
+    const rand = lcg(seed * 11 + 2);
+    const run = E.buildGatherDungeon(D, fresh(), 'garden', rand);
+    const acts = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw', 'wait'];
+    const seenSpawns = [];
+    while (!run.over) {
+      const ev = E.gatherStep(run, acts[Math.floor(rand() * acts.length)], rand);
+      const taken = run.maxSteps - run.stepsLeft;
+      for (const e of ev.filter((x) => x.t === 'spawn')) {
+        const spec = DG.guardSpawns[e.g];
+        assert.strictEqual(taken, spec.step, `seed ${seed} 第 ${e.g + 1} 名在第 ${spec.step} 步登場`);
+        assert.ok(cheb(e, run.player) >= spec.minDist, `seed ${seed} 第 ${e.g + 1} 名離玩家 ≥${spec.minDist} 格`);
+        assert.ok(E.gatherDist(run, run.player.x, run.player.y)[e.y * run.w + e.x] >= spec.minDist, '走路距離也至少這麼遠');
+        assert.deepStrictEqual([run.guards[e.g].x, run.guards[e.g].y], [e.x, e.y], '登場那回合不行動');
+        assert.ok(!ev.some((x) => x.t === 'gmove' && x.g === e.g));
+        seenSpawns.push(e.g);
+      }
+      if (taken < first.step) assert.strictEqual(run.guards.length, 0, `seed ${seed} 前 ${first.step} 步沒有侍衛`);
+      else if (taken < second.step && !run.over) assert.strictEqual(run.guards.length, 1, `seed ${seed} 第 ${second.step} 步前只有 1 名`);
+    }
+    if (run.endReason === 'timeout') assert.deepStrictEqual(seenSpawns, [0, 1], `seed ${seed} 走完 60 步兩名都登場過`);
+  }
 });
 
 test('視線是對稱的：侍衛看得到玩家 ⇔ 玩家看得到侍衛（同半徑；含牆角的不對稱案例與 100 張隨機地圖）', () => {
