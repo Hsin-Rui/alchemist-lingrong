@@ -156,7 +156,7 @@
   }
 
   // 手上有好幾個同樣的成品時，用最新做好的那個
-  const readyItem = (o) => S.hand.filter((h) => h.product === o.product).pop();
+  const readyItem = (o) => E.readyItem(S, o);
   const recipeOk = (pid) => D.PRODUCTS[pid].recipe.every((id) => have(id) >= 1);
   const daysLeft = (o) => o.due - S.day + 1;
 
@@ -1001,7 +1001,15 @@
       const result = a && b ? E.findRecipe(D, a, b) : null;
       const toInv = result && D.PRODUCTS[result].out === 'inv';
       const preview = a && b ? (result ? `→ ${itemName(result)}` : '→ ？？？（好像不太對）') : '放入兩樣素材';
-      const mats = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat');
+      const owned = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat');
+      // 配方只差一樣時，把缺的那樣也列出來（停用、標出哪裡有）：例如有紅花瓣沒烈酒，玩家才知道要去小舖買烈酒
+      const missing = [];
+      Object.values(D.PRODUCTS).forEach((p) => {
+        if (!p.recipe) return;
+        const lack = p.recipe.filter((id) => !have(id));
+        if (lack.length === 1 && !missing.includes(lack[0])) missing.push(lack[0]);
+      });
+      const mats = [...owned, ...missing];
       const spikes = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === 'spike');
       const matDef = craftSel.mats.length < 2 ? mats.find((id) => avail(id) > 0) : null;
       const spikeRow = (id) => {
@@ -1045,7 +1053,9 @@
           </div>
           <div class="drawer">
             <h3>素材 <small>點一下放進鍋裡</small></h3>
-            <div class="matgrid">${mats.length ? mats.map((id) => `<button class="mat" data-a="mat" data-v="${id}"${DEF(id === matDef)} ${avail(id) <= 0 || craftSel.mats.length >= 2 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}</small></button>`).join('') : '<p class="muted">沒有素材，先去採集或小舖吧。</p>'}</div>
+            <div class="matgrid">${mats.length ? mats.map((id) => (have(id)
+              ? `<button class="mat" data-a="mat" data-v="${id}"${DEF(id === matDef)} ${avail(id) <= 0 || craftSel.mats.length >= 2 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}</small></button>`
+              : `<button class="mat lack" data-a="mat" data-v="${id}" disabled>${tok(id)}<span>${itemName(id)}</span><small>缺・${locName(sourcesOf(id)[0].loc)}</small></button>`)).join('') : '<p class="muted">沒有素材，先去採集或小舖吧。</p>'}</div>
             <h3>要加什麼料？ ${who ? `<small>依${charName(who)}目前狀態預測</small>` : ''}</h3>
             ${toInv ? '<p class="muted">正在煉製紅花，不能再加料。</p>' : ''}
             <div class="slist">
