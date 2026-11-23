@@ -948,3 +948,36 @@ test('predict：純函式，risk 與 catchChance 一致、不改狀態', () => {
   const S2 = fresh();
   assert.strictEqual(E.predict(D, S2, 'huafei', 'musk', 'gift').cls, 'bad');
 });
+
+// ───────── 兩人要同一樣成品：成品綁訂單 ─────────
+test('craft／readyItem／deliver：替乙加料的成品不會出現在甲的訂單上，也不會被送給甲', () => {
+  const S = fresh();
+  S.inv = { sandalwood: 3, jasmine: 3, musk: 1 };
+  S.orders = [{ id: 901, who: 'huafei', product: 'incense', due: S.day + 2 }, { id: 902, who: 'zhenhuan', product: 'incense', due: S.day + 2 }];
+  const [A, B] = S.orders;
+  const r = E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: 'musk', forOrder: 902, forWho: 'zhenhuan' });
+  assert.strictEqual(r.order.id, 902);
+  assert.strictEqual(E.readyItem(S, B).spike, 'musk');
+  assert.strictEqual(E.readyItem(S, A), undefined, '甲的訂單不該看到替乙做的成品');
+  assert.ok(E.deliver(D, S, 901, null, ONE).noItem, '甲的訂單不能拿走乙的成品');
+  assert.ok(E.deliver(D, S, 901, r.itemId, ONE).noItem, '指定 itemId 也不行');
+  // 自由調合（預測對象是甲）→ 綁甲
+  const r2 = E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: null, forOrder: null, forWho: 'huafei' });
+  assert.strictEqual(r2.order.id, 901);
+  assert.strictEqual(E.readyItem(S, A).spike, null);
+  const res = E.deliver(D, S, 901, null, ONE);
+  assert.strictEqual(res.who, 'huafei');
+  assert.strictEqual(res.spike, null);
+  // 乙的訂單被婉拒後，綁乙的成品變成誰都能用
+  S.orders = S.orders.filter((o) => o.id !== 902);
+  S.orders.push({ id: 903, who: 'meizhuang', product: 'incense', due: S.day + 2 });
+  assert.strictEqual(E.readyItem(S, S.orders.find((o) => o.id === 903)).spike, 'musk');
+});
+
+test('craft：自由調合、沒指定對象 → 綁第一張還沒備好的同品項訂單', () => {
+  const S = fresh();
+  S.inv = { sandalwood: 3, jasmine: 3 };
+  S.orders = [{ id: 1, who: 'huafei', product: 'incense', due: S.day + 2 }, { id: 2, who: 'zhenhuan', product: 'incense', due: S.day + 2 }];
+  assert.strictEqual(E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: null, forOrder: null, forWho: null }).order.id, 1);
+  assert.strictEqual(E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: null, forOrder: null, forWho: null }).order.id, 2);
+});

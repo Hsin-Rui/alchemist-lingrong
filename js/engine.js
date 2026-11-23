@@ -33,8 +33,15 @@
   const pick = (arr, rand) => arr[Math.floor(rand() * arr.length)];
   const itemName = (D, id) => (D.ITEMS[id] || D.PRODUCTS[id]).name;
   const have = (S, id) => S.inv[id] || 0;
-  // 手上有好幾個同樣的成品時，用最新做好的那個
-  const readyItem = (S, o) => S.hand.filter((h) => h.product === o.product).pop();
+  // 成品記著是替哪張訂單做的（forOrder）。那張訂單還在，成品就只屬於它，不會被別張同品項訂單拿走
+  // （兩人同時要安神香時，替甲加料的那份不能出現在乙的訂單上）。訂單已不在或沒綁訂單的成品，誰要都能用。
+  const ownerOf = (S, h) => (h.forOrder != null && S.orders.some((o) => o.id === h.forOrder) ? h.forOrder : null);
+  const canFill = (S, o, h) => h.product === o.product && (ownerOf(S, h) === null || ownerOf(S, h) === o.id);
+  // 手上有好幾個能用的成品時：先用綁這張訂單的，再用沒綁的；同一類裡用最新做好的那個
+  const readyItem = (S, o) => {
+    const ok = S.hand.filter((h) => canFill(S, o, h));
+    return ok.filter((h) => ownerOf(S, h) === o.id).pop() || ok.pop();
+  };
   const recipeOk = (D, S, pid) => D.PRODUCTS[pid].recipe.every((id) => have(S, id) >= 1);
   function findRecipe(D, a, b) {
     return Object.keys(D.PRODUCTS).find((pid) => {
@@ -336,7 +343,9 @@
   // 全部是純函式：隨機只走注入的 rand，run state 可 JSON 序列化。
   // 地形字元：'#' 樹籬（擋路、擋視線）｜'.' 房間地面｜',' 走廊（外觀依地圖 tileset，目前兩張圖都和房間同一種地面）｜'G' 月洞門（可走）
   //          'P' 荷花池左上格、'p' 荷花池其餘格、'F' 花圃、'R' 假山、'L' 石燈籠（擋路、不擋視線）
-  const G_DIRS = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] };
+  // 八方向動作 → 位移（也匯出成 GATHER_DIRS，給外殼的撞牆提示與 tools/gather-bot.js 共用）
+  // 凍結：對外匯出（GATHER_DIRS）給外殼與機器人共用，不能讓外面改到引擎的移動規則
+  const G_DIRS = Object.freeze(Object.fromEntries(Object.entries({ n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] }).map(([k, v]) => [k, Object.freeze(v)])));
   // 尋路／巡邏的固定方向順序（直向優先，平手時走直的比較自然）
   const G_ORDER = [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]];
   const gTile = (run, x, y) => (x < 0 || y < 0 || x >= run.w || y >= run.h ? '#' : run.tiles[y][x]);
@@ -755,10 +764,15 @@
     const spike = toInv ? null : craftSel.spike;
     if (spike) invAdd(S, spike, -1);
     if (toInv) invAdd(S, product);
-    const item = toInv ? null : { id: ++S.seq, product, spike: product === 'junk' ? null : spike };
-    if (item) S.hand.push(item);
-    // 從訂單進來的就送那張訂單；否則找第一張要這個成品的訂單
-    const order = S.orders.find((o) => o.id === craftSel.forOrder && o.product === product) || S.orders.find((o) => o.product === product);
+    const item = toInv ? null : { id: ++S.seq, product, spike: product === 'junk' ? null : spike, forOrder: null };
+    // 從訂單進來的就送那張訂單；否則先找調合時預測的對象（forWho）要這個成品、還沒備好的訂單，
+    // 再找任何還沒備好的同品項訂單。找到就把成品綁在那張訂單上。
+    const open = (o) => o.product === product && !readyItem(S, o);
+    const order = S.orders.find((o) => o.id === craftSel.forOrder && o.product === product)
+      || S.orders.find((o) => open(o) && o.who === craftSel.forWho)
+      || S.orders.find(open)
+      || null;
+    if (item) { if (order) item.forOrder = order.id; S.hand.push(item); }
     S.dayLog.push(product === 'junk' ? '調合失敗，做出一坨黑黑的東西' : `調合了${itemName(D, product)}${spike ? `（加了${itemName(D, spike)}）` : ''}`);
     return { product, spike, toInv, lostSpike: product === 'junk' && spike, order, itemId: item && item.id };
   }
@@ -768,7 +782,7 @@
   function deliver(D, S, orderId, itemId, rand) {
     const R = D.RULES;
     const order = S.orders.find((o) => o.id === orderId);
-    const item = order && ((itemId && S.hand.find((h) => h.id === itemId && h.product === order.product)) || readyItem(S, order));
+    const item = order && ((itemId && S.hand.find((h) => h.id === itemId && canFill(S, order, h))) || readyItem(S, order));
     if (!item) return { noItem: true };
     S.slot++;
     S.orders = S.orders.filter((o) => o !== order);
@@ -860,7 +874,7 @@
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
     findRecipe, acceptChance,
-    buy, bribe, rejectOrder, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
+    buy, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof window !== 'undefined') window.GameEngine = API;

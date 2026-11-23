@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>演出示範</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../../../../../css/style.css">
+<style>
+  /* 示範頁專用：用遊戲真正的 css/style.css，這裡只加框架與演出 */
+  html, body { height: auto; }
+  body { margin: 0; padding: 16px; background: #2a2236; color: #fbf7ef; font-family: -apple-system, 'PingFang TC', sans-serif; }
+  .wrap { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .phone { width: 390px; height: 760px; border-radius: 28px; border: 8px solid #111; overflow: hidden; flex: none; background: #111; }
+  #app { height: 100%; max-width: none; }
+  #app .screen { height: 100%; }
+  .panel { flex: 1; min-width: 280px; max-width: 520px; }
+  .panel h1 { font-size: 18px; margin: 0 0 6px; }
+  .panel h2 { font-size: 14px; color: #f2c14e; margin: 18px 0 8px; }
+  .panel p, .panel li { font-size: 13px; color: #d8cce8; line-height: 1.6; margin: 0 0 6px; }
+  .panel button.scene { display: block; width: 100%; text-align: left; margin: 0 0 8px; padding: 10px 12px; border-radius: 10px; border: 2px solid #4E3F63; background: #3A2D4B; color: #fff; font-size: 14px; cursor: pointer; }
+  .panel button.scene small { display: block; color: #b9a9cf; font-size: 12px; margin-top: 2px; }
+  .panel button.scene:hover { border-color: #f2c14e; }
+  .panel label { display: block; font-size: 14px; margin: 4px 0; cursor: pointer; }
+  .panel select { font-size: 14px; }
+  .ctl { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ctl button { padding: 6px 10px; border-radius: 8px; border: 1px solid #4E3F63; background: #3A2D4B; color: #fff; cursor: pointer; font-size: 13px; }
+
+  /* 舊的紅章搖晃由示範腳本接管 */
+  #app .result:has(.stamp.red) { animation: none; }
+  #app .stamp { animation: none; opacity: 0; transform: rotate(-12deg); }
+  #app .stamp.fierce { font-size: 72px; border-width: 8px; padding: 12px 24px; min-width: 220px; margin-left: -110px; }
+  #app .stamp.fierce.purple { font-size: 48px; }
+  .ink { position: absolute; border-radius: 50%; pointer-events: none; z-index: 6; }
+  .ring { position: absolute; border-radius: 16px; pointer-events: none; z-index: 4; border: 6px solid; }
+  .dlg-next.wait { visibility: hidden; }
+  .dim { position: absolute; inset: 0; background: #140c1c; opacity: 0; pointer-events: none; z-index: 5; }
+  #app .result .stamp { z-index: 7; }
+  #app .result .receipt, #app .result .footer-cta { position: relative; z-index: 6; }
+  .dialog-layer .dim { z-index: 0; }
+  .dialog-layer .dlg-portrait, .dialog-layer .dialog-box, .dialog-layer .skip-btn { position: relative; }
+  .dlg-text.slam { display: inline-block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="phone"><div id="app"></div></div>
+  <div class="panel">
+    <h1>加料／害人演出示範</h1>
+    <p>按下面的情境播放：先跑對話，再到結果頁蓋章。在手機畫面上點一下或按空白鍵換下一句，Esc 跳過對話直接看蓋章。</p>
+    <h2>情境（後面括號是我暫定的輕重，可以用下方「力道」強制改）</h2>
+    <button class="scene" data-s="itch">小整人：狂癢（輕）<small>滑妃「癢、癢死本宮了——！」→ 紅章「狂癢」</small></button>
+    <button class="scene" data-s="musk">麝香累積 2/3（中）<small>真環聞香 → 紫章「麝香 2/3」</small></button>
+    <button class="scene" data-s="ruin">大事：不孕（重）<small>旁白「從此再也沒有傳出喜訊」→ 紅章「不孕」</small></button>
+    <button class="scene" data-s="caught">被抓（重）<small>溫太醫「且慢！」→ 紅章「被抓」</small></button>
+    <h2>手法開關</h2>
+    <label><input type="checkbox" id="t-portrait" checked> 立繪動起來（受害者抖、零溶奸笑時特寫、被抓時嚇退）</label>
+    <label><input type="checkbox" id="t-stop" checked> 停格（章蓋下去的瞬間凍結）</label>
+    <label><input type="checkbox" id="t-fierce" checked> 章蓋得更狠（更大、噴墨點、墨圈）</label>
+    <label><input type="checkbox" id="t-dim" checked> 被抓時畫面變暗（只有被抓）</label>
+    <label><input type="checkbox" id="t-shake" checked> 畫面搖晃（v2：只在「重」的蓋章時搖一次）</label>
+    <div class="ctl" style="margin-top:8px"><button id="all-off">全部關掉（＝現在的樣子，不含搖晃）</button><button id="all-on">全部打開</button></div>
+    <h2>力道</h2>
+    <label>力道 <select id="tier"><option value="">照情境預設</option><option value="light">輕</option><option value="medium">中</option><option value="heavy">重</option></select></label>
+    <label><input type="checkbox" id="t-reduce"> 模擬「減少動態效果」（不搖晃）</label>
+    <h2>看完請告訴 Sally</h2>
+    <ul><li>四種手法各自要不要？</li><li>輕／中／重的力道哪裡太多、哪裡不夠？</li><li>四個情境的輕重對嗎？</li></ul>
+  </div>
+</div>
+<script>
+(() => {
+  const IMG = '../../../../../../assets/characters/';
+  const CH = {
+    huafei: { name: '滑妃', color: '#d0453b' }, meizhuang: { name: '審沒裝', color: '#d99a2b' },
+    zhenhuan: { name: '真環', color: '#e07f9c' }, doctor: { name: '太醫溫十粗', color: '#4f7a8a' },
+    lingrong: { name: '安嬪零溶', color: '#6b8fd6' },
+  };
+  const img = (who, ex) => (ex && ex !== '_' ? `${who}_${ex}` : who);
+  // fx：victim 受害者抖／evil 零溶特寫／shock 零溶嚇退／enter 太醫衝進來／heavy 旁白重擊。lock：防連按的三個時刻
+  const SCENES = {
+    itch: { tier: 'light', bg: 'yikun', who: 'huafei', hurt: true, stamp: '狂癢', cls: 'red', line: '巴豆得逞・狂癢', lines: [
+      ['huafei', 'oops', '癢、癢死本宮了——！', 'victim', true], ['lingrong', 'evil', '（今晚可有好戲看了。）', 'evil']] },
+    musk: { tier: 'medium', bg: 'suiyu', who: 'zhenhuan', hurt: false, stamp: '麝香 2/3', cls: 'purple', line: '麝香・麝香 2/3', lines: [
+      ['zhenhuan', 'happy', '這味道好香，用了整個人都放鬆了。'], ['lingrong', 'evil', '（麝香 2/3……慢慢來，不急。）', 'evil', true]] },
+    ruin: { tier: 'heavy', bg: 'xianfu', who: 'meizhuang', hurt: true, stamp: '不孕', cls: 'red', line: '麝香得逞・不孕', lines: [
+      ['meizhuang', 'happy', '還是妹妹的東西最好用，我天天都用呢。'], ['narr', '', '日積月累的麝香終於見效——審沒裝從此再也沒有傳出喜訊。', 'heavy', true], ['lingrong', 'evil', '（三劑，剛剛好。）', 'evil']] },
+    caught: { tier: 'heavy', bg: 'yikun', who: 'doctor', hurt: false, stamp: '被抓', cls: 'red', line: '被太醫驗出巴豆！禁足 3 天', lines: [
+      ['doctor', '_', '且慢！這東西裡……有巴豆！', 'enter', true], ['huafei', 'oops', '安嬪！妳竟然——！', 'victim'], ['lingrong', 'shock', '冤、冤枉啊！一定是有人陷害臣妾！', 'shock'], ['narr', '', '黃上震怒：安嬪禁足炎洗宮 3 天，好好反省！', 'heavy']], dim: true },
+  };
+  const TIER = { light: { amp: 4, dur: 320, stop: 70 }, medium: { amp: 8, dur: 480, stop: 120 }, heavy: { amp: 15, dur: 760, stop: 190 } };
+  const $ = (s) => document.querySelector(s);
+  const on = (id) => $(`#t-${id}`).checked;
+  const app = $('#app');
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let sc = null, i = 0, typer = null, locked = false, token = 0;
+  const tierOf = () => TIER[$('#tier').value || sc.tier];
+
+  function shake(t) {
+    if (!on('shake') || on('reduce')) return;
+    const f = [];
+    const n = Math.round(t.dur / 45);
+    for (let k = 0; k <= n; k++) {
+      const a = t.amp * (1 - k / n);
+      f.push({ transform: k === n ? 'none' : `translate(${(Math.random() * 2 - 1) * a}px, ${(Math.random() * 2 - 1) * a * 0.7}px) rotate(${(Math.random() * 2 - 1) * a * 0.08}deg)` });
+    }
+    app.animate(f, { duration: t.dur, easing: 'linear' });
+  }
+  const portraitFx = {
+    victim: (el) => el.animate([{ transform: 'none' }, { transform: 'translateY(-22px) rotate(-3deg)' }, { transform: 'translate(-6px,0) rotate(3deg)' }, { transform: 'translate(6px,0) rotate(-3deg)' }, { transform: 'translate(-4px,0) rotate(2deg)' }, { transform: 'none' }], { duration: 520, easing: 'ease-out' }),
+    evil: (el) => el.animate([{ transform: 'none' }, { transform: 'translateY(-10px) scale(1.16)' }], { duration: 700, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' }),
+    shock: (el) => el.animate([{ transform: 'none' }, { transform: 'translate(-14px,6px) scale(.94) rotate(-4deg)' }, { transform: 'translate(8px,0) rotate(3deg)' }, { transform: 'translate(-4px,0)' }, { transform: 'none' }], { duration: 560, easing: 'ease-out' }),
+    enter: (el) => el.animate([{ transform: 'translateX(120%)' }, { transform: 'translateX(-14px)' }, { transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.3,1.4,.5,1)' }),
+  };
+
+  function dialogHtml(line) {
+    const [who, ex, text] = line;
+    const narr = who === 'narr';
+    const c = narr ? { color: '#6b5a80' } : CH[who];
+    return `<div class="screen bg-${sc.bg}"></div><div class="dialog-layer bg-${sc.bg}">
+      <button class="skip-btn">略過 ≫</button>
+      ${narr ? '' : `<div class="portrait dlg-portrait" style="--c:${c.color}"><div class="ph"></div><img src="${IMG}${img(who, ex)}.webp" alt=""></div>`}
+      <div class="dialog-box ${narr ? 'narr' : ''}" style="--c:${c.color}">
+        ${narr ? '' : `<div class="speaker">${c.name}</div>`}
+        <div class="dlg-text"></div><div class="dlg-next">▼</div>
+      </div></div>`;
+  }
+  function showLine() {
+    const line = sc.lines[i];
+    app.innerHTML = dialogHtml(line);
+    const fx = line[3], lock = line[4];
+    const el = app.querySelector('.dlg-text');
+    const pt = app.querySelector('.dlg-portrait');
+    const t = tierOf();
+    if (lock) { locked = true; app.querySelector('.dlg-next').classList.add('wait'); setTimeout(() => { locked = false; const n = app.querySelector('.dlg-next'); if (n) n.classList.remove('wait'); }, 600); }
+    // 被擋的句子直接整句顯示
+    if (lock || fx === 'heavy') { el.textContent = line[2]; } else {
+      let n = 0;
+      typer = setInterval(() => { n++; el.textContent = line[2].slice(0, n); if (n >= line[2].length) { clearInterval(typer); typer = null; } }, 14);
+    }
+    if (fx && fx !== 'heavy' && pt && on('portrait')) portraitFx[fx](pt);
+    // 對話中不搖晃（v2：搖晃只留給「重」的蓋章）
+    if (fx === 'heavy' && sc.dim && on('dim')) {
+      const d = document.createElement('div'); d.className = 'dim';
+      app.querySelector('.dialog-layer').prepend(d);
+      d.animate([{ opacity: 0 }, { opacity: 0.45 }], { duration: 900, easing: 'ease-in', fill: 'forwards' });
+    }
+    if (fx === 'heavy') {
+      const box = app.querySelector('.dialog-box');
+      box.animate([{ transform: 'scale(1.12)' }, { transform: 'scale(1)' }], { duration: 160, easing: 'ease-in' });
+      // v2：旁白重擊只放大彈一下，不搖晃
+    }
+  }
+  function next() {
+    if (!sc || app.querySelector('.result')) return;
+    if (locked) return;
+    if (typer) { clearInterval(typer); typer = null; app.querySelector('.dlg-text').textContent = sc.lines[i][2]; return; }
+    i++;
+    if (i >= sc.lines.length) showResult(); else showLine();
+  }
+  function ink(st, color) {
+    const stage = app.querySelector('.result-stage');
+    const sr = st.getBoundingClientRect(), pr = stage.getBoundingClientRect();
+    const cx = sr.left - pr.left + sr.width / 2, cy = sr.top - pr.top + sr.height / 2;
+    const ring = document.createElement('div');
+    ring.className = 'ring';
+    Object.assign(ring.style, { left: `${sr.left - pr.left}px`, top: `${sr.top - pr.top}px`, width: `${sr.width}px`, height: `${sr.height}px`, borderColor: color });
+    stage.appendChild(ring);
+    ring.animate([{ transform: 'rotate(-12deg) scale(1)', opacity: 0.7 }, { transform: 'rotate(-12deg) scale(1.6)', opacity: 0 }], { duration: 520, easing: 'ease-out', fill: 'forwards' });
+    for (let k = 0; k < 14; k++) {
+      const d = document.createElement('div');
+      const s = 5 + Math.random() * 9;
+      d.className = 'ink';
+      Object.assign(d.style, { width: `${s}px`, height: `${s}px`, left: `${cx}px`, top: `${cy}px`, background: color });
+      stage.appendChild(d);
+      const ang = Math.random() * Math.PI * 2, dist = sr.width * 0.55 + Math.random() * 70;
+      d.animate([{ transform: 'translate(-50%,-50%) scale(.4)', opacity: 1 }, { transform: `translate(calc(-50% + ${Math.cos(ang) * dist}px), calc(-50% + ${Math.sin(ang) * dist * 0.8}px)) scale(1)`, opacity: 1, offset: 0.6 }, { transform: `translate(calc(-50% + ${Math.cos(ang) * dist * 1.08}px), calc(-50% + ${Math.sin(ang) * dist * 0.8 + 6}px)) scale(1)`, opacity: 0 }], { duration: 700, easing: 'cubic-bezier(.1,.8,.3,1)', fill: 'forwards' });
+    }
+  }
+  async function showResult() {
+    const my = ++token;
+    const hurt = sc.hurt;
+    const ex = sc.who === 'doctor' ? '_' : hurt ? 'oops' : 'happy';
+    const c = CH[sc.who];
+    app.innerHTML = `<div class="screen result bg-${sc.bg}">
+      <div class="result-stage">
+        <div class="portrait result-portrait" style="--c:${c.color}"><div class="ph"></div><img src="${IMG}${img(sc.who, ex)}.webp" alt=""></div>
+        <div class="stamp ${sc.cls}">${sc.stamp}</div>
+      </div>
+      <div class="receipt"><div class="rline"><span>${sc.line}</span><b class="${sc.cls === 'purple' ? 'purple' : 'red'}">${sc.cls === 'purple' ? '累積中' : sc.stamp === '被抓' ? '友好 -20' : '寵 -10'}</b></div></div>
+      <div class="footer-cta"><button class="btn primary wide big">回炎洗宮</button></div></div>`;
+    const t = tierOf();
+    const st = app.querySelector('.stamp');
+    const pt = app.querySelector('.result-portrait');
+    const fierce = on('fierce');
+    const color = getComputedStyle(st).color;
+    if (fierce) st.classList.add('fierce');
+    let dim = null;
+    if (sc.dim && on('dim')) { dim = document.createElement('div'); dim.className = 'dim'; dim.style.opacity = 0.45; app.querySelector('.result').appendChild(dim); }
+    await wait(300);
+    if (my !== token) return;
+    if (!fierce) {
+      // 現在的樣子：從 2.4 倍縮回、帶一點回彈
+      st.animate([{ transform: 'scale(2.4) rotate(-12deg)', opacity: 0 }, { transform: 'rotate(-12deg)', opacity: 1 }], { duration: 450, easing: 'cubic-bezier(.2,1.4,.4,1)', fill: 'forwards' });
+      await wait(330);
+    } else {
+      st.animate([{ transform: 'scale(4) rotate(-26deg)', opacity: 0 }, { transform: 'scale(.9) rotate(-12deg)', opacity: 1 }], { duration: 190, easing: 'cubic-bezier(.6,0,1,1)', fill: 'forwards' });
+      await wait(190);
+    }
+    if (my !== token) return;
+    // 停格：章剛碰到紙，畫面凍住
+    if (on('stop')) await wait(t.stop);
+    if (my !== token) return;
+    if (fierce) {
+      st.animate([{ transform: 'scale(.9) rotate(-12deg)', opacity: 1 }, { transform: 'scale(1.07) rotate(-12deg)', opacity: 1 }, { transform: 'scale(1) rotate(-12deg)', opacity: 1 }], { duration: 240, easing: 'ease-out', fill: 'forwards' });
+      ink(st, color);
+    }
+    if (on('portrait')) {
+      if (hurt) pt.animate([{ transform: 'none' }, { transform: 'translateY(14px) scaleY(.92)' }, { transform: 'translate(-6px,0) rotate(-2deg)' }, { transform: 'translate(5px,0) rotate(2deg)' }, { transform: 'none' }], { duration: 520, easing: 'ease-out' });
+      else if (sc.who === 'doctor') pt.animate([{ transform: 'none' }, { transform: 'scale(1.08)' }, { transform: 'none' }], { duration: 400, easing: 'ease-out' });
+      else pt.animate([{ transform: 'none' }, { transform: 'translateY(-8px)' }, { transform: 'none' }], { duration: 360, easing: 'ease-out' });
+    }
+    if (dim) dim.animate([{ opacity: 0.45 }, { opacity: 0.62 }], { duration: 1400, easing: 'ease-out', fill: 'forwards' });
+    if (t === TIER.heavy) shake(t); // v2：只有「重」才搖晃
+  }
+  function play(key) {
+    token++;
+    if (typer) { clearInterval(typer); typer = null; }
+    locked = false;
+    sc = SCENES[key]; i = 0;
+    showLine();
+  }
+  document.querySelectorAll('.scene').forEach((b) => { b.onclick = () => play(b.dataset.s); });
+  app.addEventListener('click', (e) => {
+    if (e.target.closest('.skip-btn')) { if (sc && !app.querySelector('.result')) showResult(); return; }
+    if (e.target.closest('.footer-cta')) { if (sc) play(Object.keys(SCENES).find((k) => SCENES[k] === sc)); return; }
+    next();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); next(); }
+    if (e.key === 'Escape' && sc && !app.querySelector('.result')) showResult();
+  });
+  const setAll = (v) => ['portrait', 'stop', 'fierce', 'shake', 'dim'].forEach((k) => { $(`#t-${k}`).checked = v; });
+  $('#all-off').onclick = () => setAll(false);
+  $('#all-on').onclick = () => setAll(true);
+  app.innerHTML = '<div class="screen bg-yanxi" style="display:grid;place-items:center"><div class="receipt" style="padding:16px">← 從右邊選一個情境開始</div></div>';
+})();
+</script>
+</body>
+</html>

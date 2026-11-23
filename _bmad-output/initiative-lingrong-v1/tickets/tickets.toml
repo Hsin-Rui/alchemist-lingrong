@@ -22,4 +22,4 @@ slug = "epic-ux-input"
 title = "提升 UX：電腦鍵盤操作與介面手感"
 description = "電腦版可用鍵盤操作（既有動作皆有鍵對應與焦點指示），整體操作手感改善；採集小遊戲帶出的新 UI 一併設計打磨。"
 covers = ["R4"]
-after = [{ epic = 1, needs = "重構後的畫面/事件層" }]
+after = [{ epic = 1, needs = "重構後的畫面/事件層" }, { epic = 2, needs = "已完成的採集地下城程式碼（整理程式碼 story 要整理它）" }]

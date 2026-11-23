@@ -285,16 +285,32 @@ h3 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .rline small { display: block; color: var(--muted); font-size: 12px; }
 .rline b { white-space: nowrap; }
 .rline .gold { color: #6E4B12; } .rline .purple { color: var(--purple); } .rline .grey { color: var(--muted); } .rline .red { color: var(--red); }
-.result:has(.stamp.red) { animation: screenshake .35s .55s; }
+/* 狠章（加料得手、被抓）：大一號、粗框；落下／停格／回彈由 js（Web Animations）播，這裡只放靜止的最終樣子 */
+.stamp.fierce { font-size: 72px; border-width: 8px; padding: 12px 24px; min-width: 220px; left: 0; right: 0; width: max-content; margin: 0 auto; animation: none; transform: rotate(-12deg); z-index: 3; }
+.stamp.fierce.purple { font-size: 48px; }
+.fx-ink { position: absolute; border-radius: 50%; pointer-events: none; z-index: 4; opacity: 0; }
+.fx-ring { position: absolute; border: 6px solid; border-radius: 16px; pointer-events: none; z-index: 2; opacity: 0; }
+/* 搖晃：只有「重」事件的結果頁蓋章時一次（延遲＝起砸 160ms＋砸 190ms＋重停格 190ms）；振幅 15px、0.76 秒逐漸衰減 */
+.result.fx-shake { animation: fxshake .76s linear .54s; }
+/* 被抓暗幕（DESIGN dim-veil #140C1C）：壓暗背景與立繪；不擋點擊。透明度由 js 播（0→0.45、0.45→0.62），這裡是靜止值 */
+.fx-veil { position: absolute; inset: 0; background: #140C1C; opacity: .45; pointer-events: none; }
+.dialog-layer > .fx-veil { z-index: 0; } /* 對話：旁白框、略過／倍速在暗幕之上（定位元素依 DOM 順序疊在上面） */
+.result > .fx-veil { z-index: 2; }
+.result > .fx-veil.settled { opacity: .62; } /* 重繪：直接維持章落下後的暗度 */
+/* 章（狠章 z 3）、墨點、收據、底部按鈕在暗幕之上，不被壓暗 */
+.result.fx-caught .fx-ring { z-index: 3; }
+.result.fx-caught .receipt, .result.fx-caught .footer-cta { position: relative; z-index: 3; }
 
 /* ───── 對話 ───── */
 .dialog-layer { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); cursor: pointer; }
-.skip-btn { position: absolute; top: 12px; right: 12px; min-height: 40px; padding: 6px 14px; border-radius: 999px; border: none; background: rgba(46,34,40,.6); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+.dlg-ctrls { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; }
+.skip-btn, .speed-btn { min-height: 40px; padding: 6px 14px; border-radius: 999px; border: none; background: rgba(46,34,40,.6); color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
 .dlg-portrait { width: min(260px, 62vw); font-size: 20px; margin-bottom: -18px; z-index: 1; }
 .dialog-box { position: relative; z-index: 2; width: 100%; background: rgba(255,253,248,.97); border: 3px solid var(--c); border-radius: 16px; padding: 20px 16px 24px; min-height: 120px; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
 .dialog-box.narr { background: rgba(30,22,40,.94); color: #f3e9ff; border-color: var(--c); text-align: center; font-family: var(--serif); }
 .speaker { position: absolute; top: -15px; left: 14px; background: var(--c); color: #fff; font-weight: 900; padding: 2px 12px; border-radius: 8px; font-family: var(--serif); }
 .dlg-text { font-size: 17px; line-height: 1.7; min-height: 1.7em; }
+.dialog-box.locked .dlg-next { visibility: hidden; }
 .dlg-next { position: absolute; right: 14px; bottom: 6px; font-size: 12px; color: var(--muted); animation: blink 1s infinite; }
 
 /* ───── 標題、夜晚、結局 ───── */
@@ -355,7 +371,6 @@ h3 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .btn.ghost-gold { background: transparent; border: 2px solid var(--amber); color: var(--amber); border-radius: 999px; min-height: 56px; font-size: 16px; }
 .ending .btn.gold { min-height: 56px; }
 @keyframes unroll { from { transform: scaleY(.05); opacity: 0; } }
-@keyframes stamp { from { transform: scale(2.4) rotate(-12deg); opacity: 0; } }
 
 .toast { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); background: rgba(46,34,40,.92); color: #fff; padding: 8px 16px; border-radius: 999px; font-size: 14px; z-index: 50; animation: fade .2s; white-space: nowrap; }
 .toast.long { white-space: normal; width: max-content; max-width: calc(100% - 40px); border-radius: 14px; line-height: 1.6; text-align: left; }
@@ -369,10 +384,11 @@ h3 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 @keyframes rise { 0% { transform: translateY(0) scale(.6); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-50px) scale(1.2); opacity: 0; } }
 @keyframes stamp { 0% { transform: rotate(-12deg) scale(3); opacity: 0; } 100% { transform: rotate(-12deg) scale(1); opacity: 1; } }
 @keyframes floatup { 0% { transform: translateY(10px); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(-40px); opacity: 0; } }
-@keyframes screenshake { 0%,100% { transform: none; } 20% { transform: translate(-6px,3px); } 40% { transform: translate(5px,-4px); } 60% { transform: translate(-4px,2px); } 80% { transform: translate(3px,-2px); } }
+@keyframes fxshake { 0% { transform: translate(15px, -6px) rotate(-1.1deg); } 6.3% { transform: translate(-8.4px, 6.9px) rotate(0.56deg); } 12.5% { transform: translate(11.8px, -8.3px) rotate(-0.73deg); } 18.8% { transform: translate(-11px, 3.4px) rotate(0.97deg); } 25% { transform: translate(5.6px, -4.7px) rotate(-0.36deg); } 31.3% { transform: translate(-7.2px, 5.8px) rotate(0.49deg); } 37.5% { transform: translate(9.4px, -2px) rotate(-0.68deg); } 43.8% { transform: translate(-3.4px, 5.3px) rotate(0.47deg); } 50% { transform: translate(4.5px, -3.7px) rotate(-0.3deg); } 56.3% { transform: translate(-5.9px, 2.3px) rotate(0.42deg); } 62.5% { transform: translate(3.9px, -3.1px) rotate(-0.27deg); } 68.8% { transform: translate(-2.3px, 2px) rotate(0.15deg); } 75% { transform: translate(3px, -1px) rotate(-0.24deg); } 81.3% { transform: translate(-1.7px, 1.4px) rotate(0.11deg); } 87.5% { transform: translate(0.8px, -0.8px) rotate(0.12deg); } 93.8% { transform: translate(-0.8px, 0.2px) rotate(-0.04deg); } 100% { transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  .result.fx-shake { animation: none !important; } /* 減少動態：不搖晃（其他演出走 Web Animations 照常） */
 }
 
 /* ───── v0.3：翻牌子、友好、送禮、後宮 ───── */
@@ -480,3 +496,13 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .caught-guard { height: 120px; display: flex; justify-content: center; }
 .caught-guard img { height: 100%; object-fit: contain; }
 .caught-guard.noimg { display: none; }
+
+/* ───── 鍵盤游標：四角焦點框（固定定位覆蓋層，不動元素本身） ───── */
+.focus-box { position: fixed; z-index: 1000; pointer-events: none; display: none; --fc: var(--crimson); }
+.focus-box.on { display: block; }
+.focus-box.dark { --fc: var(--amber); }
+.focus-box i { position: absolute; width: 10px; height: 10px; border: 0 solid var(--fc); border-radius: 0; }
+.focus-box i:nth-child(1) { left: 0; top: 0; border-left-width: 3px; border-top-width: 3px; }
+.focus-box i:nth-child(2) { right: 0; top: 0; border-right-width: 3px; border-top-width: 3px; }
+.focus-box i:nth-child(3) { left: 0; bottom: 0; border-left-width: 3px; border-bottom-width: 3px; }
+.focus-box i:nth-child(4) { right: 0; bottom: 0; border-right-width: 3px; border-bottom-width: 3px; }
