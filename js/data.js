@@ -28,10 +28,10 @@ window.GAME_DATA = (() => {
     liquor: { name: '烈酒', ch: '酒', type: 'mat', price: 20 },
     petal: { name: '紅花瓣', ch: '瓣', type: 'mat' },
     // 料（§7）
-    musk: { name: '麝香', ch: '麝', type: 'spike', price: 50, desc: '慢性毒。下滿 3 劑才不孕；有喜時 50% 小產', catch: 0.10, ground: 2 },
-    safflower: { name: '紅花', ch: '紅', type: 'spike', desc: '猛藥。一次就不孕；有喜時小產並且不孕', catch: 0.40, ground: 4 },
-    cassava: { name: '木薯粉', ch: '薯', type: 'spike', price: 15, desc: '上吐下瀉一天，侍寢必出包', catch: 0.15, ground: 1, debuff: '上吐下瀉' },
-    catnip: { name: '貓薄荷', ch: '貓', type: 'spike', price: 20, desc: '晚上招來一群貓咪，侍寢必出包', catch: 0.15, ground: 1, debuff: '貓咪鬧場' },
+    musk: { name: '麝香', ch: '麝', type: 'spike', price: 50, desc: '慢性毒。下滿 3 劑才不孕；有喜時 50% 小產', catch: 0.12, ground: 2 },
+    safflower: { name: '紅花', ch: '紅', type: 'spike', desc: '猛藥。一次就不孕；有喜時小產並且不孕', catch: 0.45, ground: 4 },
+    cassava: { name: '木薯粉', ch: '薯', type: 'spike', price: 15, desc: '上吐下瀉一天，當晚侍寢必出包', catch: 0.18, ground: 1, debuff: '上吐下瀉' },
+    catnip: { name: '貓薄荷', ch: '貓', type: 'spike', price: 20, desc: '晚上招來一群貓咪，當晚侍寢必出包', catch: 0.18, ground: 1, debuff: '貓咪鬧場' },
   };
 
   // out: 'hand' 成品拿在手上（交貨、送禮）；'inv' 放回道具欄（例如煉出來的料）
@@ -122,6 +122,7 @@ window.GAME_DATA = (() => {
     // 各宮宮女：替主子下訂單（立繪沒有時用 face 字代替）
     songzhi: { name: '送吱', color: '#c0504a', face: '吱', imgs: { _: 'maid_songzhi' } },
     caiyue: { name: '踩月', color: '#d0a040', face: '月', imgs: { _: 'maid_caiyue' } },
+    cats: { name: '貓咪們', color: '#a0805a', face: '喵', imgs: { _: 'cats' } },
     chuijinxi: { name: '吹緊吸', color: '#d98aa2', face: '吸', imgs: { _: 'maid_chuijinxi' } },
   };
   const TARGETS = ['huafei', 'meizhuang', 'zhenhuan'];
@@ -185,7 +186,11 @@ window.GAME_DATA = (() => {
     empressFactor: 2,
     // 加料
     uselessRewardRate: 0.5,
-    // 被抓機率 = 料的基礎機率 × max(下限, 1 − 友好 ÷ 除數) × (交貨時再 × deliverCatchFactor)
+    // 被抓機率 = 遮掩後的機率 × max(下限, 1 − 友好 ÷ 除數) × (交貨時再 × deliverCatchFactor)
+    // 遮掩（§14.5）：遮掩分＝濃郁×2＋香氣＋甜蜜，每分 −6%，最低壓到 8%
+    maskWeights: { nong: 2, xiang: 1, tian: 1 },
+    maskStep: 0.06,
+    maskFloor: 0.08,
     friendCatchDivisor: 100,
     friendCatchFloor: 0.2,
     deliverCatchFactor: 0.5,
@@ -244,6 +249,10 @@ window.GAME_DATA = (() => {
     zhenhuan: [['zhenhuan', 'happy', '妹妹真是貼心。'], ['lingrong', 'smile', '姐姐別客氣，妹妹只是想對姐姐好。']],
   };
 
+  // 木薯粉、貓薄荷送給今晚沒侍寢的人：白天照樣發作，但白費了（送出後才讓玩家發現）
+  const DEBUFF_WASTED = ['lingrong', 'shock', '（……今晚又不是她侍寢。白下了。）'];
+  // 貓薄荷：夜晚貓咪鬧場
+  const CATS_LINE = ['cats', '_', '喵——！喵喵喵——！喵嗚——！', { sfx: 'meow' }];
   // 包捐代交（D7 出發、D8 回來）
   const PROXY_LINES = [
     ['baojuan', '_', '奴婢這就替小主跑一趟！'],
@@ -432,6 +441,6 @@ window.GAME_DATA = (() => {
 
   return {
     TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
-    request, THANKS, REFUSE, PROXY_LINES, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
+    request, THANKS, REFUSE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
   };
 })();

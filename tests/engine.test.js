@@ -1262,3 +1262,45 @@ test('拜訪台詞：三位妃嬪都有四種反應與拒收；嫌棄專屬句�
   const all = JSON.stringify([D.VISIT_REACT, D.REFUSE, D.VISIT_ENTER, D.VISIT_EMPTY]);
   assert.ok(!all.includes('安嬪'));
 });
+
+test('catchChance：§14.5 遮掩分壓低（最低 8%）、再乘友好與交貨倍率', () => {
+  const S = fresh();
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  S.friend.meizhuang = 80;
+  assert.ok(near(E.catchChance(D, S, 'meizhuang', 'safflower', 'gift', { nong: 3, xiang: 3, tian: 3 }), 0.45 * 0.28 * 0.2), '紅花遮掩分 12 → 12.6%，友好 80 → ×0.2');
+  S.friend.huafei = 10;
+  assert.ok(near(E.catchChance(D, S, 'huafei', 'musk', 'gift', { nong: 2, xiang: 1 }), 0.12 * 0.7 * 0.9), '麝香遮掩分 5 → 8.4%，友好 10 → ×0.9');
+  S.friend.huafei = 0;
+  assert.ok(near(E.catchChance(D, S, 'huafei', 'cassava', 'gift', { nong: 3, xiang: 3, tian: 3 }), 0.08), '木薯粉遮掩到底 → 8%');
+  assert.ok(near(E.catchChance(D, S, 'huafei', 'cassava', 'deliver', {}), 0.18 * 0.5), '交貨再 ×0.5、沒特性不遮掩');
+  assert.strictEqual(E.maskScore(D, { nong: 2, xiang: 1, tian: 1, hua: 3 }), 6);
+});
+
+test('visit：加料的禮誰都能收（不再限今晚侍寢）', () => {
+  const S = fresh();
+  S.flip = 'zhenhuan';
+  S.conc.huafei.status = 'normal';
+  S.hand = [{ id: 1, product: 'yunv', spike: 'musk', tr: {} }];
+  const r = E.visit(D, S, 'huafei', 1, () => 0.5); // 不管收不收，都不會被擋
+  assert.ok(r.refused || r.outcome, '不會回 blocked');
+  assert.strictEqual(r.blocked, undefined);
+  const S2 = fresh();
+  S2.flip = 'zhenhuan'; S2.friend.huafei = 90; S2.conc.huafei.status = 'normal';
+  S2.hand = [{ id: 1, product: 'yunv', spike: 'musk', tr: {} }];
+  const r2 = E.visit(D, S2, 'huafei', 1, seq([0, ONE()]));
+  assert.strictEqual(r2.outcome, 'musk_dose');
+});
+
+test('applySpike：木薯粉、貓薄荷只對當晚侍寢的人有效；給別人白費、不扣恩寵', () => {
+  const S = fresh();
+  S.flip = 'huafei';
+  const f0 = S.favor.meizhuang;
+  const r = E.applySpike(D, S, 'meizhuang', 'cassava', 'gift', ONE, {});
+  assert.strictEqual(r.outcome, 'debuff_useless');
+  assert.strictEqual(r.useless, true);
+  assert.strictEqual(S.favor.meizhuang, f0);
+  assert.strictEqual(S.conc.meizhuang.debuff, null);
+  const r2 = E.applySpike(D, S, 'huafei', 'catnip', 'gift', ONE, {});
+  assert.strictEqual(r2.outcome, 'debuff');
+  assert.strictEqual(S.conc.huafei.debuff, 'catnip');
+});

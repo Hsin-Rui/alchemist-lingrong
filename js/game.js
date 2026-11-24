@@ -169,6 +169,7 @@
   function outcomeLines(who, spike, res) {
     if (res.caught) return markFx(lockLine(fmt(D.CAUGHT, { who, spike, days: res.days }), 0), who, 'caught'); // 被抓那一句（且慢！）鎖 0.6 秒
     if (res.outcome === 'plain') return D.THANKS[who];
+    if (res.outcome === 'debuff_useless') return [...D.DEBUFF_LINES[who][spike], D.DEBUFF_WASTED]; // 白天照樣發作，但今晚不是她侍寢
     const lines = res.outcome === 'debuff' ? D.DEBUFF_LINES[who][spike] : fmt(D.OUTCOME_LINES[res.outcome], { who, dose: res.dose });
     const tier = fxTier(res);
     return tier ? markFx(lockLine(lines, hitIndex(lines)), who, tier) : lines;
@@ -231,6 +232,7 @@
     const text = el.dataset.full;
     const opt = dlg.lines[dlg.i][3];
     if (opt && opt.fx) playLineFx(opt.fx);
+    if (opt && opt.sfx) A.sfx(opt.sfx);
     if (opt && opt.lock) {
       // 高潮句：直接整句，LOCK_MS 內按鍵無效，▼ 之後才出現
       el.innerHTML = textHtml(text);
@@ -342,6 +344,7 @@
       if (report.serve.kind === 'debuff') {
         const d = report.serve.favDelta;
         const debuff = report.serve.debuff;
+        if (debuff === 'catnip') lines.push(D.CATS_LINE); // 貓咪鬧場：先聽到貓叫
         lines.push(['huangshang', '_', D.SERVE_FAIL_HS[debuff]], ['narr', '', D.SERVE_FAIL[debuff].replace('{n}', name)], ['narr', '', `侍寢出包！${name}恩寵 ${d}`], ['lingrong', 'evil', '（計畫通。）']);
       } else {
         const d = report.serve.favDelta;
@@ -789,7 +792,6 @@
     if (needOut()) return;
     const item = handId == null ? null : S.hand.find((h) => h.id === handId);
     if (handId != null && (!item || item.product === 'junk')) return;
-    if (item && item.spike && who !== S.flip) { toast('加料的禮只能送給今晚侍寢的人'); return; }
     const r = E.visit(D, S, who, item ? item.id : null, rand);
     const enter = D.VISIT_ENTER[who] || [];
     if (r.empty) { playDialog([...enter, ...D.VISIT_EMPTY[who]], () => go('result'), D.CHARS[who].bg); return; }
@@ -1128,12 +1130,11 @@
       if (who) {
         // 不顯示預估友好：喜好要玩家自己試出來（§14.1）
         const rows = items.map((h) => {
-          const blocked = h.spike && who !== S.flip;
-          const p = h.spike ? E.predict(D, S, who, h.spike, 'gift') : null;
-          return `<div class="row gift-row ${blocked ? 'blocked' : ''}">${tok(h.product)}${h.spike ? tok(h.spike, 'sm') : ''}
+          const p = h.spike ? E.predict(D, S, who, h.spike, 'gift', h.tr) : null;
+          return `<div class="row gift-row">${tok(h.product)}${h.spike ? tok(h.spike, 'sm') : ''}
             <div class="row-main"><b>${itemName(h.product)}${h.spike ? `<em class="spiked">＋${itemName(h.spike)}</em>` : ''}</b>${trChips(h.tr, 'sm')}
-            ${blocked ? '<small>加料的禮只能送給今晚侍寢的人</small>' : p ? `<small>${p.txt}・${p.riskTxt}</small>` : ''}</div>
-            <button class="btn small ${blocked ? '' : 'primary'}" data-a="gift" data-v="${h.id}" ${blocked || off ? 'disabled' : ''}>帶這份去</button></div>`;
+            ${p ? `<small>${p.txt}・${p.riskTxt}</small>` : ''}</div>
+            <button class="btn small primary" data-a="gift" data-v="${h.id}" ${off ? 'disabled' : ''}>帶這份去</button></div>`;
         }).join('');
         list = `<div class="row gift-row empty-visit"><span class="tok tok-none"><span class="tok-ch">空</span></span>
             <div class="row-main"><b>空手拜訪</b><small>聊聊天，友好 +${R.visitEmptyFriend}</small></div>
@@ -1739,6 +1740,8 @@
     const FX_DEMO = {
       cassava: ['上吐下瀉（輕）', 'huafei', 'cassava', null, [NO_CATCH]],
       catnip: ['貓咪鬧場（輕）', 'huafei', 'catnip', null, [NO_CATCH]],
+      debuff_useless: ['木薯粉白下（不是今晚侍寢）', 'meizhuang', 'cassava', null, [NO_CATCH]],
+      cats_night: ['夜晚貓咪鬧場（貓叫）', 'huafei', null, null, []],
       musk_dose: ['麝香 2/3（中）', 'zhenhuan', 'musk', { status: 'normal', musk: 1 }, [NO_CATCH]],
       musk_miss: ['麝香落空（中）', 'zhenhuan', 'musk', { status: 'pregnant', preg: 1, musk: 0 }, [NO_CATCH, NO_CATCH]],
       musk_infertile: ['麝香不孕（重）', 'meizhuang', 'musk', { status: 'normal', musk: 2 }, [NO_CATCH]],
@@ -1768,6 +1771,7 @@
     } else {
       const [, who, spike, conc, dice, viaGift] = FX_DEMO[key];
       if (conc) Object.assign(S.conc[who], conc);
+      S.flip = key === 'debuff_useless' ? 'huafei' : who; // 木薯粉、貓薄荷只對當晚侍寢的人有效
       const seq = [...dice];
       const demoRand = () => (seq.length ? seq.shift() : NO_CATCH);
       const product = 'incense';
@@ -1779,8 +1783,10 @@
         S.orders.push({ id: 'fxdemo', who, product, due: S.day + 1 });
         r = E.deliver(D, S, 'fxdemo', 'fxdemo', demoRand);
       }
-      const lines = r.refused ? D.REFUSE[who] : outcomeLines(who, spike, r);
-      dlg = { lines, i: 0, done: () => go('result'), bg: D.CHARS[who].bg };
+      const lines = key === 'cats_night'
+        ? [D.CATS_LINE, ['huangshang', '_', D.SERVE_FAIL_HS.catnip], ['narr', '', D.SERVE_FAIL.catnip.replace('{n}', charName(who))]]
+        : r.refused ? D.REFUSE[who] : outcomeLines(who, spike, r);
+      dlg = { lines, i: 0, done: () => go('result'), bg: key === 'cats_night' ? 'night' : D.CHARS[who].bg };
     }
   }
   // 測試用：網址後面加 #e2e 時開放狀態給 tools/keyboard-e2e.js 造情境（不影響正常遊戲）
