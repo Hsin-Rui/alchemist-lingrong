@@ -258,7 +258,7 @@
     if (report.grounded) lines.push(['baojuan', '_', `小主還在禁足中（到第 ${S.groundUntil} 天）……今天只能待在炎洗宮了。`]);
     if (report.boosted) lines.push(...D.EMPRESS);
     if (report.flip === 'lingrong') {
-      lines.push(['baojuan', '_', '小主！小主！敬事房傳話——今晚黃上翻的是您的牌子！', { lock: true }], ['lingrong', 'evil', '終於……輪到本嬪了。']);
+      lines.push(['baojuan', '_', '小主！小主！敬事房傳話——今晚黃上翻的是您的牌子！', { lock: true }], ['lingrong', 'evil', '終於……輪到我了。']);
     } else if (report.flip) {
       lines.push(['baojuan', '_', `小主，敬事房傳話，今晚黃上翻了${charName(report.flip)}的牌子。`]);
       lines.push(report.flipFriend >= 50

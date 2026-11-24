@@ -97,7 +97,7 @@ window.GAME_DATA = (() => {
     baojuan: { name: '包捐', color: '#5f9a7a', face: '捐', imgs: { _: 'baojuan' } },
     huafei: { name: '滑妃', color: '#d0453b', face: '滑', palace: '一捆宮', bg: 'yikun', imgs: { happy: 'huafei_happy', oops: 'huafei_oops' } },
     meizhuang: { name: '審沒裝', color: '#d99a2b', face: '審', palace: '嫌福宮', bg: 'xianfu', imgs: { happy: 'meizhuang_happy', oops: 'meizhuang_oops' } },
-    zhenhuan: { name: '真環', color: '#e07f9c', face: '環', palace: '碎魚軒', bg: 'suiyu', imgs: { happy: 'zhenhuan_happy', oops: 'zhenhuan_oops' } },
+    zhenhuan: { name: '真環', color: '#e07f9c', face: '環', palace: '睡慾軒', bg: 'suiyu', imgs: { happy: 'zhenhuan_happy', oops: 'zhenhuan_oops' } },
     huangshang: { name: '黃上', color: '#d4a800', face: '黃', imgs: { _: 'huangshang', happy: 'huangshang_happy' } },
     huanghou: { name: '黃后', color: '#7a4e9a', face: '后', imgs: { _: 'huanghou' } },
     doctor: { name: '太醫溫十粗', color: '#4f7a8a', face: '溫', imgs: { _: 'doctor' } },
@@ -295,7 +295,7 @@ window.GAME_DATA = (() => {
 
   const TUTORIAL = [
     ['baojuan', '_', '小主！小主您醒啦！'],
-    ['lingrong', 'smile', '包捐，本嬪在這後宮……是不是最不受寵的那一個？'],
+    ['lingrong', 'smile', '包捐，我在這後宮……是不是最不受寵的那一個？'],
     ['baojuan', '_', '呃……小主恩寵確實是墊底的。但小主會煉金啊！'],
     ['baojuan', '_', '每天早上，敬事房會傳話今晚黃上翻誰的牌子。只有侍寢，恩寵才會漲。小主有銀子的話，也可以給敬事房包個大紅包……'],
     ['baojuan', '_', '各宮娘娘會來下訂單。替她們做東西，交情就會變好；交情好的娘娘侍寢時，可能會在黃上耳邊替小主美言幾句。'],
@@ -310,7 +310,7 @@ window.GAME_DATA = (() => {
     lingrong: '安嬪零溶恩寵冠絕六宮，即日起改姓鈕祜祿！',
     huafei: '滑妃恩寵冠絕六宮，晉為皇貴妃，一捆宮夜夜笙歌。',
     meizhuang: '審沒裝恩寵冠絕六宮，晉為惠妃，嫌福宮從此不嫌福。',
-    zhenhuan: '真環恩寵冠絕六宮，晉為熹妃，碎魚軒門庭若市。',
+    zhenhuan: '真環恩寵冠絕六宮，晉為熹妃，睡慾軒門庭若市。',
   };
   // 對手第一時，零溶的處境（禁足優先）
   const END_LING = {
@@ -339,7 +339,7 @@ window.GAME_DATA = (() => {
   // 主畫面零溶的閒聊台詞
   const IDLE = [
     '今天要對誰下手呢……',
-    '本嬪只是個平凡的煉金術士而已。',
+    '我只是個平凡的煉金術士而已。',
     '姐姐們都對我好好喔……（呵）',
     '包捐，去把鍋子刷一刷。',
     '黃上什麼時候才會翻我的牌子呢？',
