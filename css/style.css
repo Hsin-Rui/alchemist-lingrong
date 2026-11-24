@@ -227,11 +227,11 @@ h3 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .workshop::before { content: ''; position: absolute; left: 50%; top: 10px; width: 280px; height: 280px; margin-left: -110px; border-radius: 50%; background: radial-gradient(circle, rgba(170,120,240,.35), transparent 70%); }
 .ws-portrait { position: absolute; left: 4px; bottom: 0; width: 140px; font-size: 13px; }
 .cauldron { position: relative; margin-left: 120px; width: 220px; display: flex; flex-direction: column; align-items: center; }
-.cslots { display: flex; gap: 8px; margin-bottom: 10px; }
-.cslot { width: 64px; height: 64px; border-radius: 50%; border: 2px dashed #8E7BA8; background: transparent; color: #8E7BA8; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; padding: 0; }
-.cslot span { max-width: 58px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cslots { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.cslot { width: 50px; height: 50px; border-radius: 50%; border: 2px dashed #8E7BA8; background: transparent; color: #8E7BA8; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; padding: 0; }
+.cslot span { max-width: 46px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cslot.filled { border: none; background: #FBF3DE; color: var(--ink); box-shadow: 0 0 0 3px var(--amber); }
-.cslot.filled .tok { width: 32px; height: 32px; font-size: 16px; }
+.cslot.filled .tok { width: 28px; height: 28px; font-size: 14px; }
 .cslot.spike { border-color: var(--lavender); color: var(--lavender); }
 .cslot.spike.filled { background: var(--purple-soft); box-shadow: 0 0 0 3px var(--lavender); }
 .pot { position: relative; display: flex; flex-direction: column; align-items: center; }

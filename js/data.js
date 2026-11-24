@@ -1,46 +1,62 @@
 // 遊戲資料：素材、配方、數值、台詞。調數值或改台詞只要動這個檔案。
 window.GAME_DATA = (() => {
+  // 特性（game-design §13.1）：每種 1～3 級，成品最多 3 種
+  const TRAITS = {
+    xiang: { name: '香氣', color: '#B784F0' },
+    tian: { name: '甜蜜', color: '#F08DB0' },
+    hua: { name: '華麗', color: '#F4C66A' },
+    qing: { name: '清雅', color: '#7FC8A9' },
+    nong: { name: '濃郁', color: '#D9925A' },
+  };
+
+  // nature：採集時特性會偏向的「本性」（§8 素材表）
   const ITEMS = {
-    // 正經素材
-    sandalwood: { name: '檀香', ch: '檀', type: 'mat', price: 10 },
-    ricefl: { name: '糯米粉', ch: '糯', type: 'mat', price: 5 },
-    honey: { name: '蜂蜜', ch: '蜜', type: 'mat', price: 8 },
-    pearl: { name: '珍珠粉', ch: '珍', type: 'mat', price: 15 },
-    jujube: { name: '紅棗', ch: '棗', type: 'mat', price: 5 },
+    // 正經素材（§8，第二輪）
+    pine: { name: '松針', ch: '松', type: 'mat', price: 6, nature: ['qing'] },
+    bamboo: { name: '竹葉', ch: '竹', type: 'mat', price: 6, nature: ['qing'] },
+    lotus: { name: '藕粉', ch: '藕', type: 'mat', price: 6, nature: ['tian', 'qing'] },
+    osmanthus: { name: '桂花', ch: '桂', type: 'mat', price: 8, nature: ['tian', 'xiang'] },
+    pear: { name: '梨花', ch: '梨', type: 'mat', price: 8, nature: ['qing', 'xiang'] },
+    jasmine: { name: '茉莉花', ch: '茉', type: 'mat', price: 8, nature: ['xiang', 'qing'] },
+    plum: { name: '梅花', ch: '梅', type: 'mat', price: 10, nature: ['xiang', 'hua'] },
+    jujube: { name: '紅棗', ch: '棗', type: 'mat', price: 5, nature: ['tian'] },
+    motherwort: { name: '益母草', ch: '益', type: 'mat', price: 10, nature: ['qing', 'nong'] },
+    angelica: { name: '當歸', ch: '歸', type: 'mat', price: 12, nature: ['nong'] },
+    pearl: { name: '珍珠粉', ch: '珍', type: 'mat', price: 15, nature: ['hua'] },
+    agarwood: { name: '沉香', ch: '沉', type: 'mat', price: 15, nature: ['nong', 'hua'] },
+    // 害人用的素材（煉紅花）
     liquor: { name: '烈酒', ch: '酒', type: 'mat', price: 20 },
-    jasmine: { name: '茉莉花', ch: '茉', type: 'mat' },
-    osmanthus: { name: '桂花', ch: '桂', type: 'mat' },
-    rose: { name: '玫瑰', ch: '玫', type: 'mat' },
-    angelica: { name: '當歸', ch: '歸', type: 'mat' },
     petal: { name: '紅花瓣', ch: '瓣', type: 'mat' },
-    // 料
+    // 料（§7）
     musk: { name: '麝香', ch: '麝', type: 'spike', price: 50, desc: '慢性毒。下滿 3 劑才不孕；有喜時 50% 小產', catch: 0.10, ground: 2 },
     safflower: { name: '紅花', ch: '紅', type: 'spike', desc: '猛藥。一次就不孕；有喜時小產並且不孕', catch: 0.40, ground: 4 },
-    itch: { name: '癢癢粉', ch: '癢', type: 'spike', desc: '狂癢一天，侍寢必出包', catch: 0.15, ground: 1 },
-    stinky: { name: '臭豆腐精華', ch: '臭', type: 'spike', price: 15, desc: '口臭一天，侍寢必出包', catch: 0.15, ground: 1 },
-    croton: { name: '巴豆', ch: '巴', type: 'spike', desc: '腹瀉一天，侍寢必出包', catch: 0.15, ground: 1 },
+    cassava: { name: '木薯粉', ch: '薯', type: 'spike', price: 15, desc: '上吐下瀉一天，侍寢必出包', catch: 0.15, ground: 1, debuff: '上吐下瀉' },
+    catnip: { name: '貓薄荷', ch: '貓', type: 'spike', price: 20, desc: '晚上招來一群貓咪，侍寢必出包', catch: 0.15, ground: 1, debuff: '貓咪鬧場' },
   };
 
   // out: 'hand' 成品拿在手上（交貨、送禮）；'inv' 放回道具欄（例如煉出來的料）
+  // recipe：2 或 3 樣素材，順序不拘。reward＝素材總值×1.5（安胎藥×2）；gift＝素材總值÷3（§8）
   const PRODUCTS = {
-    incense: { name: '安神香', ch: '香', recipe: ['sandalwood', 'jasmine'], reward: 28, gift: 5 },
-    cake: { name: '桂花糕', ch: '糕', recipe: ['ricefl', 'osmanthus'], reward: 21, gift: 4 },
-    cream: { name: '養顏膏', ch: '膏', recipe: ['pearl', 'rose'], reward: 35, gift: 6 },
-    tea: { name: '玫瑰蜜茶', ch: '茶', recipe: ['honey', 'rose'], reward: 25, gift: 4 },
-    tonic: { name: '安胎藥', ch: '藥', recipe: ['angelica', 'jujube'], reward: 42, gift: 8 },
+    yunv: { name: '神仙玉女粉', ch: '粉', recipe: ['pearl', 'motherwort'], reward: 38, gift: 8 },
+    cake: { name: '藕粉桂花糖糕', ch: '糕', recipe: ['lotus', 'osmanthus'], reward: 21, gift: 5 },
+    suihan: { name: '歲寒三友茶', ch: '茶', recipe: ['pine', 'bamboo', 'plum'], reward: 33, gift: 7 },
+    incense: { name: '梨花帳中香', ch: '香', recipe: ['agarwood', 'pear'], reward: 35, gift: 8 },
+    shuhen: { name: '舒痕膠', ch: '膠', recipe: ['pearl', 'jasmine'], reward: 35, gift: 8 },
+    zuotai: { name: '坐胎藥', ch: '坐', recipe: ['angelica', 'motherwort'], reward: 33, gift: 7 },
+    tonic: { name: '安胎藥', ch: '藥', recipe: ['angelica', 'jujube'], reward: 34, gift: 6 },
     safflower: { name: '紅花', ch: '紅', recipe: ['petal', 'liquor'], out: 'inv' },
     junk: { name: '一坨黑黑的東西', ch: '黑', recipe: null },
   };
-  const NORMAL_ORDERS = ['incense', 'cake', 'cream', 'tea'];
+  const NORMAL_ORDERS = ['yunv', 'cake', 'suihan', 'incense', 'shuhen'];
 
-  const SHOP = ['sandalwood', 'ricefl', 'honey', 'pearl', 'jujube', 'liquor', 'stinky', 'musk'];
+  const SHOP = ['pine', 'bamboo', 'lotus', 'osmanthus', 'pear', 'jasmine', 'plum', 'jujube', 'motherwort', 'angelica', 'pearl', 'agarwood', 'liquor', 'cassava', 'catnip', 'musk'];
 
   // 採集表：[素材, 權重]
   const GATHER = {
     garden: {
-      name: '御花園', bg: 'garden', rare: 'itch',
+      name: '御花園', bg: 'garden', rare: 'catnip',
       bgm: 'gather', // 採集音樂：assets/audio/bgm_gather.lite.mp3（沒有就用 8-bit 合成曲）
-      table: [['jasmine', 3], ['osmanthus', 3], ['rose', 3], ['itch', 2]],
+      table: [['pine', 3], ['bamboo', 3], ['lotus', 3], ['osmanthus', 3], ['pear', 3], ['jasmine', 3], ['plum', 2], ['catnip', 1.5]],
       intro: '零溶提著小籃子，假裝在御花園賞花……',
       // 地形代號 → 像素圖（js/pixelart.js 的 id）。floor／hall 是變體清單；big 是佔 2×2 格的擺設（_0、_1 兩幀）
       tileset: {
@@ -60,7 +76,7 @@ window.GAME_DATA = (() => {
         guardSight: 4.5, playerSight: 5.5,
         // 侍衛不是一開始就在場：走滿 step 步後登場，離零溶當下位置至少 minDist 格、盡量不超過 maxDist 格
         guardSpawns: [{ step: 10, minDist: 8, maxDist: 14 }, { step: 30, minDist: 5, maxDist: 11 }],
-        rareCount: 2, extraItems: [7, 9], nearItem: 4, // 出生點 nearItem 格內保證有 1 個素材
+        rareCount: 2, extraItems: [5, 7], nearItem: 4, // 出生點 nearItem 格內保證有 1 個素材
         searchTurns: 3, wanderKeep: 0.7, wanderIdle: 0.1,
         loops: 2, rareReach: 0.7,
       },
@@ -68,7 +84,7 @@ window.GAME_DATA = (() => {
     taiyi: {
       name: '太醫院', bg: 'taiyi', rare: 'musk',
       bgm: 'gather', // 想讓太醫院用不同曲子：改成 'gather_taiyi'，放 bgm_gather_taiyi.lite.mp3
-      table: [['angelica', 3], ['croton', 1.5], ['petal', 0.8], ['musk', 0.6]],
+      table: [['jujube', 3], ['motherwort', 3], ['angelica', 3], ['pearl', 2], ['agarwood', 2], ['cassava', 2], ['liquor', 1.5], ['petal', 0.8], ['musk', 0.6]],
       intro: '趁太醫打瞌睡，零溶偷偷拉開了百子櫃……',
       tileset: {
         floor: ['ty_floor_0', 'ty_floor_1', 'ty_floor_2'], hall: ['ty_floor_0', 'ty_floor_0', 'ty_floor_1'], // 走廊也鋪木地板，可走的地方一眼看得出來
@@ -85,7 +101,7 @@ window.GAME_DATA = (() => {
         w: 25, h: 31, rooms: [6, 8], roomW: [3, 6], roomH: [3, 4], steps: 60,
         guardSight: 4.5, playerSight: 5.5,
         guardSpawns: [{ step: 10, minDist: 8, maxDist: 14 }, { step: 30, minDist: 5, maxDist: 11 }],
-        rareCount: 1, extraItems: [7, 9], nearItem: 4,
+        rareCount: 1, extraItems: [4, 6], nearItem: 4,
         searchTurns: 3, wanderKeep: 0.7, wanderIdle: 0.1,
         loops: 3, rareReach: 0.7,
       },
@@ -95,12 +111,16 @@ window.GAME_DATA = (() => {
   const CHARS = {
     lingrong: { name: '零溶', color: '#7b8fd1', face: '零', imgs: { smile: 'lingrong_smile', evil: 'lingrong_evil', shock: 'lingrong_shock' } },
     baojuan: { name: '包捐', color: '#5f9a7a', face: '捐', imgs: { _: 'baojuan' } },
-    huafei: { name: '滑妃', color: '#d0453b', face: '滑', palace: '一捆宮', bg: 'yikun', imgs: { happy: 'huafei_happy', oops: 'huafei_oops' } },
-    meizhuang: { name: '審沒裝', color: '#d99a2b', face: '審', palace: '嫌福宮', bg: 'xianfu', imgs: { happy: 'meizhuang_happy', oops: 'meizhuang_oops' } },
-    zhenhuan: { name: '真環', color: '#e07f9c', face: '環', palace: '睡慾軒', bg: 'suiyu', imgs: { happy: 'zhenhuan_happy', oops: 'zhenhuan_oops' } },
+    huafei: { name: '滑妃', color: '#d0453b', face: '滑', palace: '一捆宮', bg: 'yikun', maid: 'songzhi', imgs: { happy: 'huafei_happy', oops: 'huafei_oops' } },
+    meizhuang: { name: '審沒裝', color: '#d99a2b', face: '審', palace: '嫌福宮', bg: 'xianfu', maid: 'caiyue', imgs: { happy: 'meizhuang_happy', oops: 'meizhuang_oops' } },
+    zhenhuan: { name: '真環', color: '#e07f9c', face: '環', palace: '睡慾軒', bg: 'suiyu', maid: 'chuijinxi', imgs: { happy: 'zhenhuan_happy', oops: 'zhenhuan_oops' } },
     huangshang: { name: '黃上', color: '#d4a800', face: '黃', imgs: { _: 'huangshang', happy: 'huangshang_happy' } },
     huanghou: { name: '黃后', color: '#7a4e9a', face: '后', imgs: { _: 'huanghou' } },
     doctor: { name: '太醫溫十粗', color: '#4f7a8a', face: '溫', imgs: { _: 'doctor' } },
+    // 各宮宮女：替主子下訂單（立繪沒有時用 face 字代替）
+    songzhi: { name: '送吱', color: '#c0504a', face: '吱', imgs: { _: 'maid_songzhi' } },
+    caiyue: { name: '踩月', color: '#d0a040', face: '月', imgs: { _: 'maid_caiyue' } },
+    chuijinxi: { name: '吹緊吸', color: '#d98aa2', face: '吸', imgs: { _: 'maid_chuijinxi' } },
   };
   const TARGETS = ['huafei', 'meizhuang', 'zhenhuan'];
   const ALL = ['lingrong', ...TARGETS];
@@ -113,7 +133,7 @@ window.GAME_DATA = (() => {
     friend: { huafei: 10, meizhuang: 40, zhenhuan: 50 },
     // 滑妃開局就不孕（歡你香梗）
     status: { huafei: 'infertile', meizhuang: 'normal', zhenhuan: 'normal' },
-    startInv: { sandalwood: 1, ricefl: 1, honey: 1, pearl: 1, jujube: 1, jasmine: 1, osmanthus: 1, rose: 1, angelica: 1 },
+    startInv: { pine: 1, bamboo: 1, lotus: 1, osmanthus: 1, pear: 1, jasmine: 1, plum: 1, jujube: 1, motherwort: 1, angelica: 1, pearl: 1, agarwood: 1 },
     orderCountWeights: [[0, 25], [1, 45], [2, 30]],
     maxOpenOrdersPerChar: 2,
     orderDays: 3, // 期限：當天＋之後 2 天
@@ -152,46 +172,53 @@ window.GAME_DATA = (() => {
     muskMiscarryChance: 0.5,
     fx: {
       infertile: -10, miscarry: -20, saffMiscarry: -25,
-      itch: -8, stinky: -8, croton: -10,
+      cassava: -10, catnip: -8,
     },
   };
 
   // ───────── 台詞 ─────────
   // 每句台詞格式：[說話者, 表情, 內容]；說話者 'narr' 是旁白
+  // 訂單需求（台詞總表 C1–C18），由宮女轉述：「我家娘娘{需求}」
   const NEEDS = {
     huafei: {
-      incense: '最近睡不好，一閉眼就看到真環那張臉',
-      cake: '嘴饞得很',
-      cream: '覺得臉上好像多了一條細紋',
-      tea: '今天罵人罵到口乾舌燥',
+      yunv: '照鏡子照了一早上，說臉上多了一條細紋',
+      cake: '嘴饞了，又不許御膳房的人知道',
+      suihan: '今天罵人罵到口乾舌燥',
+      incense: '一閉眼就看到真環那張臉，整夜睡不著',
+      shuhen: '教訓宮女教訓到手背都擦破了皮',
+      zuotai: '說今年一定要給黃上生個阿哥',
     },
     meizhuang: {
-      incense: '最近心裡煩悶，夜裡總睡不安穩',
+      yunv: '天乾物燥，臉上有些緊繃',
       cake: '想念家鄉的點心',
-      cream: '天氣乾燥，臉上有些緊繃',
-      tea: '想喝些清甜的茶潤潤喉',
-      tonic: '太醫說我有喜了，想要碗安胎藥補一補',
+      suihan: '讀書讀到夜深，想喝杯清茶提神',
+      incense: '最近心裡煩悶，夜裡總睡不安穩',
+      shuhen: '練字時被硯台磕傷了手',
+      tonic: '太醫說小主有喜了，想喝碗安胎藥補一補',
     },
     zhenhuan: {
-      incense: '近來心事重重，總是睡不安穩',
+      yunv: '想讓黃上多看兩眼',
       cake: '突然想吃點甜的',
-      cream: '想讓皇上多看我兩眼',
-      tea: '倚梅園的梅花謝了，想喝點花茶解解悶',
-      tonic: '我有了身孕，想喝碗安胎藥',
+      suihan: '倚梅園的梅花謝了，想喝點花茶解解悶',
+      incense: '近來心事重重，總是睡不安穩',
+      shuhen: '前幾日摔了一跤，手上留了道疤',
+      tonic: '有了身孕，想喝碗安胎藥',
     },
   };
 
+  // 宮女開口下單（台詞總表 B12–B14）
   function request(who, productId) {
     const p = PRODUCTS[productId].name;
     const need = NEEDS[who][productId];
-    if (who === 'huafei') return ['huafei', 'happy', `安妹妹，本宮${need}。給本宮做個「${p}」送來，做不好仔細你的皮！`];
-    if (who === 'meizhuang') return ['meizhuang', 'happy', `安妹妹，${need}，能不能麻煩妹妹做個「${p}」？`];
-    return ['zhenhuan', 'happy', `零溶妹妹，${need}，可否請妹妹做個「${p}」給我？`];
+    const maid = CHARS[who].maid;
+    if (who === 'huafei') return [maid, '_', `安小主，我家娘娘${need}，要一份「${p}」。娘娘說了，東西只要最好的。`];
+    if (who === 'meizhuang') return [maid, '_', `安小主安好。我家小主${need}，想請小主做一份「${p}」。`];
+    return [maid, '_', `安小主安好。我家娘娘${need}，不知能否勞煩小主做一份「${p}」？`];
   }
 
   // 收下東西（交貨或送禮）時的反應
   const THANKS = {
-    huafei: [['huafei', 'happy', '哼，還算你有點用處。'], ['lingrong', 'smile', '（……好無聊。）']],
+    huafei: [['huafei', 'happy', '哼，還算妳有點用處。'], ['lingrong', 'smile', '（……好無聊。）']],
     meizhuang: [['meizhuang', 'happy', '妹妹的手藝真好，難怪大家都誇妳。'], ['lingrong', 'smile', '姐姐喜歡就好。']],
     zhenhuan: [['zhenhuan', 'happy', '妹妹真是貼心。'], ['lingrong', 'smile', '姐姐別客氣，妹妹只是想對姐姐好。']],
   };
@@ -243,37 +270,32 @@ window.GAME_DATA = (() => {
     ],
   };
 
-  // 出糗類：每個人有自己的演出（白天收下時）
+  // 出糗類：每個人有自己的演出（白天收下時；台詞總表 F1–F10）
   const DEBUFF_LINES = {
     huafei: {
-      itch: [['huafei', 'oops', '癢、癢死本宮了——！'], ['lingrong', 'evil', '（今晚可有好戲看了。）']],
-      stinky: [['huafei', 'happy', '安妹妹妳看什麼看？本宮臉上有東西嗎？'], ['lingrong', 'evil', '（不是臉上，是嘴裡。）']],
-      croton: [['huafei', 'oops', '本宮……本宮先失陪一下——！'], ['lingrong', 'evil', '（這就是囂張的下場。）']],
+      cassava: [['huafei', 'oops', '本宮……本宮先失陪一下——！'], ['lingrong', 'evil', '（這就是囂張的下場。）']],
+      catnip: [['huafei', 'happy', '這是什麼味道？……外頭的貓怎麼一直盯著本宮看？'], ['lingrong', 'evil', '（今晚，貓貓們會好好陪娘娘的。）']],
     },
     meizhuang: {
-      itch: [['meizhuang', 'oops', '這、這實在有失體統……可是好癢……'], ['lingrong', 'evil', '（端莊不起來了吧。）']],
-      stinky: [['meizhuang', 'happy', '妹妹，我今天讀了一首好詩——'], ['lingrong', 'evil', '（姐姐，口氣也很大方呢。）']],
-      croton: [['meizhuang', 'oops', '失陪……失陪了……！'], ['lingrong', 'evil', '（呵呵。）']],
+      cassava: [['meizhuang', 'oops', '失陪……失陪了……！'], ['lingrong', 'evil', '（呵呵。）']],
+      catnip: [['meizhuang', 'happy', '好特別的味道……踩月，窗外是不是有貓在叫？'], ['lingrong', 'evil', '（不只一隻喔。）']],
     },
     zhenhuan: {
-      itch: [['zhenhuan', 'oops', '好癢……快來人幫我抓背……'], ['lingrong', 'evil', '（姐姐，扭得真好看。）']],
-      stinky: [['zhenhuan', 'happy', '妹妹，我為妳吟一首——'], ['lingrong', 'evil', '（臭豆腐，YES！）']],
-      croton: [['zhenhuan', 'oops', '妹妹恕罪，我……我去去就回！'], ['lingrong', 'evil', '（姐姐，聰明有什麼用呢？）']],
+      cassava: [['zhenhuan', 'oops', '妹妹恕罪，我……我去去就回！'], ['lingrong', 'evil', '（姐姐，聰明有什麼用呢？）']],
+      catnip: [['zhenhuan', 'happy', '這味道真特別。……奇怪，今天睡慾軒怎麼這麼多貓？'], ['lingrong', 'evil', '（姐姐，貓緣真好。）']],
     },
   };
 
-  // 夜晚侍寢出包
+  // 夜晚侍寢出包（F11、F13）
   const SERVE_FAIL = {
-    itch: '{n}侍寢時狂抓背，黃上以為她長了跳蚤，連夜逃回癢心殿。',
-    stinky: '{n}一開口，黃上當場暈了過去。',
-    croton: '{n}侍寢到一半衝去茅房，黃上獨守空房到天亮。',
+    cassava: '{n}侍寢到一半上吐下瀉，黃上連夜逃回癢心殿。',
+    catnip: '半夜，十幾隻貓從窗戶湧進寢殿，全壓在黃上身上喵喵叫。{n}的侍寢泡湯了。',
   };
 
-  // 侍寢出包時黃上的反應（用他「嚇到逃跑」的立繪）
+  // 侍寢出包時黃上的反應（用他「嚇到逃跑」的立繪；F12、F14）
   const SERVE_FAIL_HS = {
-    itch: '愛、愛妃妳別一直抓了！妳身上是不是有跳蚤？！',
-    stinky: '這、這是什麼味道……朕……朕快不行了……',
-    croton: '愛妃？愛妃妳要去哪——？留朕一個人在這裡嗎？！',
+    cassava: '愛妃？愛妃妳怎麼又吐了——太醫！傳太醫！',
+    catnip: '哪來這麼多貓？！喵……不對，朕是說——來人啊！',
   };
 
   const EMPRESS = [
@@ -346,7 +368,7 @@ window.GAME_DATA = (() => {
   ];
 
   return {
-    ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, ALL, RULES,
+    TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, ALL, RULES,
     request, THANKS, REFUSE, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
   };
 })();

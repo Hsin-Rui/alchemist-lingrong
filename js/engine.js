@@ -43,10 +43,14 @@
     return ok.filter((h) => ownerOf(S, h) === o.id).pop() || ok.pop();
   };
   const recipeOk = (D, S, pid) => D.PRODUCTS[pid].recipe.every((id) => have(S, id) >= 1);
-  function findRecipe(D, a, b) {
+  // 配方比對：放進鍋裡的素材（2 或 3 樣，順序不拘、可重複）和配方完全一樣才算數。
+  // 舊呼叫法 findRecipe(D, a, b) 也接受。
+  function findRecipe(D, mats, b) {
+    const list = Array.isArray(mats) ? mats : [mats, b];
+    const key = list.filter(Boolean).slice().sort().join('+');
     return Object.keys(D.PRODUCTS).find((pid) => {
       const r = D.PRODUCTS[pid].recipe;
-      return r && ((r[0] === a && r[1] === b) || (r[0] === b && r[1] === a));
+      return r && r.slice().sort().join('+') === key;
     });
   }
   const acceptChance = (D, S, who) => Math.min(100, S.friend[who] + D.RULES.giftAcceptBonus) / 100;
@@ -157,8 +161,7 @@
       if (c.status === 'pregnant') return { ...out, txt: `小產＋不孕 ${R.fx.saffMiscarry}`, cls: 'good' };
       return { ...out, txt: `不孕 ${R.fx.infertile}`, cls: 'good' };
     }
-    const label = { itch: '狂癢', stinky: '口臭', croton: '腹瀉' }[spike];
-    return { ...out, txt: `${label} ${R.fx[spike]}${S.flip === who ? '・今晚出包' : ''}`, cls: 'good', it };
+    return { ...out, txt: `${it.debuff} ${R.fx[spike]}${S.flip === who ? '・今晚出包' : ''}`, cls: 'good', it };
   }
 
   // 真正下料（擲骰、改狀態、推 S.log/S.stats）。rand 注入。
@@ -198,7 +201,7 @@
       outcome = 'debuff';
       c.debuff = spike;
       fav = R.fx[spike];
-      label = { itch: '狂癢', stinky: '口臭', croton: '腹瀉' }[spike];
+      label = it.debuff;
     }
     const useless = outcome.endsWith('_useless');
     const favDelta = fav ? addFavor(S, who, fav) : 0;
@@ -753,12 +756,12 @@
     return { loc, got: got || {}, ready };
   }
 
-  // 調合（確定性，無 rand）：slot++、材料 -1、findRecipe→成品或 junk；成品入 hand/inv。
+  // 調合（確定性，無 rand）：slot++、放進去的 2～3 樣素材各 -1、findRecipe→成品或 junk；成品入 hand/inv。
   function craft(D, S, craftSel) {
-    const [a, b] = craftSel.mats;
+    const mats = craftSel.mats.filter(Boolean);
     S.slot++;
-    invAdd(S, a, -1); invAdd(S, b, -1);
-    const product = findRecipe(D, a, b) || 'junk';
+    mats.forEach((id) => invAdd(S, id, -1));
+    const product = findRecipe(D, mats) || 'junk';
     if (product === 'junk') S.stats.junk++;
     const toInv = D.PRODUCTS[product].out === 'inv';
     const spike = toInv ? null : craftSel.spike;

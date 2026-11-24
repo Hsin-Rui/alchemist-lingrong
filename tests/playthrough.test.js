@@ -136,7 +136,7 @@ test('#結局 debug 路徑能算出並渲染結局（6 種隨機狀態）', () =
 test('#演出 測試入口：各事件播對話＋結果頁，等級對應狠章／搖晃；沒加 hash 時不存在', async () => {
   // 事件 → [狠章?, 搖晃?]
   const cases = {
-    croton: [true, false], itch: [true, false], musk_dose: [true, false], musk_miss: [true, false],
+    cassava: [true, false], catnip: [true, false], musk_dose: [true, false], musk_miss: [true, false],
     musk_infertile: [true, true], safflower_infertile: [true, true], miscarry_musk: [true, true], miscarry_safflower: [true, true],
     musk_useless: [false, false], safflower_useless: [false, false], plain: [false, false], refused: [false, false], caught: [true, true],
   };

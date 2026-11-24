@@ -61,10 +61,10 @@ function play(Dv, R, bot, rand, hauls) {
       else E.gather(Dv, S, loc, rand);
       return true;
     },
-    craft(a, b, spike) {
+    craft(mats, spike) {
       // 材料不足由 bot 端先擋（引擎的 craft 不檢查）
-      if (have(a) < 1 || have(b) < 1 || (a === b && have(a) < 2)) return false;
-      return E.craft(Dv, S, { mats: [a, b], spike }).product;
+      if (mats.some((id) => have(id) < mats.filter((m) => m === id).length)) return false;
+      return E.craft(Dv, S, { mats, spike }).product;
     },
     deliver(order) {
       if (grounded()) return false;
@@ -124,7 +124,7 @@ function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, b
       const { S, D, have } = G;
       // 0. 有錢就打點敬事房（明天被翻的機率）
       if (bribeSmart ? S.silver >= G.R.bribeCost && G.flipOdds(0) < 0.35 : S.silver >= G.R.bribeCost + bribeReserve) G.bribe();
-      if (buySpikes && S.silver >= 80 && have('stinky') < 1) G.buy('stinky');
+      if (buySpikes && S.silver >= 80 && have('cassava') < 1) G.buy('cassava');
       // 1. 交貨
       if (!G.grounded()) {
         const o = S.orders.find((x) => S.hand.some((h) => h.product === x.product));
@@ -133,28 +133,28 @@ function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, b
       // 2. 加料送禮給今晚侍寢的人
       if (giftSpike && !G.grounded() && D.TARGETS.includes(S.flip) && (!bribeSmart || S.favor[S.flip] >= S.favor.lingrong - 10)) {
         // 料要在調合時加進去：手上有加了出包料的成品就送，沒有就先做一個
-        const isDebuff = (x) => ['croton', 'itch', 'stinky'].includes(x);
+        const isDebuff = (x) => DEBUFFS.includes(x);
         const ready = S.hand.find((h) => isDebuff(h.spike));
         const safe = (sp) => G.acceptChance(S.flip) >= 0.6 && G.catchChance(S.flip, sp, 'gift') < 0.15;
         if (ready && safe(ready.spike)) return G.gift(S.flip, ready);
-        const sp = ['croton', 'itch', 'stinky'].find((x) => have(x) > 0);
+        const sp = DEBUFFS.find((x) => have(x) > 0);
         if (!ready && sp && safe(sp) && S.slot < G.R.slotsPerDay - 1) {
-          const pid = ['cake', 'incense', 'tea', 'cream'].find((p) => D.PRODUCTS[p].recipe.every((id) => have(id) >= 1));
-          if (pid) { const [a, b] = D.PRODUCTS[pid].recipe; return G.craft(a, b, sp); }
+          const pid = D.NORMAL_ORDERS.find((p) => D.PRODUCTS[p].recipe.every((id) => have(id) >= 1));
+          if (pid) return G.craft(D.PRODUCTS[pid].recipe, sp);
         }
       }
       // 3. 做訂單（照期限排序）
       const todo = S.orders.filter((o) => !S.hand.some((h) => h.product === o.product)).sort((a, b) => a.due - b.due);
       for (const o of todo) {
-        const [a, b] = D.PRODUCTS[o.product].recipe;
-        [a, b].forEach((id) => { if (have(id) < 1 && D.SHOP.includes(id)) G.buy(id); });
-        if (have(a) >= 1 && have(b) >= 1) {
+        const mats = D.PRODUCTS[o.product].recipe;
+        mats.forEach((id) => { if (have(id) < 1 && D.SHOP.includes(id)) G.buy(id); });
+        if (mats.every((id) => have(id) >= 1)) {
           const sp = spikeFor(G, o.who);
-          return G.craft(a, b, sp && have(sp) > 0 ? sp : null);
+          return G.craft(mats, sp && have(sp) > 0 ? sp : null);
         }
       }
       // 4. 煉紅花
-      if (makeSaff && have('petal') > 0 && (have('liquor') > 0 || G.buy('liquor'))) return G.craft('petal', 'liquor');
+      if (makeSaff && have('petal') > 0 && (have('liquor') > 0 || G.buy('liquor'))) return G.craft(['petal', 'liquor']);
       // 5. 採集訂單缺的東西
       if (!G.grounded()) {
         const need = new Set();
@@ -172,20 +172,21 @@ function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, b
 }
 
 // 精算型的加料判斷：風險低才下手，挑效果最好的料
+const DEBUFFS = ['cassava', 'catnip'];
 function smartSpike(G, who) {
   const { S, have } = G;
   const c = S.conc[who];
   const ok = (sp) => have(sp) > 0 && G.catchChance(who, sp, 'deliver') < 0.15;
   if (c.status === 'pregnant') { if (ok('safflower')) return 'safflower'; if (ok('musk')) return 'musk'; }
   if (c.status === 'normal' && ok('safflower')) return 'safflower';
-  if (S.flip === who) { const d = ['croton', 'itch', 'stinky'].find(ok); if (d) return d; }
+  if (S.flip === who) { const d = DEBUFFS.find(ok); if (d) return d; }
   if (c.status === 'normal' && ok('musk')) return 'musk';
-  return ['croton', 'itch', 'stinky'].find(ok) || null;
+  return DEBUFFS.find(ok) || null;
 }
 
 const BOTS = [
   makeBot({ name: '正經', spikeFor: () => null, bribeReserve: 40 }),
-  makeBot({ name: '隨手加料', spikeFor: (G) => { const s = ['itch', 'stinky', 'croton', 'musk', 'safflower'].filter((x) => G.have(x) > 0); return s.length && G.rand() < 0.5 ? s[0] : null; }, bribeReserve: 40 }),
+  makeBot({ name: '隨手加料', spikeFor: (G) => { const s = [...DEBUFFS, 'musk', 'safflower'].filter((x) => G.have(x) > 0); return s.length && G.rand() < 0.5 ? s[0] : null; }, bribeReserve: 40 }),
   makeBot({ name: '精算', spikeFor: smartSpike, giftSpike: true, bribeReserve: 0, makeSaff: true, buySpikes: true }),
   // 高手：只整恩寵追得上自己的人，打點只在被翻機率低的時候
   makeBot({ name: '高手', spikeFor: (G, who) => (G.S.favor[who] >= G.S.favor.lingrong - 10 ? smartSpike(G, who) : null), giftSpike: true, bribeSmart: true, makeSaff: true, buySpikes: true }),

@@ -592,8 +592,8 @@ function connect(url) {
     const toResult = async () => { await press('Escape'); await waitScr('result'); };
 
     // 輕：腹瀉（對話逐句走，確認立繪演出、對話中不晃）
-    await loadFx('croton');
-    check('演出入口：#演出=croton 直接播對話', await hasDlg());
+    await loadFx('cassava');
+    check('演出入口：#演出=cassava 直接播對話', await hasDlg());
     check('輕：受害者那句立繪跳起來抖（fx-victim＋動畫）', await ev("!!document.querySelector('.dlg-portrait.fx-victim') && document.querySelector('.dlg-portrait').getAnimations().length > 0"));
     check('輕：對話中不搖晃（受害者句）', await noShakeNow());
     await sleep(650);
@@ -610,7 +610,7 @@ function connect(url) {
     check('輕：受害者立繪被震（有動畫）', await ev("document.querySelector('.result-portrait').getAnimations().length > 0"));
     check('輕：14 顆墨點＋1 圈墨痕', await ev("document.querySelectorAll('.fx-ink').length === 14 && document.querySelectorAll('.fx-ring').length === 1"));
     check('輕：墨點與章同色', await ev("getComputedStyle(document.querySelector('.fx-ink')).backgroundColor === getComputedStyle(document.querySelector('.stamp')).color"));
-    await shot('fx-light-croton');
+    await shot('fx-light-cassava');
     await press('Enter');
     check('演出入口：結果頁 Enter 照常回炎洗宮', await waitScr('home'));
 
@@ -757,7 +757,7 @@ function connect(url) {
     check('演出入口：未知事件 → 標題頁', (await scr()) === 'title' && !(await hasDlg()));
     await loadFx(null);
     check('演出入口：#演出 顯示事件選單', await ev("document.querySelectorAll('#app .sheet a[href^=\"#\"]').length >= 10"));
-    await ev("document.querySelector('#app .sheet a[href*=\"croton\"]').click()");
+    await ev("document.querySelector('#app .sheet a[href*=\"cassava\"]').click()");
     await waitFor("!!document.querySelector('.dialog-layer')", 4000);
     check('演出入口：點選單事件 → 播該事件', await ev("!!document.querySelector('.dlg-portrait.fx-victim')"));
     await cdp.send('Emulation.setEmulatedMedia', { features: [] });

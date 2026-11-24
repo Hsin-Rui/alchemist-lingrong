@@ -267,7 +267,7 @@
     } else {
       lines.push(['baojuan', '_', '今晚黃上誰的牌子都沒翻，說是要批奏摺。']);
     }
-    report.newOrders.forEach((o) => lines.push(['baojuan', '_', `${D.CHARS[o.who].palace}的${charName(o.who)}派人來下訂單了。`], D.request(o.who, o.product)));
+    report.newOrders.forEach((o) => lines.push(D.request(o.who, o.product)));
     if (report.noOrders) lines.push(['baojuan', '_', '今天各宮都沒有新訂單。']);
     return lines;
   }
@@ -682,8 +682,7 @@
   }
 
   function doCraft() {
-    const [a, b] = craftSel.mats;
-    if (!a || !b || busy) return;
+    if (craftSel.mats.length < 2 || busy) return;
     busy = true;
     A.sfx('bubble');
     app.querySelector('.cauldron')?.classList.add('brewing');
@@ -825,7 +824,7 @@
     } else {
       const c = S.conc[f];
       body = `${avatar(f)}<div class="tn-main"><b>今晚${charName(f)}侍寢</b>
-        <small>${c.debuff ? `已經${({ itch: '狂癢', stinky: '口臭', croton: '腹瀉' })[c.debuff]}，今晚必定出包！` : `友好 ${S.friend[f]}・枕邊風 ${pct(E.pillowChance(D, S, f))}`}</small></div>
+        <small>${c.debuff ? `已經${D.ITEMS[c.debuff].debuff}，今晚必定出包！` : `友好 ${S.friend[f]}・枕邊風 ${pct(E.pillowChance(D, S, f))}`}</small></div>
         <button class="btn small ${c.debuff ? '' : 'primary'}" data-a="giftto" data-v="${f}" ${grounded() || c.debuff ? 'disabled' : ''}>送禮</button>`;
     }
     return `<section class="tonight">
@@ -875,7 +874,7 @@
     const c = S.conc[who];
     let s = { normal: '正常', pregnant: `有喜（${c.preg + 1}/${R.pregnancyNights}）`, infertile: '不孕' }[c.status];
     if (c.musk && c.status !== 'infertile') s += `・麝香 ${c.musk}/${R.muskDoses}`;
-    if (c.debuff) s += `・${({ itch: '狂癢', stinky: '口臭', croton: '腹瀉' })[c.debuff]}`;
+    if (c.debuff) s += `・${D.ITEMS[c.debuff].debuff}`;
     return s;
   }
 
@@ -995,12 +994,13 @@
     craft() {
       const order = S.orders.find((o) => o.id === craftSel.forOrder);
       const who = craftSel.forWho;
-      const [a, b] = craftSel.mats;
+      const [a, b, c3] = craftSel.mats;
+      const enough = craftSel.mats.length >= 2;
       const avail = (id) => have(id) - craftSel.mats.filter((m) => m === id).length;
-      const slot = (id, i) => `<button class="cslot ${id ? 'filled' : ''}" data-a="unmat" data-v="${i}" aria-label="${id ? `移除${itemName(id)}` : '空格'}">${id ? `${tok(id, 'lg')}<span>${itemName(id)}</span>` : '<span>素材</span>'}</button>`;
-      const result = a && b ? E.findRecipe(D, a, b) : null;
+      const slot = (id, i) => `<button class="cslot ${id ? 'filled' : ''}" data-a="unmat" data-v="${i}" aria-label="${id ? `移除${itemName(id)}` : '空格'}">${id ? `${tok(id, 'lg')}<span>${itemName(id)}</span>` : `<span>${i === 2 ? '可不放' : '素材'}</span>`}</button>`;
+      const result = enough ? E.findRecipe(D, craftSel.mats) : null;
       const toInv = result && D.PRODUCTS[result].out === 'inv';
-      const preview = a && b ? (result ? `→ ${itemName(result)}` : '→ ？？？（好像不太對）') : '放入兩樣素材';
+      const preview = enough ? (result ? `→ ${itemName(result)}` : '→ ？？？（好像不太對）') : '放入兩、三樣素材';
       const owned = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat');
       // 配方只差一樣時，把缺的那樣也列出來（停用、標出哪裡有）：例如有紅花瓣沒烈酒，玩家才知道要去小舖買烈酒
       const missing = [];
@@ -1011,7 +1011,7 @@
       });
       const mats = [...owned, ...missing];
       const spikes = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === 'spike');
-      const matDef = craftSel.mats.length < 2 ? mats.find((id) => avail(id) > 0) : null;
+      const matDef = craftSel.mats.length < 2 ? mats.find((id) => avail(id) > 0) : null; // 第三格選放，預設焦點不指它
       const spikeRow = (id) => {
         const it = D.ITEMS[id];
         const n = have(id);
@@ -1045,7 +1045,7 @@
           <div class="workshop">
             ${portrait('lingrong', craftSel.spike ? 'evil' : 'smile', 'ws-portrait')}
             <div class="cauldron">
-              <div class="cslots">${slot(a, 0)}${slot(b, 1)}
+              <div class="cslots">${slot(a, 0)}${slot(b, 1)}${slot(c3, 2)}
                 <button class="cslot spike ${craftSel.spike ? 'filled' : ''}" data-a="spike" data-v="" aria-label="料">${craftSel.spike ? `${tok(craftSel.spike, 'lg')}<span>${itemName(craftSel.spike)}</span>` : '<span>料</span>'}</button></div>
               <div class="pot"><div class="pot-rim"></div><div class="pot-body">${preview}</div><div class="pot-legs"><i></i><i></i></div>
                 <div class="bubbles"><i></i><i></i><i></i><i></i><i></i></div></div>
@@ -1054,7 +1054,7 @@
           <div class="drawer">
             <h3>素材 <small>點一下放進鍋裡</small></h3>
             <div class="matgrid">${mats.length ? mats.map((id) => (have(id)
-              ? `<button class="mat" data-a="mat" data-v="${id}"${DEF(id === matDef)} ${avail(id) <= 0 || craftSel.mats.length >= 2 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}</small></button>`
+              ? `<button class="mat" data-a="mat" data-v="${id}"${DEF(id === matDef)} ${avail(id) <= 0 || craftSel.mats.length >= 3 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}</small></button>`
               : `<button class="mat lack" data-a="mat" data-v="${id}" disabled>${tok(id)}<span>${itemName(id)}</span><small>缺・${locName(sourcesOf(id)[0].loc)}</small></button>`)).join('') : '<p class="muted">沒有素材，先去採集或小舖吧。</p>'}</div>
             <h3>要加什麼料？ ${who ? `<small>依${charName(who)}目前狀態預測</small>` : ''}</h3>
             ${toInv ? '<p class="muted">正在煉製紅花，不能再加料。</p>' : ''}
@@ -1067,7 +1067,7 @@
             </details>
           </div>
         </div>
-        <div class="footer-cta dark"><button class="btn amber wide big" data-a="craft" ${a && b ? '' : 'disabled'}>開始調合（花 1 個時辰）</button></div>
+        <div class="footer-cta dark"><button class="btn amber wide big" data-a="craft" ${enough ? '' : 'disabled'}>開始調合（花 1 個時辰）</button></div>
         ${popup}
       </div>`;
     },
@@ -1616,7 +1616,7 @@
         break;
       }
       case 'craftfor': openCraft(v ? Number(v) : null); break;
-      case 'mat': if (craftSel.mats.length < 2) craftSel.mats.push(v); render(); break;
+      case 'mat': if (craftSel.mats.length < 3) craftSel.mats.push(v); render(); break;
       case 'unmat': craftSel.mats.splice(Number(v), 1); render(); break;
       case 'spike': craftSel.spike = v && craftSel.spike !== v ? v : null; render(); break;
       case 'craft': doCraft(); break;
@@ -1675,9 +1675,8 @@
     const NO_CATCH = 0.999; // 抓包骰 ≥ 機率 → 沒被抓；送禮骰 ≥ 收禮機率 → 拒收
     // 事件 → [說明, 對象, 加料, 對象狀態, 骰子序列, 送禮?]
     const FX_DEMO = {
-      itch: ['狂癢（輕）', 'huafei', 'itch', null, [NO_CATCH]],
-      stinky: ['口臭（輕）', 'huafei', 'stinky', null, [NO_CATCH]],
-      croton: ['腹瀉（輕）', 'huafei', 'croton', null, [NO_CATCH]],
+      cassava: ['上吐下瀉（輕）', 'huafei', 'cassava', null, [NO_CATCH]],
+      catnip: ['貓咪鬧場（輕）', 'huafei', 'catnip', null, [NO_CATCH]],
       musk_dose: ['麝香 2/3（中）', 'zhenhuan', 'musk', { status: 'normal', musk: 1 }, [NO_CATCH]],
       musk_miss: ['麝香落空（中）', 'zhenhuan', 'musk', { status: 'pregnant', preg: 1, musk: 0 }, [NO_CATCH, NO_CATCH]],
       musk_infertile: ['麝香不孕（重）', 'meizhuang', 'musk', { status: 'normal', musk: 2 }, [NO_CATCH]],
@@ -1688,7 +1687,7 @@
       safflower_useless: ['紅花白下（一般）', 'meizhuang', 'safflower', { status: 'infertile' }, [NO_CATCH]],
       plain: ['收下（一般）', 'huafei', null, null, []],
       refused: ['拒收（一般）', 'huafei', null, null, [NO_CATCH], true],
-      caught: ['被抓（重＋暗幕）', 'huafei', 'croton', null, [0]],
+      caught: ['被抓（重＋暗幕）', 'huafei', 'cassava', null, [0]],
     };
     window.addEventListener('hashchange', () => location.reload()); // 選單連結換 hash → 重新播
     const key = fxHash.slice('#演出='.length);

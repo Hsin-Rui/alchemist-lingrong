@@ -83,9 +83,9 @@
   // 兩張地圖的圖塊（對應 js/data.js 的 GATHER.<loc>.tileset）、素材與巡邏者
   const THEMES = [
     { canvas: 'room', wallTop: 'hedge_top', wallFace: 'hedge_face', door: 'gate', floor: ['grass_0', 'grass_1', 'grass_2'], big: 'pond',
-      props: { F: 'flowerbed', R: 'rock', L: 'lantern' }, items: ['jasmine', 'osmanthus', 'rose', 'itch'], guards: ['guard', 'guard'] },
+      props: { F: 'flowerbed', R: 'rock', L: 'lantern' }, items: ['pine', 'bamboo', 'lotus', 'osmanthus', 'pear', 'jasmine', 'plum', 'catnip'], guards: ['guard', 'guard'] },
     { canvas: 'room2', wallTop: 'ty_wall_top', wallFace: 'ty_wall_face', door: 'ty_door', floor: ['ty_floor_0', 'ty_floor_1', 'ty_floor_2'], big: 'ty_stove',
-      props: { F: 'ty_basket', R: 'ty_mortar', L: 'ty_candle' }, items: ['angelica', 'croton', 'petal', 'musk'], guards: ['page', 'doctor'] },
+      props: { F: 'ty_basket', R: 'ty_mortar', L: 'ty_candle' }, items: ['jujube', 'motherwort', 'angelica', 'pearl', 'agarwood', 'cassava', 'liquor', 'petal', 'musk'], guards: ['page', 'doctor'] },
   ];
   const hash = (x, y) => (((x * 73856093) ^ (y * 19349663)) >>> 0) % 8;
   const tile = (x, y) => (MAP[y] && MAP[y][x]) || '#';
