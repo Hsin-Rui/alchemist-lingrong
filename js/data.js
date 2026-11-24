@@ -184,8 +184,8 @@ window.GAME_DATA = (() => {
   function request(who, productId) {
     const p = PRODUCTS[productId].name;
     const need = NEEDS[who][productId];
-    if (who === 'huafei') return ['huafei', 'happy', `安嬪，本宮${need}。給本宮做個「${p}」送來，做不好仔細你的皮！`];
-    if (who === 'meizhuang') return ['meizhuang', 'happy', `安嬪妹妹，${need}，能不能麻煩妹妹做個「${p}」？`];
+    if (who === 'huafei') return ['huafei', 'happy', `安妹妹，本宮${need}。給本宮做個「${p}」送來，做不好仔細你的皮！`];
+    if (who === 'meizhuang') return ['meizhuang', 'happy', `安妹妹，${need}，能不能麻煩妹妹做個「${p}」？`];
     return ['zhenhuan', 'happy', `零溶妹妹，${need}，可否請妹妹做個「${p}」給我？`];
   }
 
@@ -247,7 +247,7 @@ window.GAME_DATA = (() => {
   const DEBUFF_LINES = {
     huafei: {
       itch: [['huafei', 'oops', '癢、癢死本宮了——！'], ['lingrong', 'evil', '（今晚可有好戲看了。）']],
-      stinky: [['huafei', 'happy', '安嬪你看什麼看？本宮臉上有東西嗎？'], ['lingrong', 'evil', '（不是臉上，是嘴裡。）']],
+      stinky: [['huafei', 'happy', '安妹妹妳看什麼看？本宮臉上有東西嗎？'], ['lingrong', 'evil', '（不是臉上，是嘴裡。）']],
       croton: [['huafei', 'oops', '本宮……本宮先失陪一下——！'], ['lingrong', 'evil', '（這就是囂張的下場。）']],
     },
     meizhuang: {
@@ -277,7 +277,7 @@ window.GAME_DATA = (() => {
   };
 
   const EMPRESS = [
-    ['huanghou', '_', '皇上，安嬪近日安分守己，又會唱曲，皇上也該去炎洗宮坐坐了。'],
+    ['huanghou', '_', '皇上，安小主近日安分守己，又會唱曲，皇上也該去炎洗宮坐坐了。'],
     ['lingrong', 'shock', '（黃后娘娘……居然替我說話？她到底在打什麼算盤……）'],
   ];
 
@@ -288,9 +288,9 @@ window.GAME_DATA = (() => {
 
   const CAUGHT = [
     ['doctor', '_', '且慢！這東西裡……有{spike}！'],
-    ['{who}', 'oops', '安嬪！妳竟然——！'],
+    ['{who}', 'oops', '安妹妹！妳竟然——！'],
     ['lingrong', 'shock', '冤、冤枉啊！一定是有人陷害臣妾！'],
-    ['narr', '', '黃上震怒：安嬪禁足炎洗宮 {days} 天，好好反省！'],
+    ['narr', '', '黃上震怒：安小主禁足炎洗宮 {days} 天，好好反省！'],
   ];
 
   const TUTORIAL = [
@@ -307,26 +307,26 @@ window.GAME_DATA = (() => {
   // ───────── 結局 ─────────
   // 第一層：誰恩寵第一（寫在聖旨開頭）
   const END_TOP = {
-    lingrong: '安嬪零溶恩寵冠絕六宮，即日起改姓鈕祜祿！',
+    lingrong: '安小主零溶恩寵冠絕六宮，即日起改姓鈕祜祿！',
     huafei: '滑妃恩寵冠絕六宮，晉為皇貴妃，一捆宮夜夜笙歌。',
     meizhuang: '審沒裝恩寵冠絕六宮，晉為惠妃，嫌福宮從此不嫌福。',
     zhenhuan: '真環恩寵冠絕六宮，晉為熹妃，睡慾軒門庭若市。',
   };
   // 對手第一時，零溶的處境（禁足優先）
   const END_LING = {
-    grounded: '安嬪零溶尚在禁足，著閉門思過。',
-    2: '安嬪零溶屈居第二，只差一點點。',
-    3: '安嬪零溶位居第三，還得再加把勁。',
-    4: '安嬪零溶恩寵墊底，炎洗宮依舊門可羅雀。',
+    grounded: '安小主零溶尚在禁足，著閉門思過。',
+    2: '安小主零溶屈居第二，只差一點點。',
+    3: '安小主零溶位居第三，還得再加把勁。',
+    4: '安小主零溶恩寵墊底，炎洗宮依舊門可羅雀。',
   };
   // 第二層：封號。依序排列＝越前面越稀有，拿到多個時，第一個是主封號，其餘「另外加封」。
   // 判定條件寫在 game.js 的 TITLE_CHECK。
   const TITLES = [
     { id: 'shexiang', name: '麝香代言人', seal: '麝香|代言人', comment: '一劑一劑，耐心是美德。歡宜香的配方，從此由炎洗宮獨家監製。', hint: '據說有一種香，聞久了就……' },
-    { id: 'shuangmian', name: '雙面零溶', seal: '雙面|零溶', comment: '姐姐們都說安嬪妹妹最貼心了。三位都中了招，卻沒有一個人懷疑妳。', hint: '表面姐妹情深，背地裡……而且一次都不能失手。' },
+    { id: 'shuangmian', name: '雙面零溶', seal: '雙面|零溶', comment: '姐姐們都說安妹妹最貼心了。三位都中了招，卻沒有一個人懷疑妳。', hint: '表面姐妹情深，背地裡……而且一次都不能失手。' },
     { id: 'duanzi', name: '斷子絕孫專賣店', seal: '斷子絕孫|專賣店', comment: '炎洗宮出品，必屬佳品。後宮出生率創下歷史新低。', hint: '審沒裝和真環，好像都還生得出來……' },
     { id: 'wentaiyi', name: '溫太醫不要', seal: '溫太醫|不要', comment: '溫十粗太醫在炎洗宮門口擺了張桌子。妳一出門，他就搖頭。', hint: '被太醫抓到不只一次的話……' },
-    { id: 'guimi', name: '後宮好閨蜜', seal: '後宮|好閨蜜', comment: '大家都好喜歡安嬪妹妹！……雖然黃上還是不太記得妳。', hint: '三位姐姐都跟妳很要好的話……' },
+    { id: 'guimi', name: '後宮好閨蜜', seal: '後宮|好閨蜜', comment: '大家都好喜歡安妹妹！……雖然黃上還是不太記得妳。', hint: '三位姐姐都跟妳很要好的話……' },
     { id: 'baimang', name: '白忙一場', seal: '白忙|一場', comment: '料加了，錢花了，人一個都沒害到。', hint: '加了料，卻一次都沒得逞……' },
     { id: 'jingshi', name: '敬事房大金主', seal: '敬事房|大金主', comment: '敬事房的公公們逢年過節都送點心來，感謝妳養活了整個部門。', hint: '常給敬事房包紅包的話……' },
     { id: 'bailian', name: '白蓮花', seal: '白蓮花', comment: '十天來安分守己，什麼都沒加。……妳是來玩什麼遊戲的？', hint: '從頭到尾都乖乖的話……' },

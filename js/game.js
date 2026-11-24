@@ -328,7 +328,7 @@
         const d = report.serve.favDelta;
         lines.push(['narr', '', `${name}今晚侍寢，恩寵 +${d}`]);
         if (report.pillow) {
-          lines.push([who, 'happy', '皇上，安嬪妹妹做的東西可好了，您也去看看她吧。'], ['narr', '', `枕邊風！零溶恩寵 +${report.pillow.favDelta}`]);
+          lines.push([who, 'happy', '皇上，安妹妹做的東西可好了，您也去看看她吧。'], ['narr', '', `枕邊風！零溶恩寵 +${report.pillow.favDelta}`]);
         }
         if (report.conceived) {
           lines.push(['narr', '', `隔天一早，太醫診出${name}有喜了！`], ['lingrong', 'evil', '（……有喜了啊。）']);
@@ -1202,7 +1202,7 @@
         <div class="edict">
           <div class="edict-hd">奉天承運　黃上詔曰</div>
           <p class="edict-open">${e.opening.join('')}</p>
-          <p>茲賜${e.top === 'lingrong' ? '鈕祜祿氏零溶' : '炎洗宮安嬪零溶'}封號——</p>
+          <p>茲賜${e.top === 'lingrong' ? '鈕祜祿氏零溶' : '炎洗宮安小主零溶'}封號——</p>
           <h1 class="edict-title">${e.main.name}</h1>
           <p>${e.main.comment}欽此。</p>
           ${e.extra.length ? `<div class="edict-extra">另外加封：${e.extra.map((t) => `<b>${t.name}</b>`).join('、')}</div>` : ''}
