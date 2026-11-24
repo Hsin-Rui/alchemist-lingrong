@@ -1,0 +1,47 @@
+# 第二輪的 epic，表格順序＝建造順序。
+[[epic]]
+id = 1
+slug = "epic-materials-recipes"
+title = "新素材、新配方與帶特性的素材份"
+description = "遊戲改用 7 道新配方與 12 種新素材，素材一份一份記、採集的帶特性，小舖什麼都買得到、多的能賣；現有調合畫面照常能做新配方（含三素材）。"
+covers = ["R1", "R3", "R11"]
+
+[[epic]]
+id = 2
+slug = "epic-craft-stages"
+title = "四階段調合"
+description = "調合變成配方冊＋開火攪拌＋加料＋起鍋四階段，有演出、有快速調合，成品帶特性。"
+covers = ["R2", "R3", "R11"]
+after = [{ epic = 1, needs = "素材份與特性的資料結構" }]
+
+[[epic]]
+id = 3
+slug = "epic-visit-palaces"
+title = "拜訪各宮與新的加料規則"
+description = "送禮改成拜訪：喜好、投其所好與嫌棄反應、拒收；宮女送訂單、包捐代交；新料與遮掩被抓；模擬器跟著更新並調好數值。"
+covers = ["R4", "R5", "R6", "R11", "R12"]
+after = [{ epic = 2, needs = "帶特性的成品" }]
+
+[[epic]]
+id = 4
+slug = "epic-grounded-sutra"
+title = "禁足抄經"
+description = "禁足時能玩排字拼經、得到後宮心經，包捐會提示能做什麼。"
+covers = ["R7", "R11"]
+after = [{ epic = 3, needs = "拜訪送禮流程（心經要能送）與包捐代交" }]
+
+[[epic]]
+id = 5
+slug = "epic-opening-tutorial"
+title = "開場與包捐教學"
+description = "新開場對話、教學模式帶完第一天、第一次碰到時的說明、包捐每天一句。"
+covers = ["R8", "R11"]
+after = [{ epic = 4, needs = "所有要教的玩法都已到位" }]
+
+[[epic]]
+id = 6
+slug = "epic-ending-share"
+title = "結局兩畫面與分享圖卡"
+description = "結局拆成恩寵揭曉與封號戰績兩個畫面，新封號生效，玩家能把圖卡分享或存下來。"
+covers = ["R9", "R10", "R11"]
+after = [{ epic = 3, needs = "新封號要計的事件（投其所好、包捐代交、特性）" }]
