@@ -775,15 +775,18 @@
     playDialog(outcomeLines(r.who, r.spike, r), () => go('result'), D.CHARS[r.who].bg);
   }
 
-  function doGift(who, handId) {
+  // 拜訪各宮（§14）：handId 空＝空手
+  function doVisit(who, handId) {
     if (needOut()) return;
-    const item = S.hand.find((h) => h.id === handId);
-    if (!item || item.product === 'junk') return;
-    if (item.spike && who !== S.flip) { toast('加料的禮只能送給今晚侍寢的人'); return; }
-    const r = E.gift(D, S, who, handId, rand);
-    if (r.refused) { playDialog(D.REFUSE[r.who], () => go('result'), D.CHARS[r.who].bg); return; }
+    const item = handId == null ? null : S.hand.find((h) => h.id === handId);
+    if (handId != null && (!item || item.product === 'junk')) return;
+    if (item && item.spike && who !== S.flip) { toast('加料的禮只能送給今晚侍寢的人'); return; }
+    const r = E.visit(D, S, who, item ? item.id : null, rand);
+    const enter = D.VISIT_ENTER[who] || [];
+    if (r.empty) { playDialog([...enter, ...D.VISIT_EMPTY[who]], () => go('result'), D.CHARS[who].bg); return; }
+    if (r.refused) { playDialog([...enter, ...D.REFUSE[r.who]], () => go('result'), D.CHARS[r.who].bg); return; }
     A.sfx('pop');
-    playDialog(outcomeLines(r.who, r.spike, r), () => go('result'), D.CHARS[r.who].bg);
+    playDialog([...enter, ...outcomeLines(r.who, r.spike, r)], () => go('result'), D.CHARS[r.who].bg);
   }
 
   function sleepEarly() {
@@ -895,7 +898,7 @@
       const c = S.conc[f];
       body = `${avatar(f)}<div class="tn-main"><b>今晚${charName(f)}侍寢</b>
         <small>${c.debuff ? `已經${D.ITEMS[c.debuff].debuff}，今晚必定出包！` : `友好 ${S.friend[f]}・枕邊風 ${pct(E.pillowChance(D, S, f))}`}</small></div>
-        <button class="btn small ${c.debuff ? '' : 'primary'}" data-a="giftto" data-v="${f}" ${grounded() || c.debuff ? 'disabled' : ''}>送禮</button>`;
+        <button class="btn small ${c.debuff ? '' : 'primary'}" data-a="giftto" data-v="${f}" ${grounded() || c.debuff ? 'disabled' : ''}>拜訪</button>`;
     }
     return `<section class="tonight">
       <div class="tn-row">${body}</div>
@@ -973,7 +976,7 @@
       return `<div class="screen theme-light">
         ${topBar()}
         <div class="scroll">
-          ${grounded() ? `<div class="grounded">禁足中（到第 ${S.groundUntil} 天）：不能出門採集、交貨、送禮，也不能侍寢</div>` : ''}
+          ${grounded() ? `<div class="grounded">禁足中（到第 ${S.groundUntil} 天）：不能出門採集、交貨、拜訪，也不能侍寢</div>` : ''}
           <div class="stage bg-yanxi">
             ${portrait('lingrong', grounded() ? 'shock' : 'smile', 'stage-portrait')}
             <div class="bubble">${esc(hintLine())}</div>
@@ -981,7 +984,7 @@
           ${tonightCard()}
           <section class="orders">
             <h2>訂單 <small>${S.orders.length} 張</small></h2>
-            ${S.orders.length ? S.orders.map(orderCard).join('') : '<p class="muted">目前沒有訂單。可以先採集備料，或做點東西送禮。</p>'}
+            ${S.orders.length ? S.orders.map(orderCard).join('') : '<p class="muted">目前沒有訂單。可以先採集備料，或去各宮走動走動。</p>'}
             ${S.hand.some((h) => h.product === 'junk') ? `<p class="muted">（手上還有 ${S.hand.filter((h) => h.product === 'junk').length} 坨黑黑的東西……）</p>` : ''}
           </section>
         </div>
@@ -990,7 +993,7 @@
           <button data-a="go" data-v="shop"><b>商</b><span>小舖</span></button>
           <button data-a="go" data-v="gather"${DEF(!(S.orders.length && orderMainOk(S.orders[0])))}><b>採</b><span>採集</span></button>
           <button data-a="craftfor" data-v=""><b>煉</b><span>調合</span></button>
-          <button data-a="giftto" data-v=""><b>禮</b><span>送禮</span></button>
+          <button data-a="giftto" data-v=""><b>訪</b><span>拜訪</span></button>
           <button data-a="go" data-v="status"><b>宮</b><span>後宮</span></button>
           <button data-a="sleep"><b>寢</b><span>就寢</span></button>
         </nav>
@@ -1092,32 +1095,37 @@
     gift() {
       const who = giftWho;
       const items = S.hand.filter((h) => h.product !== 'junk');
+      const off = grounded();
       const targetCard = (t) => {
         const tonight = S.flip === t;
-        return `<button class="gcard ${who === t ? 'on' : ''}" data-a="giftwho" data-v="${t}"${DEF(sendDef == null && t === (who || D.TARGETS[0]))} style="--c:${D.CHARS[t].color}">
+        return `<button class="gcard ${who === t ? 'on' : ''}" data-a="giftwho" data-v="${t}"${DEF(who == null && t === D.TARGETS[0])} style="--c:${D.CHARS[t].color}">
           ${avatar(t)}<span class="gcard-main"><b>${charName(t)}${tonight ? '<em>今晚侍寢</em>' : ''}</b>
-          <small>友好 ${S.friend[t]}・收禮機率 ${pct(E.acceptChance(D, S, t))}</small>
+          <small>${D.CHARS[t].palace}・友好 ${S.friend[t]}・收禮機率 ${pct(E.acceptChance(D, S, t))}</small>
           <span class="bar heart"><i style="width:${S.friend[t]}%"></i></span></span></button>`;
       };
       let list = '';
-      const sendDef = who && !grounded() ? (items.find((h) => !(h.spike && who !== S.flip)) || {}).id : null;
       if (who) {
-        list = items.length ? items.map((h) => {
+        // 不顯示預估友好：喜好要玩家自己試出來（§14.1）
+        const rows = items.map((h) => {
           const blocked = h.spike && who !== S.flip;
           const p = h.spike ? E.predict(D, S, who, h.spike, 'gift') : null;
           return `<div class="row gift-row ${blocked ? 'blocked' : ''}">${tok(h.product)}${h.spike ? tok(h.spike, 'sm') : ''}
             <div class="row-main"><b>${itemName(h.product)}${h.spike ? `<em class="spiked">＋${itemName(h.spike)}</em>` : ''}</b>${trChips(h.tr, 'sm')}
-            <small>${blocked ? '加料的禮只能送給今晚侍寢的人' : p ? `${p.txt}・${p.riskTxt}` : `收下後友好 +${D.PRODUCTS[h.product].gift}`}</small></div>
-            <button class="btn small ${blocked ? '' : 'primary'}" data-a="gift" data-v="${h.id}"${DEF(h.id === sendDef)} ${blocked || grounded() ? 'disabled' : ''}>送出</button></div>`;
-        }).join('') : '<p class="muted">手上沒有成品。先去調合一份吧！</p><button class="btn primary wide" data-a="craftfor" data-v="">去調合</button>';
+            ${blocked ? '<small>加料的禮只能送給今晚侍寢的人</small>' : p ? `<small>${p.txt}・${p.riskTxt}</small>` : ''}</div>
+            <button class="btn small ${blocked ? '' : 'primary'}" data-a="gift" data-v="${h.id}" ${blocked || off ? 'disabled' : ''}>帶這份去</button></div>`;
+        }).join('');
+        list = `<div class="row gift-row empty-visit"><span class="tok tok-none"><span class="tok-ch">空</span></span>
+            <div class="row-main"><b>空手拜訪</b><small>聊聊天，友好 +${R.visitEmptyFriend}</small></div>
+            <button class="btn small primary" data-a="gift" data-v=""${DEF(!off)} ${off ? 'disabled' : ''}>去${D.CHARS[who].palace}</button></div>
+          ${rows || '<p class="muted">手上沒有成品可以當伴手禮。</p>'}`;
       }
       return `<div class="screen theme-light">
-        ${subHeader('送禮', '花 1 個時辰・可以送給任何人；加料的禮只能送給今晚侍寢的人')}
+        ${subHeader('拜訪各宮', '花 1 個時辰・可以空手去，也可以帶一份成品當伴手禮')}
         <div class="scroll pad">
-          ${grounded() ? '<div class="grounded inline">禁足中，不能出門送禮</div>' : ''}
-          <h3>送給誰？</h3>
+          ${off ? '<div class="grounded inline">禁足中，不能出門拜訪</div>' : ''}
+          <h3>去誰那裡？</h3>
           <div class="gcards">${D.TARGETS.map(targetCard).join('')}</div>
-          ${who ? `<h3>送什麼？</h3>${list}` : '<p class="muted">先選一位娘娘。</p>'}
+          ${who ? `<h3>帶什麼去？</h3>${list}` : '<p class="muted">先選一位娘娘。</p>'}
         </div>
       </div>`;
     },
@@ -1131,7 +1139,8 @@
       else if (r.caught) { stamp = '被抓'; stampCls = 'red'; }
       else if (r.useless) { stamp = '無效'; stampCls = 'grey'; }
       else if (r.label) { stamp = r.label; stampCls = r.outcome === 'musk_dose' || r.outcome === 'musk_miss' ? 'purple' : 'red'; }
-      else { stamp = '收下'; stampCls = 'gold'; }
+      else if (r.empty) { stamp = '拜訪'; stampCls = 'gold'; }
+      else { stamp = { love: '投其所好', hate: '嫌棄', mixed: '又愛又嫌' }[r.reaction] || '收下'; stampCls = r.reaction === 'hate' ? 'grey' : 'gold'; }
       const tier = fxTier(r);
       if (tier) stampCls += ' fierce'; // 狠章（加料得手、被抓）
       const shake = tier === 'heavy' && !r.fxDone && !dlg; // 只有「重」在蓋章時晃一次；重繪不再晃
@@ -1139,6 +1148,8 @@
       if (r.kind === 'deliver') {
         lines.push(`<div class="rline">${tok(r.product, 'sm')}<span>${r.caught ? '東西被沒收了' : `訂單完成・${itemName(r.product)}`}${r.useless ? '<small>（味道怪怪的，賞銀減半、不加友好）</small>' : ''}</span>
           <b class="gold">銀 +${r.reward}${!r.caught && r.friendDelta ? `　友好 +${r.friendDelta}` : ''}</b></div>`);
+      } else if (r.empty) {
+        lines.push(`<div class="rline"><span class="tok tok-none sm"><span class="tok-ch">空</span></span><span>空手拜訪${c.palace}，聊了一會兒</span><b class="gold">友好 +${r.friendDelta}</b></div>`);
       } else {
         lines.push(`<div class="rline">${tok(r.product, 'sm')}<span>${r.refused ? '被拒收，禮物退回' : r.caught ? '禮物被沒收了' : `送出${itemName(r.product)}`}</span>
           <b class="gold">${!r.refused && !r.caught && r.friendDelta ? `友好 +${r.friendDelta}` : '—'}</b></div>`);
@@ -1651,7 +1662,7 @@
       case 'deliver': doDeliver(Number(v)); break;
       case 'giftto': giftWho = v || (isTarget(S.flip) ? S.flip : null); go('gift'); break;
       case 'giftwho': giftWho = v; render(); break;
-      case 'gift': doGift(giftWho, Number(v)); break;
+      case 'gift': doVisit(giftWho, v ? Number(v) : null); break;
       case 'resultdone': finishAction(() => go('home')); break;
       case 'spikeinfo': spikeInfo(v); break;
       case 'closemodal': modal = null; render(); break;

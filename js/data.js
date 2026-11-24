@@ -125,6 +125,12 @@ window.GAME_DATA = (() => {
     chuijinxi: { name: '吹緊吸', color: '#d98aa2', face: '吸', imgs: { _: 'maid_chuijinxi' } },
   };
   const TARGETS = ['huafei', 'meizhuang', 'zhenhuan'];
+  // 三位妃嬪的喜好（§14.2，藏起來：畫面不暗示、不記錄）：喜歡／討厭的特性、喜歡／不喜歡的成品
+  const PREFS = {
+    huafei: { likeT: ['hua', 'nong'], hateT: ['qing'], likeP: ['yunv', 'incense', 'zuotai'], hateP: ['cake', 'tonic'] },
+    meizhuang: { likeT: ['qing', 'tian'], hateT: ['hua'], likeP: ['cake', 'zuotai', 'tonic'], hateP: ['yunv'] },
+    zhenhuan: { likeT: ['xiang', 'tian'], hateT: ['nong'], likeP: ['cake', 'suihan', 'yunv'], hateP: ['zuotai'] },
+  };
   const ALL = ['lingrong', ...TARGETS];
 
   const RULES = {
@@ -163,6 +169,10 @@ window.GAME_DATA = (() => {
     lateFriend: -5,
     caughtFriend: -30,
     giftAcceptBonus: 30, // 收禮機率 = 友好 + 30
+    // 拜訪各宮（§14.1、§14.3）：伴手禮友好 =（成品 gift ＋喜歡特性每級 −討厭特性每級）× 係數；嫌棄時收禮機率再扣
+    giftCoef: { like: 1.2, plain: 1, hate: 0.8 },
+    hateAcceptPenalty: 20,
+    visitEmptyFriend: 1,
     // 敬事房
     bribeCost: 150,
     bribeWeight: 100,
@@ -230,6 +240,18 @@ window.GAME_DATA = (() => {
     huafei: [['huafei', 'happy', '哼，還算妳有點用處。'], ['lingrong', 'smile', '（……好無聊。）']],
     meizhuang: [['meizhuang', 'happy', '妹妹的手藝真好，難怪大家都誇妳。'], ['lingrong', 'smile', '姐姐喜歡就好。']],
     zhenhuan: [['zhenhuan', 'happy', '妹妹真是貼心。'], ['lingrong', 'smile', '姐姐別客氣，妹妹只是想對姐姐好。']],
+  };
+
+  // 拜訪各宮：進門（E1–E3）、空手（E4–E6）
+  const VISIT_ENTER = {
+    huafei: [['huafei', 'happy', '喲，稀客。安妹妹今天怎麼有空來一捆宮？']],
+    meizhuang: [['meizhuang', 'happy', '妹妹來了，快坐。踩月，上茶。']],
+    zhenhuan: [['zhenhuan', 'happy', '妹妹來得正好，陪我說說話。']],
+  };
+  const VISIT_EMPTY = {
+    huafei: [['huafei', 'happy', '空著手來？妳是來看本宮笑話的？']],
+    meizhuang: [['meizhuang', 'happy', '妹妹能來就好，帶什麼東西。']],
+    zhenhuan: [['zhenhuan', 'happy', '姐妹之間，不必拘禮。']],
   };
 
   const REFUSE = {
@@ -377,7 +399,7 @@ window.GAME_DATA = (() => {
   ];
 
   return {
-    TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, ALL, RULES,
-    request, THANKS, REFUSE, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
+    TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
+    request, THANKS, REFUSE, VISIT_ENTER, VISIT_EMPTY, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
   };
 })();

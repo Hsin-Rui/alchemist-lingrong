@@ -32,6 +32,8 @@ const SCENES = {
   'craft-bubble': [SETUP + "__e2e.openCraft(null);", click('[data-v="recipe:cake"]'), click('[data-v="lot:0:0"]'), click('[data-v="lot:1:0"]'), click('[data-v=cook]'), 'WAIT2800'],
   'craft-spike': [SETUP + "__e2e.openCraft(null);", click('[data-v="recipe:cake"]'), click('[data-v="lot:0:0"]'), click('[data-v="lot:1:0"]'), click('[data-v=cook]'), 'WAIT10500', click('[data-v="spike:cassava"]'), 'WAIT1500'],
   'craft-result': [SETUP + "__e2e.openCraft(null);", click('[data-v=quick]'), click('[data-v="recipe:cake"]'), click('[data-v="lot:0:0"]'), click('[data-v="lot:1:0"]'), click('[data-v=cook]'), click('[data-v=go4]'), 'WAIT1500', "localStorage.setItem('lingrong-quickcraft', '0');"],
+  visit: [SETUP + "S.hand.push({ id: 900, product: 'cake', spike: null, tr: { tian: 2 } }); __e2e.go('home');", click('[data-a=giftto]'), click('[data-a=giftwho][data-v=meizhuang]')],
+  'visit-result': [SETUP + "S.hand.push({ id: 900, product: 'cake', spike: null, tr: { tian: 2 } }); S.friend.meizhuang = 90; __e2e.go('home');", click('[data-a=giftto]'), click('[data-a=giftwho][data-v=meizhuang]'), click('[data-a=gift][data-v=\"900\"]'), "for (let i = 0; i < 10 && document.querySelector('[data-a=skip]'); i++) document.querySelector('[data-a=skip]').click();", 'WAIT800'],
   shop: [SETUP + "__e2e.go('shop');", "document.querySelector('.scroll').scrollTop = 99999;"],
 };
 

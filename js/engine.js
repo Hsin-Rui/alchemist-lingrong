@@ -153,7 +153,31 @@
       return r && r.slice().sort().join('+') === key;
     });
   }
-  const acceptChance = (D, S, who) => Math.min(100, S.friend[who] + D.RULES.giftAcceptBonus) / 100;
+  // ───────── 拜訪各宮（§14）─────────
+  // 反應：成品喜歡 +1／不喜歡 −1，帶的特性喜歡每種 +1／討厭每種 −1；加總 >0 投其所好、<0 嫌棄、=0 兩邊都有＝又愛又嫌、其他普通
+  function giftReaction(D, who, product, tr) {
+    const P = D.PREFS[who];
+    const ts = Object.keys(tr || {}).filter((t) => tr[t] > 0);
+    const likeP = P.likeP.includes(product), hateP = P.hateP.includes(product);
+    const likeT = ts.filter((t) => P.likeT.includes(t)).length, hateT = ts.filter((t) => P.hateT.includes(t)).length;
+    const net = (likeP ? 1 : 0) - (hateP ? 1 : 0) + likeT - hateT;
+    const both = (likeP || likeT > 0) && (hateP || hateT > 0);
+    return { net, kind: net > 0 ? 'love' : net < 0 ? 'hate' : both ? 'mixed' : 'plain' };
+  }
+  // 伴手禮的友好：（基本值＋喜歡特性每級 −討厭特性每級）× 成品係數，四捨五入、最低 0
+  function giftFriend(D, who, product, tr) {
+    const P = D.PREFS[who];
+    const C = D.RULES.giftCoef;
+    let v = D.PRODUCTS[product].gift || 0;
+    for (const [t, lv] of Object.entries(tr || {})) {
+      if (P.likeT.includes(t)) v += lv;
+      if (P.hateT.includes(t)) v -= lv;
+    }
+    const coef = P.likeP.includes(product) ? C.like : P.hateP.includes(product) ? C.hate : C.plain;
+    return Math.max(0, Math.round(v * coef));
+  }
+  // 收禮機率＝友好＋30%（最高 100%）；反應是嫌棄時再扣
+  const acceptChance = (D, S, who, kind) => Math.max(0, Math.min(100, S.friend[who] + D.RULES.giftAcceptBonus - (kind === 'hate' ? D.RULES.hateAcceptPenalty : 0))) / 100;
 
   function newState(D) {
     const R = D.RULES;
@@ -936,26 +960,35 @@
     return S.result;
   }
 
-  // 送禮：rand>=acceptChance → 拒收（S.result.refused）；否則 applySpike＋收禮友好，設 S.result。
-  // junk／加料非侍寢者由外殼先擋；找不到成品 → { noItem:true }，被擋 → { blocked:true }
-  function gift(D, S, who, handId, rand) {
+  // 拜訪各宮：花 1 時辰。handId 空＝空手（友好 +1，不擲骰）；帶禮：rand>=收禮機率 → 拒收（禮物退回）；
+  // 收下 → applySpike＋伴手禮友好。junk 不能送 → { noItem:true }；加料禮給非侍寢者 → { blocked:true }（story 4 放寬）
+  function visit(D, S, who, handId, rand) {
+    if (handId == null) {
+      S.slot++;
+      const friendDelta = addFriend(S, who, D.RULES.visitEmptyFriend);
+      S.result = { kind: 'gift', who, empty: true, friendDelta, reward: 0 };
+      S.dayLog.push(`空手拜訪${charName(D, who)}`);
+      return S.result;
+    }
     const item = S.hand.find((h) => h.id === handId);
     if (!item || item.product === 'junk') return { noItem: true };
     if (item.spike && who !== S.flip) return { blocked: true };
     S.slot++;
-    if (rand() >= acceptChance(D, S, who)) {
-      S.result = { kind: 'gift', who, product: item.product, spike: item.spike, refused: true, friendDelta: 0 };
-      S.dayLog.push(`送禮給${charName(D, who)}被拒收`);
+    const reaction = giftReaction(D, who, item.product, item.tr).kind;
+    if (rand() >= acceptChance(D, S, who, reaction)) {
+      S.result = { kind: 'gift', who, product: item.product, spike: item.spike, refused: true, reaction, friendDelta: 0 };
+      S.dayLog.push(`拜訪${charName(D, who)}，禮被拒收`);
       return S.result;
     }
     S.hand = S.hand.filter((h) => h !== item);
     const res = applySpike(D, S, who, item.spike, 'gift', rand);
     let friendDelta = res.friendDelta || 0;
-    if (!res.caught && !res.useless) friendDelta = addFriend(S, who, D.PRODUCTS[item.product].gift);
-    S.result = { kind: 'gift', who, product: item.product, spike: item.spike, friendDelta, reward: 0, ...res };
-    S.dayLog.push(`送${itemName(D, item.product)}給${charName(D, who)}${res.caught ? '，被抓！' : res.label ? `，${res.label}` : ''}`);
+    if (!res.caught && !res.useless) friendDelta = addFriend(S, who, giftFriend(D, who, item.product, item.tr));
+    S.result = { kind: 'gift', who, product: item.product, spike: item.spike, reaction, friendDelta, reward: 0, ...res };
+    S.dayLog.push(`拜訪${charName(D, who)}，送了${itemName(D, item.product)}${res.caught ? '，被抓！' : res.label ? `，${res.label}` : ''}`);
     return S.result;
   }
+  const gift = visit; // 舊名（模擬器用，story 5 改掉）
 
   // 開日：重置 dayLog；tired→slot=1；逾期訂單移除＋lateFriend；chooseFlip＋消耗 empressBoost＋重置 bribe；
   // 生成新訂單（weightedPick＋隨機抽對象）。回報告，外殼 renderStartLines 據此組對話。
@@ -1007,7 +1040,7 @@
     newState, TITLE_CHECK, computeEnding,
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
-    findRecipe, acceptChance, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
+    findRecipe, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
     potTraits, rollBubbles, stirTraits, finishZone, applyFinish, finalTraits,
     buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
   };

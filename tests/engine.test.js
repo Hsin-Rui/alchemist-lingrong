@@ -427,24 +427,70 @@ test('deliver：加料被抓 → 無賞銀、友好 caughtFriend；無效 → �
   assert.strictEqual(S2.friend.huafei, 10, '無效不加友好');
 });
 
-test('gift：收下 → 友好＋禮物值；拒收 → refused、不動友好', () => {
-  // 收下：ZERO < acceptChance 必收；無料 → 友好 += gift
+test('visit：帶禮收下 → 友好照喜好公式；拒收 → refused、不動友好、禮物退回、仍花時辰', () => {
   const S = fresh();
-  S.hand = [{ id: 1, product: 'yunv', spike: null }];
-  const r = E.gift(D, S, 'meizhuang', 1, ZERO);
+  S.hand = [{ id: 1, product: 'yunv', spike: null, tr: {} }];
+  const r = E.visit(D, S, 'meizhuang', 1, ZERO);
   assert.strictEqual(r.kind, 'gift');
   assert.strictEqual(r.refused, undefined);
-  assert.strictEqual(S.friend.meizhuang, 40 + D.PRODUCTS.yunv.gift); // +8
+  assert.strictEqual(r.reaction, 'hate', '審沒裝不喜歡神仙玉女粉');
+  assert.strictEqual(S.friend.meizhuang, 40 + Math.round(D.PRODUCTS.yunv.gift * 0.8));
   assert.strictEqual(S.hand.length, 0);
   assert.strictEqual(S.slot, 1);
-  // 拒收：ONE(0.999) >= acceptChance(0.7) → 退回、友好不變、手牌留著
   const S2 = fresh();
-  S2.hand = [{ id: 1, product: 'yunv', spike: null }];
-  const r2 = E.gift(D, S2, 'meizhuang', 1, ONE);
+  S2.hand = [{ id: 1, product: 'yunv', spike: null, tr: {} }];
+  const r2 = E.visit(D, S2, 'meizhuang', 1, ONE);
   assert.strictEqual(r2.refused, true);
   assert.strictEqual(S2.friend.meizhuang, 40, '拒收不動友好');
   assert.strictEqual(S2.hand.length, 1, '拒收退回手牌');
   assert.strictEqual(S2.slot, 1, '拒收仍花時辰');
+});
+
+test('visit：空手 → 花 1 時辰、友好 +1、不擲骰；黑暗料理不能送', () => {
+  const S = fresh();
+  const f0 = S.friend.zhenhuan;
+  const r = E.visit(D, S, 'zhenhuan', null, () => { throw new Error('空手不該擲骰'); });
+  assert.strictEqual(r.empty, true);
+  assert.strictEqual(S.friend.zhenhuan, f0 + 1);
+  assert.strictEqual(S.slot, 1);
+  S.hand = [{ id: 7, product: 'junk', spike: null, tr: {} }];
+  assert.deepStrictEqual(E.visit(D, S, 'zhenhuan', 7, ZERO), { noItem: true });
+  assert.strictEqual(S.slot, 1, '不能送就不花時辰');
+});
+
+test('giftFriend：§14.3 表格四個例子與最低 0', () => {
+  assert.strictEqual(E.giftFriend(D, 'huafei', 'yunv', { hua: 3 }), 13);
+  assert.strictEqual(E.giftFriend(D, 'meizhuang', 'cake', { tian: 2, qing: 1 }), 10);
+  assert.strictEqual(E.giftFriend(D, 'zhenhuan', 'incense', { nong: 2 }), 6);
+  assert.strictEqual(E.giftFriend(D, 'huafei', 'tonic', {}), 5);
+  assert.strictEqual(E.giftFriend(D, 'huafei', 'cake', { qing: 3 }), 2, '(5−3)×0.8＝1.6 → 2');
+  const D2 = { ...D, PRODUCTS: { ...D.PRODUCTS, cake: { ...D.PRODUCTS.cake, gift: 1 } } };
+  assert.strictEqual(E.giftFriend(D2, 'huafei', 'cake', { qing: 3 }), 0, '算出負數 → 0');
+});
+
+test('giftReaction：投其所好／嫌棄／又愛又嫌／普通', () => {
+  assert.strictEqual(E.giftReaction(D, 'huafei', 'yunv', { hua: 3 }).kind, 'love');
+  assert.strictEqual(E.giftReaction(D, 'meizhuang', 'cake', { tian: 2, qing: 1 }).kind, 'love');
+  assert.strictEqual(E.giftReaction(D, 'zhenhuan', 'incense', { nong: 2 }).kind, 'hate', '討厭的特性');
+  assert.strictEqual(E.giftReaction(D, 'huafei', 'tonic', {}).kind, 'hate', '不喜歡的成品');
+  assert.strictEqual(E.giftReaction(D, 'meizhuang', 'zuotai', { hua: 1 }).kind, 'mixed', '喜歡的成品＋討厭的特性抵銷');
+  assert.strictEqual(E.giftReaction(D, 'huafei', 'shuhen', {}).kind, 'plain');
+  assert.strictEqual(E.giftFriend(D, 'huafei', 'shuhen', {}), D.PRODUCTS.shuhen.gift, '普通＝基本值');
+});
+
+test('acceptChance：友好＋30%，嫌棄再 −20%，又愛又嫌不扣', () => {
+  const S = fresh();
+  S.friend.huafei = 10;
+  assert.strictEqual(E.acceptChance(D, S, 'huafei'), 0.4);
+  assert.strictEqual(E.acceptChance(D, S, 'huafei', 'mixed'), 0.4);
+  assert.ok(Math.abs(E.acceptChance(D, S, 'huafei', 'hate') - 0.2) < 1e-9);
+  S.friend.huafei = 90;
+  assert.strictEqual(E.acceptChance(D, S, 'huafei', 'love'), 1, '最高 100%');
+  // 嫌棄的禮：擲 0.3 → 0.3 ≥ 0.2 拒收；不嫌棄的禮同樣擲 0.3 → 收下
+  const S2 = fresh(); S2.friend.huafei = 10;
+  S2.hand = [{ id: 1, product: 'tonic', spike: null, tr: {} }, { id: 2, product: 'shuhen', spike: null, tr: {} }];
+  assert.strictEqual(E.visit(D, S2, 'huafei', 1, () => 0.3).refused, true);
+  assert.strictEqual(E.visit(D, S2, 'huafei', 2, () => 0.3).refused, undefined);
 });
 
 test('startDay：逾期扣友好＋移除、tired→slot=1、重置 bribe、回報告', () => {
