@@ -154,3 +154,25 @@ slightly over-dramatic, 70 BPM, short
 ```
 
 > 用法：可以在演唱橋段播 15～20 秒的片段。要做的話也需要我改程式。
+
+---
+
+## 9. 第二輪新增（2026-11，都是選做）
+
+### `bgm_sutra.mp3`：禁足抄經
+安靜、有點無奈又好笑的閉門思過感，短、能循環。
+```
+Quiet Chinese guqin and soft wooden fish, slow meditative temple mood with a hint of comedic boredom,
+sparse notes, 70 BPM, seamless loop, instrumental, no vocals
+```
+
+### `bgm_workshop.mp3`：四階段調合
+沿用上面第 4 節「煉金工房」的 prompt；有了就會在調合畫面播放。
+
+### 音效（3 秒內，選做）
+| 檔名 | 用途 | Prompt |
+|---|---|---|
+| `sfx_meow.mp3` | 貓薄荷鬧場 | `Several cute cartoon cats meowing excitedly at once, comedic, 3 seconds` |
+| `sfx_stamp.mp3` | 結局封號蓋章 | `Heavy wooden seal stamp thud on paper with a small gong ring, 1.5 seconds` |
+
+> 沒有這些檔案時，遊戲用程式合成的聲音代替。
