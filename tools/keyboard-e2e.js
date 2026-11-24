@@ -344,6 +344,57 @@ function connect(url) {
     check('素材按鈕停用後 → 回預設', f && f.key === defAfter && !f.key.startsWith(`mat|${mats[0]}`), `${f && f.key} vs ${defAfter}`);
     await G('S.inv = window.__inv; __e2e.go("home");');
 
+    // ── 四階段調合（第二輪 §13.3）：配方冊 → 攪拌 1/2/3 → 加料 → 起鍋 Space；下鍋後 Esc／快捷鍵無效 ──
+    await hideByMouse();
+    await G(`window.__inv2 = { ...S.inv }; window.__lots2 = S.lots.slice(); window.__slot2 = S.slot; window.__hand2 = S.hand.slice(); S.slot = 0;
+      S.inv = { lotus: 1, osmanthus: 1 }; S.lots = [];
+      try { localStorage.setItem('lingrong-quickcraft', '0'); } catch (e) {}
+      __e2e.openCraft(null);`);
+    await press('ArrowDown');
+    f = await focus();
+    check('配方冊預設＝第一道做得出來的配方', f && f.key === 'recipe|cake#1', JSON.stringify(f));
+    await press('Enter');
+    f = await focus();
+    check('選了配方 → 游標移到「下鍋」', f && f.key === 'craft|#1', JSON.stringify(f));
+    await press('Enter');
+    const stepOn = () => ev("document.querySelector('.csteps li.on')?.textContent || ''");
+    check('Enter 下鍋 → 開火攪拌', (await stepOn()) === '開火攪拌');
+    f = await focus();
+    check('攪拌預設＝第一顆泡泡', f && f.key === 'bubble|0#1', JSON.stringify(f));
+    await press('Escape');
+    check('攪拌中 Esc 不會離開', (await scr()) === 'craft' && (await stepOn()) === '開火攪拌');
+    await press('1');
+    check('攪拌中按 1 是挑泡泡，不是去小舖', (await scr()) === 'craft' && (await ev("document.querySelector('.drawer h3 small')?.textContent || ''")).includes('第 2／3'));
+    await press('2'); await press('3');
+    check('攪三次 → 加料', (await stepOn()) === '加料');
+    f = await focus();
+    check('加料預設＝不加料', f && f.key === 'spike|#1', JSON.stringify(f));
+    await press('5');
+    check('加料中按 5 不會跑去後宮', (await scr()) === 'craft');
+    for (let m = 0; m < 12 && (await focus())?.key !== 'tofinish|#1'; m++) await press('ArrowDown');
+    await press('Enter');
+    check('加料 → 起鍋', (await stepOn()) === '起鍋');
+    check('起鍋時珠珠在動', await waitFor("(() => { const b = document.querySelector('.bead'); return b && parseFloat(b.style.left) > 1; })()", 1500));
+    await press('Space', { wait: 100 });
+    check('Space 停珠珠 → 顯示結果', /火候|還可以|糊了/.test(await ev("document.querySelector('.finish-verdict')?.textContent || ''")));
+    check('起鍋後出現完成視窗', await waitFor("!!document.querySelector('#app .sheet-layer')", 4000));
+    check('成品帶特性標籤或沒有特性都正常顯示', await ev("!!document.querySelector('#app .sheet-layer .sheet-title')"));
+    await press('Escape');
+    check('完成視窗 Esc → 回炎洗宮', await waitFor("document.getElementById('app').dataset.screen === 'home'", 3000));
+    // 快速調合：下鍋直接到加料，加料完直接完成
+    await G(`S.inv = { lotus: 1, osmanthus: 1 }; __e2e.openCraft(null);`);
+    await ev("document.querySelector('[data-a=quickcraft]').classList.contains('on') || document.querySelector('[data-a=quickcraft]').click()");
+    await ev("document.querySelector('[data-a=recipe][data-v=cake]').click()");
+    await ev("document.querySelector('[data-a=craft]').click()");
+    check('快速調合：下鍋直接到加料', (await stepOn()) === '加料');
+    await ev("document.querySelector('[data-a=tofinish]').click()");
+    check('快速調合：加料後直接完成', await waitFor("!!document.querySelector('#app .sheet-layer')", 4000));
+    await ev("document.querySelector('[data-a=craftdone]').click()");
+    await G(`__e2e.openCraft(null);`);
+    await ev("document.querySelector('[data-a=quickcraft]').click()"); // 關掉快速調合（記憶體裡的開關也要關）
+    check('快速調合可以關掉', await ev("!document.querySelector('[data-a=quickcraft]').classList.contains('on')"));
+    await G(`S.inv = window.__inv2; S.lots = window.__lots2; S.slot = window.__slot2; S.hand = window.__hand2; __e2e.go("home");`);
+
     // ── 採集地下城：方向鍵只有地下城走路；收工後結果單預設 ──
     await hideByMouse();
     await G('__e2e.go("gather");');

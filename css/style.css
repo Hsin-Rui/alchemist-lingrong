@@ -595,3 +595,8 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .pot-body .trs { flex-direction: row; flex-wrap: wrap; justify-content: center; max-width: 160px; gap: 3px; }
 .pot-body .trc { font-size: 10px; padding: 0 5px; }
 .pot-body .trc { text-shadow: none; box-shadow: 0 0 0 1.5px rgba(36,27,48,.7); }
+@media (max-width: 380px) {
+  .cauldron { margin-left: 100px; width: 210px; }
+  .cslot { width: 46px; height: 46px; }
+  .cslot span { max-width: 42px; }
+}

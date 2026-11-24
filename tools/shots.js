@@ -1,5 +1,5 @@
 // 情境截圖：用 headless Chrome 開遊戲（#e2e），照劇本擺好狀態，存成 PNG，給人眼檢查畫面。
-// 用法：node tools/shots.js <輸出資料夾> [劇本名…]（不給劇本名＝全部）
+// 用法：node tools/shots.js <輸出資料夾> [劇本名…]（不給劇本名＝全部）；SHOT_W=360 可改畫面寬度（模擬手機）
 // 需要：Node ≥ 22（內建 WebSocket）、Google Chrome（或環境變數 CHROME 指定路徑）
 const http = require('http');
 const fs = require('fs');
@@ -90,6 +90,8 @@ function connect(url) {
   const chrome = await launchChrome();
   const cdp = await connect(chrome.ws);
   await cdp.send('Page.enable');
+  const W = Number(process.env.SHOT_W || 480);
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: W, height: 800, deviceScaleFactor: 1, mobile: W < 480 });
   const ev = async (expr) => {
     const r = await cdp.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true });
     if (r.exceptionDetails) throw new Error(`${expr}\n→ ${r.exceptionDetails.exception?.description || r.exceptionDetails.text}`);

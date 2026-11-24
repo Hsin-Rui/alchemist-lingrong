@@ -743,7 +743,8 @@
     const result = E.findRecipe(D, craftSel.mats);
     if (!result || D.PRODUCTS[result].out === 'inv') { craftSel.spike = null; doCraft(); return; }
     craftFx = { k: 'drop' };
-    if (quickCraft) { craftSel.stage = 3; render(); return; } // 快速調合：直接到加料
+    if (quickCraft) { cursor.key = null; craftSel.stage = 3; render(); return; } // 快速調合：直接到加料
+    cursor.key = null;
     craftSel.stage = 2;
     craftSel.bubbles = E.rollBubbles(D, E.potTraits(D, craftLots().trs), rand);
     A.sfx('bubble');
@@ -754,7 +755,7 @@
     craftSel.stirs.push(craftSel.bubbles[i]);
     craftFx = { k: 'stir', c: D.TRAITS[craftSel.bubbles[i].t].color };
     A.sfx('pick');
-    if (craftSel.stirs.length >= R.craft.stirs) { craftSel.stage = 3; craftSel.bubbles = null; }
+    if (craftSel.stirs.length >= R.craft.stirs) { craftSel.stage = 3; craftSel.bubbles = null; cursor.key = null; }
     else craftSel.bubbles = E.rollBubbles(D, E.potTraits(D, craftLots().trs), rand);
     render();
   }
@@ -762,6 +763,7 @@
     if (craftSel.stage !== 3 || busy) return;
     if (craftSel.spike) craftFx = { k: 'spikedrop' };
     if (quickCraft) { render(); doCraft(); return; } // 快速調合：不起鍋，成品只帶素材的特性
+    cursor.key = null;
     craftSel.stage = 4;
     craftSel.beadT0 = performance.now();
     render();
@@ -1810,7 +1812,7 @@
       }
       case 'craftfor': openCraft(v ? Number(v) : null); break;
       case 'mat': if (craftSel.mats.length < 3) { craftSel.mats.push(v); craftSel.lots = []; } render(); break;
-      case 'recipe': craftSel.mats = [...D.PRODUCTS[v].recipe]; craftSel.lots = []; craftSel.free = false; render(); break;
+      case 'recipe': craftSel.mats = [...D.PRODUCTS[v].recipe]; craftSel.lots = []; craftSel.free = false; cursor.key = null; render(); break; // 選好配方 → 游標回預設（下鍋）
       case 'lot': { const [i, uid] = v.split(':').map(Number); craftSel.lots[i] = uid; render(); break; }
       case 'freecraft': craftSel.free = v === '1'; craftSel.mats = []; craftSel.lots = []; render(); break;
       case 'unmat': craftSel.mats.splice(Number(v), 1); craftSel.lots = []; render(); break;
