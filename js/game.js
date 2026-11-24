@@ -374,6 +374,16 @@
     render();
   }
 
+  // v：'id' 賣一般份；'id:uid' 賣指定那份
+  function sell(v) {
+    const [id, uid] = String(v).split(':');
+    const r = E.sell(D, S, id, uid ? Number(uid) : null);
+    if (!r.ok) { A.sfx('fail'); return; }
+    A.sfx('coin');
+    toast(`賣了 ${itemName(id)}，+${r.price} 兩`);
+    render();
+  }
+
   function bribe() {
     const r = E.bribe(D, S);
     if (!r.ok) {
@@ -935,19 +945,37 @@
     },
 
     shop() {
+      const buyRow = (id) => {
+        const it = D.ITEMS[id];
+        const isDef = id === D.SHOP.find((x) => S.silver >= D.ITEMS[x].price);
+        const desc = it.type === 'spike' ? it.desc : id === 'liquor' ? '加紅花瓣可以煉出紅花' : '';
+        return `<div class="row">${tok(id)}<div class="row-main"><b>${it.name}</b>${it.type === 'spike' ? '<span class="tag">料</span>' : ''}<small>${desc ? `${desc}・` : ''}持有 ${have(id)}</small></div>
+          <button class="btn small ${S.silver >= it.price ? 'primary' : ''}" data-a="buy" data-v="${id}"${DEF(isDef)} ${S.silver < it.price ? 'disabled' : ''}>${coin(it.price)}</button></div>`;
+      };
+      // 賣：一般份一列（一次賣一份），帶特性的每份各一列
+      const sellable = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat' && D.ITEMS[id].price);
+      const sellRows = sellable.flatMap((id) => {
+        const plain = have(id) - lotCount(id);
+        const rows = S.lots.filter((l) => l.id === id).map((l) => `<div class="row">${tok(id)}<div class="row-main"><b>${itemName(id)}</b>${trChips(l.tr, 'sm')}</div>
+          <button class="btn small" data-a="sell" data-v="${id}:${l.uid}">賣 ${coin(E.sellPrice(D, id, l.tr))}</button></div>`);
+        if (plain > 0) rows.unshift(`<div class="row">${tok(id)}<div class="row-main"><b>${itemName(id)}</b><small>一般・持有 ${plain}</small></div>
+          <button class="btn small" data-a="sell" data-v="${id}">賣 ${coin(E.sellPrice(D, id, {}))}</button></div>`);
+        return rows;
+      });
+      const mats = D.SHOP.filter((id) => D.ITEMS[id].type === 'mat');
+      const spikes = D.SHOP.filter((id) => D.ITEMS[id].type === 'spike');
       return `<div class="screen theme-light">
-        ${subHeader('包捐的跑腿小舖', '買東西不花時辰，禁足中也能買')}
+        ${subHeader('包捐的跑腿小舖', '買賣都不花時辰，禁足中也能買賣')}
         <div class="scroll">
-          <div class="stage bg-shop">${portrait('baojuan', '_', 'stage-portrait')}<div class="bubble">小主要買什麼？奴婢這就去辦！</div></div>
+          <div class="stage bg-shop">${portrait('baojuan', '_', 'stage-portrait')}<div class="bubble">小主要買什麼？多的東西，奴婢也能拿去換銀子。</div></div>
           <div class="pad">
-          ${D.SHOP.map((id) => {
-            const it = D.ITEMS[id];
-            const isDef = id === D.SHOP.find((x) => S.silver >= D.ITEMS[x].price);
-            const desc = it.type === 'spike' ? it.desc : id === 'liquor' ? '加紅花瓣可以煉出紅花' : '';
-            return `<div class="row">${tok(id)}<div class="row-main"><b>${it.name}</b>${it.type === 'spike' ? '<span class="tag">料</span>' : ''}<small>${desc ? `${desc}・` : ''}持有 ${have(id)}</small></div>
-              <button class="btn small ${S.silver >= it.price ? 'primary' : ''}" data-a="buy" data-v="${id}"${DEF(isDef)} ${S.silver < it.price ? 'disabled' : ''}>${coin(it.price)}</button></div>`;
-          }).join('')}
-          <p class="muted">花草藥材、癢癢粉、巴豆、紅花瓣都得自己去採集喔。</p>
+          <h3>素材 <small>小舖買的沒有特性，採集來的才有</small></h3>
+          ${mats.map(buyRow).join('')}
+          <h3>料</h3>
+          ${spikes.map(buyRow).join('')}
+          <p class="muted">紅花瓣只有太醫院採得到喔。</p>
+          <h3>賣東西 <small>售價一半，每級特性多 1 兩</small></h3>
+          ${sellRows.length ? sellRows.join('') : '<p class="muted">沒有能賣的素材。</p>'}
         </div></div>
       </div>`;
     },
@@ -1612,6 +1640,7 @@
       case 'go': go(v); break;
       case 'goto': if (v === 'shop') go('shop'); else if (v === 'craft') openCraft(null); else go('gather'); break;
       case 'buy': buy(v); break;
+      case 'sell': sell(v); break;
       case 'bribe': bribe(); break;
       case 'reject': rejectOrder(Number(v)); break;
       case 'gather': gather(v); break;

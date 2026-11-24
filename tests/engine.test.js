@@ -1084,3 +1084,28 @@ test('地下城：素材帶特性、撿起來進 haul；applyGatherHaul 給 haul
   assert.strictEqual(S.inv.catnip, 1);
   assert.deepStrictEqual(r.haul, haul);
 });
+
+// ───────── 第二輪：小舖買賣 ─────────
+test('小舖：除了紅花瓣什麼都賣；賣素材＝售價一半＋每級特性 1 兩，不花時辰', () => {
+  const sellable = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].price);
+  assert.ok(!D.SHOP.includes('petal'));
+  Object.keys(D.ITEMS).filter((id) => id !== 'petal' && id !== 'safflower').forEach((id) => assert.ok(D.SHOP.includes(id), `${id} 要買得到`));
+  assert.ok(sellable.includes('pine'));
+  const S = fresh();
+  const silver = S.silver;
+  E.addUnit(S, 'plum', { xiang: 2, hua: 1 });
+  const r = E.sell(D, S, 'plum'); // 先賣一般份
+  assert.deepStrictEqual([r.ok, r.price], [true, 5]);
+  const uid = S.lots[0].uid;
+  const r2 = E.sell(D, S, 'plum', uid);
+  assert.deepStrictEqual([r2.ok, r2.price], [true, 5 + 3]);
+  assert.strictEqual(S.silver, silver + 13);
+  assert.strictEqual(S.inv.plum, undefined);
+  assert.strictEqual(S.slot, 0, '不花時辰');
+  assert.strictEqual(E.sell(D, S, 'plum').ok, false, '沒有就不能賣');
+  S.inv.petal = 1;
+  assert.strictEqual(E.sell(D, S, 'petal').ok, false, '紅花瓣沒有售價');
+  S.inv.musk = 1;
+  assert.strictEqual(E.sell(D, S, 'musk').ok, false, '料不收');
+  assert.strictEqual(E.sellPrice(D, 'pine', {}), 3);
+});

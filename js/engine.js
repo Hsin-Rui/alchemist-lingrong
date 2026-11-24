@@ -353,6 +353,19 @@
     return { ok: true };
   }
 
+  // 賣素材（§8）：不花時辰。售價一半（無條件捨去）＋每 1 級特性 1 兩；沒有售價的（紅花瓣）和料不收。
+  // uid 指定賣哪一份；沒指定先賣一般份。回 { ok, price }，不能賣 → { ok:false }
+  const sellPrice = (D, id, tr) => Math.floor((D.ITEMS[id].price || 0) / 2) + traitSum(tr);
+  function sell(D, S, id, uid) {
+    const it = D.ITEMS[id];
+    if (!it || it.type !== 'mat' || !it.price || !(S.inv[id] > 0)) return { ok: false };
+    if (uid != null && !S.lots.some((l) => l.uid === uid && l.id === id)) return { ok: false };
+    const tr = takeUnit(S, id, uid);
+    const price = sellPrice(D, id, tr);
+    S.silver += price;
+    return { ok: true, price, tr };
+  }
+
   // 賄賂敬事房：足銀且未打點 → 扣錢、加權、記錄；否則 { ok:false, reason }
   function bribe(D, S) {
     const R = D.RULES;
@@ -944,7 +957,7 @@
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
     findRecipe, acceptChance, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
-    buy, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
+    buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof window !== 'undefined') window.GameEngine = API;
