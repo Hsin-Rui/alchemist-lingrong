@@ -227,7 +227,8 @@ window.GameAudio = (() => {
     }
   }
 
-  function playBgm(name) {
+  // alt：這首沒有檔案時改播哪一首（例如標題曲還沒放 → 播主題曲）
+  function playBgm(name, alt) {
     if (bgmName === name) return;
     bgmName = name;
     stopSynth();
@@ -238,7 +239,11 @@ window.GameAudio = (() => {
     el.volume = 0.6;
     bgmEl = el;
     // 檔案載不到就改用合成旋律；人在地下城裡的話先記著，出來再播
-    const fallback = () => { bgmEl = null; if (inDungeon) wasSynth = true; else startSynth(); };
+    const fallback = () => {
+      bgmEl = null;
+      if (alt) { bgmName = null; playBgm(alt); return; }
+      if (inDungeon) wasSynth = true; else startSynth();
+    };
     el.addEventListener('error', () => { if (bgmEl === el) fallback(); });
     const p = el.play();
     if (p && p.catch) p.catch(() => { if (bgmEl === el && el.error) fallback(); });

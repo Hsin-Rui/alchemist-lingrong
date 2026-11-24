@@ -1933,6 +1933,10 @@
   if (location.hash === '#e2e') {
     window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, render, go, openCraft, playDialog };
   }
+  // 標題曲：瀏覽器要等玩家第一次點擊／按鍵才准出聲。assets/audio/bgm_title.lite.mp3 沒有就播主題曲
+  const titleBgm = () => { if (screen === 'title' && !dlg) { A.unlock(); A.playBgm('title', 'main'); } };
+  document.addEventListener('pointerdown', titleBgm, { once: true });
+  document.addEventListener('keydown', titleBgm, { once: true });
   render();
   preloadImages();
 })();

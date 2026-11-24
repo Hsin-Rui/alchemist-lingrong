@@ -82,7 +82,7 @@ header h1 { font-family: var(--serif); font-size: 20px; margin: 0; color: var(--
       },
     });
   };
-  document.addEventListener('pointerdown', () => A.unlock(), { once: true });
+  document.addEventListener('pointerdown', () => { A.unlock(); A.playBgm('workshop'); }, { once: true });
   $('again').addEventListener('click', start);
   $('quick').addEventListener('change', () => { try { localStorage.setItem('lingrong-quickcraft', $('quick').checked ? '1' : '0'); } catch { /* 略 */ } start(); });
   $('mute').addEventListener('click', () => { $('mute').textContent = `音效：${A.toggleMute() ? '關' : '開'}`; });
