@@ -325,6 +325,7 @@ function connect(url) {
       const ids = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === 'mat').slice(0, 2);
       S.inv = { [ids[0]]: 2, [ids[1]]: 1 };
       __e2e.openCraft(null); return ids;`);
+    await ev("document.querySelector('[data-a=freecraft]').click()"); // 素材格在「自由調合」裡
     await press('ArrowDown');
     f = await focus();
     check('調合預設＝第一個可用素材', f && f.key === `mat|${mats[0]}#1`, JSON.stringify(f));
@@ -379,7 +380,7 @@ function connect(url) {
     check('按 2 → 採集', await toScr('2', 'gather'));
     check('子畫面按 3 → 調合', await toScr('3', 'craft'));
     await G('const ids = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === "mat"); S.inv[ids[0]] = (S.inv[ids[0]] || 0) + 2; __e2e.render();');
-    await ev("document.querySelector('[data-a=mat]:not([disabled])').click()");
+    await ev("(document.querySelector('[data-a=recipe]:not([disabled])') || document.querySelector('[data-a=freecraft]')).click(); document.querySelector('[data-a=mat]:not([disabled])')?.click()");
     const slotsBefore = await ev("document.querySelectorAll('.cslot.filled').length");
     await press('3');
     check('調合畫面再按 3 不清掉已放的素材', slotsBefore > 0 && (await ev("document.querySelectorAll('.cslot.filled').length")) === slotsBefore, String(slotsBefore));

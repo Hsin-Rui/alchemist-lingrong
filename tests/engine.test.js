@@ -1155,3 +1155,19 @@ test('craft：帶攪拌與起鍋 → 成品特性照 finalTraits；省略＝快�
   E.addUnit(S2, 'lotus', { tian: 1 });
   assert.deepStrictEqual(E.craft(D, S2, { mats: ['lotus', 'osmanthus'], spike: null }).tr, { tian: 1 });
 });
+
+test('craft：lots 填 0（PLAIN）＝指定用一般份；沒有一般份時退回特性最少的那份', () => {
+  const S = fresh(); // lotus 一般 ×1
+  E.addUnit(S, 'lotus', { tian: 2 });
+  const r = E.craft(D, S, { mats: ['lotus', 'osmanthus'], lots: [0, null], spike: null });
+  assert.deepStrictEqual(r.tr, {}, '用一般份，所以沒特性');
+  assert.strictEqual(S.lots.length, 1, '帶特性的那份還在');
+  const S2 = fresh();
+  S2.inv.lotus = 0; delete S2.inv.lotus;
+  E.addUnit(S2, 'lotus', { tian: 2 });
+  E.addUnit(S2, 'lotus', { tian: 1 });
+  const r2 = E.craft(D, S2, { mats: ['lotus', 'osmanthus'], lots: [0, null], spike: null });
+  assert.deepStrictEqual(r2.tr, { tian: 1 });
+  assert.strictEqual(S2.inv.lotus, 1);
+  assert.strictEqual(S2.lots.length, 1);
+});

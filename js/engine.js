@@ -48,11 +48,13 @@
     if (tr && traitSum(tr) > 0) S.lots.push({ uid: ++S.lotSeq, id, tr: { ...tr } });
   }
   // 拿走一份：指定 uid 就拿那份；沒指定先拿一般份，一般份沒了再拿特性最少的那份。回傳拿走那份的特性（一般份 → {}）。
+  // craftSel.lots 裡的 0（PLAIN）表示「指定用一般份」，不會自動改挑帶特性的。
   function takeUnit(S, id, uid) {
     if (!(S.inv[id] > 0)) return {};
     let lot = uid != null ? S.lots.find((l) => l.uid === uid && l.id === id) : null;
     const ls = lotsOf(S, id);
-    if (!lot && uid == null && ls.length >= S.inv[id]) lot = ls.reduce((a, b) => (traitSum(b.tr) < traitSum(a.tr) ? b : a));
+    // 沒指定、或指定的那份不存在（例如 PLAIN＝0：指定用一般份）→ 先拿一般份，一般份沒了才拿特性最少的那份
+    if (!lot && ls.length >= S.inv[id]) lot = ls.reduce((a, b) => (traitSum(b.tr) < traitSum(a.tr) ? b : a));
     invAdd(S, id, -1);
     if (!lot) return {};
     S.lots = S.lots.filter((l) => l !== lot);

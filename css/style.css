@@ -538,3 +538,19 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 @keyframes beadhit { 50% { transform: scale(1.6); } }
 .finish-verdict { text-align: center; font-weight: 700; min-height: 1.6em; }
 .finish-verdict.up { color: #8E6A12; } .finish-verdict.down { color: #B42B2B; }
+
+.rlist { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.rrow { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 12px; border-radius: 10px; background: var(--card); border: 1.5px solid var(--line); color: var(--ink); text-align: left; cursor: pointer; width: 100%; font-family: inherit; }
+.rrow.on { border: 2px solid var(--crimson); background: #FFF6E4; }
+.rrow:disabled { opacity: .55; cursor: not-allowed; }
+.rrow-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rrow-main small { color: var(--muted); font-size: 12px; }
+.pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: #E3F1E8; color: var(--ok); }
+.pill.miss { background: #F8E1E1; color: var(--red); }
+.lotgroup h4 { margin: 6px 0 4px; font-size: 13px; }
+.lotopts { display: flex; flex-wrap: wrap; gap: 6px; }
+.lotopt { min-height: 36px; padding: 4px 10px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); cursor: pointer; font-family: inherit; color: var(--ink); }
+.lotopt.on { border: 2px solid var(--crimson); background: #FFF6E4; }
+.lotopt small { color: var(--muted); }
+.linkbtn { display: block; margin: 10px auto 0; background: none; border: none; color: var(--muted); text-decoration: underline; font-size: 13px; cursor: pointer; font-family: inherit; padding: 6px; }

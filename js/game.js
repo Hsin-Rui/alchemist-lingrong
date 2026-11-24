@@ -12,7 +12,7 @@
   let modal = null; // { title, body }
   let busy = false; // 動畫進行中，暫停輸入
   // 調合進行中的選擇（四階段，§13.3）：stage 1 選素材、2 開火攪拌、3 加料、4 起鍋
-  const newCraftSel = (forOrder = null, forWho = null) => ({ stage: 1, mats: [], lots: [], spike: null, forOrder, forWho, stirs: [], bubbles: null, zone: null, beadT0: 0 });
+  const newCraftSel = (forOrder = null, forWho = null) => ({ stage: 1, free: false, mats: [], lots: [], spike: null, forOrder, forWho, stirs: [], bubbles: null, zone: null, beadT0: 0 });
   let craftSel = newCraftSel();
   let beadRaf = 0;
   let craftResult = null;
@@ -701,16 +701,20 @@
     go('craft');
   }
 
+  const PLAIN = 0; // craftSel.lots 裡的 0＝指定用一般份（沒特性）
   // 每格用哪一份素材：有指定（craftSel.lots[i]）就用指定的，沒有就跟引擎一樣自動挑特性最多的那份
+  // 回 uids（給引擎：沒指定的格子填 null，讓引擎用同樣規則自動挑）、trs（每格的特性）、resolved（每格實際用哪份，一般份＝PLAIN）
   function craftLots() {
-    const uids = [];
+    const taken = [];
+    const resolved = [];
     const trs = craftSel.mats.map((id, i) => {
       const want = craftSel.lots[i];
-      const l = want != null ? S.lots.find((x) => x.uid === want) : E.bestLot(S, id, uids);
-      if (l) uids.push(l.uid);
+      const l = want === PLAIN ? null : want != null ? S.lots.find((x) => x.uid === want) : E.bestLot(S, id, taken);
+      if (l) taken.push(l.uid);
+      resolved.push(l ? l.uid : PLAIN);
       return l ? l.tr : {};
     });
-    return { uids: craftSel.mats.map((id, i) => (craftSel.lots[i] != null ? craftSel.lots[i] : null)), trs };
+    return { uids: craftSel.mats.map((id, i) => (craftSel.lots[i] != null ? craftSel.lots[i] : null)), trs, resolved };
   }
   // 鍋裡現在的特性（給畫面預覽）：素材＋已挑的泡泡；第 3 步起只留最強 3 種
   function craftPotTr() {
@@ -1149,15 +1153,41 @@
       const steps = `<ol class="csteps">${STEPS.map((t, i) => `<li class="${i + 1 === stage ? 'on' : i + 1 < stage ? 'done' : ''}">${t}</li>`).join('')}</ol>`;
       let panel = '';
       let cta = '';
-      if (stage === 1) {
-        panel = `<h3>素材 <small>點一下放進鍋裡</small></h3>
+      if (stage === 1 && craftSel.free) {
+        panel = `<h3>自由調合 <small>挑兩、三樣丟進鍋裡，配錯了會怎樣……誰知道呢</small></h3>
             <div class="matgrid">${mats.length ? mats.map((id) => (have(id)
               ? `<button class="mat" data-a="mat" data-v="${id}"${DEF(id === matDef)} ${avail(id) <= 0 || craftSel.mats.length >= 3 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}${lotCount(id) ? `・<b class="has-tr">${lotCount(id)} 份有特性</b>` : ''}</small></button>`
               : `<button class="mat lack" data-a="mat" data-v="${id}" disabled>${tok(id)}<span>${itemName(id)}</span><small>缺・${locName(sourcesOf(id)[0].loc)}</small></button>`)).join('') : '<p class="muted">沒有素材，先去採集或小舖吧。</p>'}</div>
-            <details class="recipes"><summary>配方書</summary>
-              ${Object.entries(D.PRODUCTS).filter(([, p]) => p.recipe).map(([pid, p]) => `<div class="recipe">${tok(pid, 'sm')}<b>${p.name}</b> = ${p.recipe.map(itemName).join(' + ')}</div>`).join('')}
-            </details>`;
+            <button class="linkbtn" data-a="freecraft" data-v="0">回到配方冊</button>`;
         cta = `<button class="btn amber wide big" data-a="craft"${DEF(enough && !matDef)} ${enough ? '' : 'disabled'}>下鍋（花 1 個時辰）</button>`;
+      } else if (stage === 1) {
+        // 配方冊：每道標示可以做或缺什麼；點了自動放好素材（§13.3 第一階段）
+        const cur = result && !craftSel.free ? result : null;
+        const lack = (p) => [...new Set(p.recipe.filter((id) => have(id) < p.recipe.filter((x) => x === id).length))];
+        const book = Object.entries(D.PRODUCTS).filter(([, p]) => p.recipe).map(([pid, p]) => {
+          const miss = lack(p);
+          return `<button class="rrow ${cur === pid ? 'on' : ''}" data-a="recipe" data-v="${pid}"${DEF(!cur && !miss.length && pid === Object.keys(D.PRODUCTS).find((q) => D.PRODUCTS[q].recipe && !lack(D.PRODUCTS[q]).length))} ${miss.length ? 'disabled' : ''}>
+            ${tok(pid)}<span class="rrow-main"><b>${p.name}</b><small>${p.recipe.map(itemName).join(' ＋ ')}</small></span>
+            ${miss.length ? `<span class="pill miss">缺 ${miss.map(itemName).join('、')}</span>` : '<span class="pill ok">可以做</span>'}</button>`;
+        }).join('');
+        // 選好配方後：每種素材要用哪一份（一般份／帶特性的各份）
+        const { resolved } = craftLots();
+        const lotPick = cur ? craftSel.mats.map((id, i) => {
+          const plain = have(id) - lotCount(id);
+          const opts = [];
+          if (plain > 0) opts.push({ uid: PLAIN, tr: {}, label: `一般 ×${plain}` });
+          S.lots.filter((l) => l.id === id).forEach((l) => opts.push({ uid: l.uid, tr: l.tr }));
+          if (opts.length < 2) return '';
+          return `<div class="lotgroup"><h4>${itemName(id)}</h4><div class="lotopts">${opts.map((o) => {
+            const on = resolved[i] === o.uid;
+            return `<button class="lotopt ${on ? 'on' : ''}" data-a="lot" data-v="${i}:${o.uid}">${o.label ? `<small>${o.label}</small>` : trChips(o.tr)}</button>`;
+          }).join('')}</div></div>`;
+        }).join('') : '';
+        panel = `<h3>配方冊 <small>點一道，素材自動放好</small></h3>
+            <div class="rlist">${book}</div>
+            ${lotPick ? `<h3>用哪一份？ <small>同一種素材，採集來的可能帶特性</small></h3>${lotPick}` : ''}
+            <button class="linkbtn" data-a="freecraft" data-v="1">不看配方，自由調合</button>`;
+        cta = `<button class="btn amber wide big" data-a="craft"${DEF(!!cur)} ${enough ? '' : 'disabled'}>下鍋（花 1 個時辰）</button>`;
       } else if (stage === 2) {
         const n = craftSel.stirs.length;
         panel = `<h3>開火攪拌 <small>第 ${n + 1}／${R.craft.stirs} 次・挑一顆泡泡留在鍋裡</small></h3>
@@ -1182,7 +1212,7 @@
       }
       const sub = order ? `給${charName(order.who)}（${statusShort(order.who)}）` : who ? `料的預測以今晚侍寢的${charName(who)}為準` : '試試看會做出什麼';
       return `<div class="screen theme-dark">
-        ${subHeader(order ? `調合・${itemName(order.product)}` : '自由調合', sub, true, false, stage === 1)}
+        ${subHeader(order ? `調合・${itemName(order.product)}` : craftSel.free ? '自由調合' : result && stage > 1 ? `調合・${itemName(result)}` : '調合', sub, true, false, stage === 1)}
         <div class="scroll">
           <div class="workshop">
             ${portrait('lingrong', craftSel.spike ? 'evil' : 'smile', 'ws-portrait')}
@@ -1753,8 +1783,11 @@
         break;
       }
       case 'craftfor': openCraft(v ? Number(v) : null); break;
-      case 'mat': if (craftSel.mats.length < 3) craftSel.mats.push(v); render(); break;
-      case 'unmat': craftSel.mats.splice(Number(v), 1); render(); break;
+      case 'mat': if (craftSel.mats.length < 3) { craftSel.mats.push(v); craftSel.lots = []; } render(); break;
+      case 'recipe': craftSel.mats = [...D.PRODUCTS[v].recipe]; craftSel.lots = []; craftSel.free = false; render(); break;
+      case 'lot': { const [i, uid] = v.split(':').map(Number); craftSel.lots[i] = uid; render(); break; }
+      case 'freecraft': craftSel.free = v === '1'; craftSel.mats = []; craftSel.lots = []; render(); break;
+      case 'unmat': craftSel.mats.splice(Number(v), 1); craftSel.lots = []; render(); break;
       case 'spike': craftSel.spike = v && craftSel.spike !== v ? v : null; render(); break;
       case 'craft': startCook(); break;
       case 'bubble': pickBubble(Number(v)); break;
