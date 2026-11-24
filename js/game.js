@@ -15,6 +15,8 @@
   const newCraftSel = (forOrder = null, forWho = null) => ({ stage: 1, free: false, mats: [], lots: [], spike: null, forOrder, forWho, stirs: [], bubbles: null, zone: null, beadT0: 0 });
   let craftSel = newCraftSel();
   let beadRaf = 0;
+  // 調合的一次性演出（只在下一次重繪時播，播完就清掉，免得每次重繪都重播）：{ k:'drop'|'stir'|'spike'|'spikedrop', c:顏色 }
+  let craftFx = null;
   // 快速調合（§13.3）：跳過攪拌與起鍋。記在這台裝置的瀏覽器裡，跟靜音一樣
   let quickCraft = false;
   try { quickCraft = localStorage.getItem('lingrong-quickcraft') === '1'; } catch { /* 無痕模式等 */ }
@@ -102,7 +104,12 @@
   // 特性小標籤：香氣●●○。tr 空 → 空字串
   function trChips(tr, cls = '') {
     const e = Object.entries(tr || {});
-    return e.length ? `<span class="trs ${cls}">${e.map(([t, lv]) => `<span class="trc" style="--c:${D.TRAITS[t].color}">${D.TRAITS[t].name}<i>${'●'.repeat(lv)}${'○'.repeat(3 - lv)}</i></span>`).join('')}</span>` : '';
+    return e.length ? `<span class="trs ${cls}">${e.map(([t, lv], i) => `<span class="trc" style="--c:${D.TRAITS[t].color};--i:${i}">${D.TRAITS[t].name}<i>${'●'.repeat(lv)}${'○'.repeat(3 - lv)}</i></span>`).join('')}</span>` : '';
+  }
+  // 鍋裡湯色：依特性顏色（等級高的在前）做漸層
+  function liquid(tr) {
+    const cs = Object.entries(tr).sort((a, b) => b[1] - a[1]).map(([t]) => D.TRAITS[t].color);
+    return cs.length === 1 ? `linear-gradient(160deg, ${cs[0]}, #6E5A3A)` : `linear-gradient(160deg, ${cs.join(', ')})`;
   }
   // 某素材有幾份帶特性
   const lotCount = (id) => S.lots.filter((l) => l.id === id).length;
@@ -735,6 +742,7 @@
     if (craftSel.mats.length < 2 || busy) return;
     const result = E.findRecipe(D, craftSel.mats);
     if (!result || D.PRODUCTS[result].out === 'inv') { craftSel.spike = null; doCraft(); return; }
+    craftFx = { k: 'drop' };
     if (quickCraft) { craftSel.stage = 3; render(); return; } // 快速調合：直接到加料
     craftSel.stage = 2;
     craftSel.bubbles = E.rollBubbles(D, E.potTraits(D, craftLots().trs), rand);
@@ -744,6 +752,7 @@
   function pickBubble(i) {
     if (craftSel.stage !== 2 || !craftSel.bubbles || !craftSel.bubbles[i]) return;
     craftSel.stirs.push(craftSel.bubbles[i]);
+    craftFx = { k: 'stir', c: D.TRAITS[craftSel.bubbles[i].t].color };
     A.sfx('pick');
     if (craftSel.stirs.length >= R.craft.stirs) { craftSel.stage = 3; craftSel.bubbles = null; }
     else craftSel.bubbles = E.rollBubbles(D, E.potTraits(D, craftLots().trs), rand);
@@ -751,7 +760,8 @@
   }
   function toFinish() {
     if (craftSel.stage !== 3 || busy) return;
-    if (quickCraft) { doCraft(); return; } // 快速調合：不起鍋，成品只帶素材的特性
+    if (craftSel.spike) craftFx = { k: 'spikedrop' };
+    if (quickCraft) { render(); doCraft(); return; } // 快速調合：不起鍋，成品只帶素材的特性
     craftSel.stage = 4;
     craftSel.beadT0 = performance.now();
     render();
@@ -1226,13 +1236,16 @@
       return `<div class="screen theme-dark">
         ${subHeader(order ? `調合・${itemName(order.product)}` : craftSel.free ? '自由調合' : result && stage > 1 ? `調合・${itemName(result)}` : '調合', sub, true, false, stage === 1)}
         <div class="scroll">
-          <div class="workshop">
+          <div class="workshop ${stage > 1 ? 'lit' : ''} ${craftFx ? `fx-${craftFx.k}` : ''}" ${craftFx && craftFx.c ? `style="--fxc:${craftFx.c}"` : ''}>
             ${portrait('lingrong', craftSel.spike ? 'evil' : 'smile', 'ws-portrait')}
+            ${craftFx && craftFx.k === 'spike' ? '<span class="hehe">嘿嘿……</span>' : ''}
             <div class="cauldron">
               <div class="cslots">${slot(a, 0)}${slot(b, 1)}${slot(c3, 2)}
                 <span class="cslot spike ${craftSel.spike ? 'filled' : ''}" aria-label="料">${craftSel.spike ? `${tok(craftSel.spike, 'lg')}<span>${itemName(craftSel.spike)}</span>` : '<span>料</span>'}</span></div>
-              <div class="pot"><div class="pot-rim"></div><div class="pot-body">${preview}${trChips(potTr, 'sm')}</div><div class="pot-legs"><i></i><i></i></div>
-                <div class="bubbles"><i></i><i></i><i></i><i></i><i></i></div></div>
+              <div class="pot"><i class="ladle"></i><div class="pot-rim"></div><div class="pot-body" ${stage > 1 && Object.keys(potTr).length ? `style="--liq:${liquid(potTr)}"` : ''}>${preview}${trChips(potTr, 'sm')}</div><div class="pot-legs"><i></i><i></i></div>
+                <div class="flames"><i></i><i></i><i></i></div>
+                <div class="bubbles"><i></i><i></i><i></i><i></i><i></i></div>
+                ${craftFx && craftFx.k === 'spikedrop' && craftSel.spike ? `<span class="spike-drop">${tok(craftSel.spike)}</span>` : ''}</div>
             </div>
           </div>
           <div class="drawer">${steps}${panel}</div>
@@ -1540,6 +1553,7 @@
       playResultFx();
     }
     if (screen === 'craft' && craftSel.stage === 4 && !craftSel.zone && !beadRaf && typeof requestAnimationFrame === 'function') beadRaf = requestAnimationFrame(beadLoop);
+    if (screen === 'craft') craftFx = null;
     syncCursor(true);
   }
 
@@ -1800,7 +1814,7 @@
       case 'lot': { const [i, uid] = v.split(':').map(Number); craftSel.lots[i] = uid; render(); break; }
       case 'freecraft': craftSel.free = v === '1'; craftSel.mats = []; craftSel.lots = []; render(); break;
       case 'unmat': craftSel.mats.splice(Number(v), 1); craftSel.lots = []; render(); break;
-      case 'spike': craftSel.spike = v && craftSel.spike !== v ? v : null; render(); break;
+      case 'spike': craftSel.spike = v && craftSel.spike !== v ? v : null; if (craftSel.spike) { craftFx = { k: 'spike' }; A.sfx('evil'); } render(); break;
       case 'craft': startCook(); break;
       case 'bubble': pickBubble(Number(v)); break;
       case 'tofinish': toFinish(); break;

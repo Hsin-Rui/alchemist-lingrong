@@ -562,3 +562,36 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .quick-toggle i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .2s; }
 .quick-toggle.on i { background: var(--crimson); }
 .quick-toggle.on i::after { left: 14px; }
+
+/* ───── 調合演出（第二輪 story 2.4） ───── */
+.pot-body { transition: background .6s; }
+.pot-body[style*="--liq"] { background: var(--liq); text-shadow: 0 1px 2px rgba(0,0,0,.55); }
+.flames { position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; opacity: 0; transition: opacity .4s; pointer-events: none; }
+.flames i { width: 14px; height: 22px; border-radius: 50% 50% 40% 40%; background: radial-gradient(circle at 50% 70%, #ffe08a, #ff7b2e 60%, transparent 72%); transform-origin: bottom; animation: flick .35s infinite alternate; }
+.flames i:nth-child(2) { height: 28px; animation-delay: .1s; } .flames i:nth-child(3) { animation-delay: .2s; }
+@keyframes flick { to { transform: scaleY(.75) scaleX(1.1); } }
+.workshop.lit .flames { opacity: 1; }
+.ladle { position: absolute; z-index: 2; top: -34px; left: 50%; width: 7px; height: 64px; margin-left: -3px; border-radius: 4px; background: #a77b4f; transform-origin: 50% 100%; transform: rotate(20deg); opacity: 0; transition: opacity .3s; pointer-events: none; }
+.ladle::after { content: ''; position: absolute; bottom: -6px; left: -8px; width: 22px; height: 11px; border-radius: 0 0 11px 11px; background: #8a6440; }
+.workshop.lit .ladle { opacity: 1; }
+.fx-stir .ladle { animation: stir .7s ease-in-out; }
+@keyframes stir { 25% { transform: translateX(-30px) rotate(-25deg); } 50% { transform: translateX(25px) rotate(30deg); } 75% { transform: translateX(-20px) rotate(-15deg); } }
+.fx-stir .bubbles i { background: var(--fxc); animation: rise .9s ease-out; }
+.fx-stir .bubbles i:nth-child(2) { animation-delay: .12s; } .fx-stir .bubbles i:nth-child(3) { animation-delay: .24s; } .fx-stir .bubbles i:nth-child(4) { animation-delay: .36s; } .fx-stir .bubbles i:nth-child(5) { animation-delay: .48s; }
+.fx-drop .cslot.filled { animation: dropin .7s ease-in; }
+@keyframes dropin { 55% { transform: translateY(70px) scale(.4); opacity: 0; } 56% { transform: none; opacity: 0; } 100% { opacity: 1; } }
+.fx-drop .pot-body { animation: splash .5s .45s; }
+@keyframes splash { 40% { transform: scaleY(.92) scaleX(1.04); } }
+.hehe { position: absolute; z-index: 3; left: 110px; top: 70px; font-family: var(--serif); font-weight: 900; font-size: 18px; color: var(--lavender); text-shadow: 0 2px 6px rgba(0,0,0,.6); animation: popin .4s cubic-bezier(.3,1.6,.5,1) both; pointer-events: none; }
+.spike-drop { position: absolute; z-index: 3; top: -60px; left: 50%; margin-left: -18px; animation: spikedrop .8s ease-in forwards; pointer-events: none; }
+@keyframes spikedrop { 70% { transform: translateY(80px) scale(1); opacity: 1; } 100% { transform: translateY(95px) scale(.3); opacity: 0; } }
+.dark-sheet .trs.center .trc { animation: popin .45s cubic-bezier(.3,1.6,.5,1) both; animation-delay: calc(.35s + var(--i, 0) * .22s); }
+.dark-sheet .craft-pop { position: relative; }
+.dark-sheet .craft-pop::before, .dark-sheet .craft-pop::after { content: ''; position: absolute; top: 0; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.5), transparent 70%); animation: steam 1.4s ease-out both; pointer-events: none; }
+.dark-sheet .craft-pop::before { left: 38%; } .dark-sheet .craft-pop::after { left: 52%; animation-delay: .25s; }
+@keyframes steam { from { transform: translateY(10px) scale(.6); opacity: .9; } to { transform: translateY(-60px) scale(2.2); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .flames i, .ladle { animation: none !important; } }
+.ladle { left: 82%; }
+.pot-body .trs { flex-direction: row; flex-wrap: wrap; justify-content: center; max-width: 160px; gap: 3px; }
+.pot-body .trc { font-size: 10px; padding: 0 5px; }
+.pot-body .trc { text-shadow: none; box-shadow: 0 0 0 1.5px rgba(36,27,48,.7); }
