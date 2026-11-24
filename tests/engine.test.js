@@ -707,11 +707,11 @@ test('gatherStep 等待：步數 -1、侍衛照常行動', () => {
 test('gatherStep 撿取：走到素材上 → got++、素材移除、事件 pick（帶 rare），同一格不會重複計算', () => {
   const run = mini(['######', '#Zj*.#', '######']);
   let ev = E.gatherStep(run, 'e', ZERO);
-  assert.deepStrictEqual(ev.find((e) => e.t === 'pick'), { t: 'pick', id: 'jasmine', rare: false, x: 2, y: 1 });
+  assert.deepStrictEqual(ev.find((e) => e.t === 'pick'), { t: 'pick', id: 'jasmine', rare: false, x: 2, y: 1, tr: {} });
   assert.deepStrictEqual(run.got, { jasmine: 1 });
   assert.strictEqual(run.items.length, 1);
   ev = E.gatherStep(run, 'e', ZERO);
-  assert.deepStrictEqual(ev.find((e) => e.t === 'pick'), { t: 'pick', id: 'catnip', rare: true, x: 3, y: 1 });
+  assert.deepStrictEqual(ev.find((e) => e.t === 'pick'), { t: 'pick', id: 'catnip', rare: true, x: 3, y: 1, tr: {} });
   // 走回原格：已經沒有素材
   ev = E.gatherStep(run, 'w', ZERO);
   assert.ok(!ev.some((e) => e.t === 'pick'));
@@ -1054,4 +1054,33 @@ test('craft：自動挑特性最多的那份，成品帶合併特性；指定 lo
   const r3 = E.craft(D, S2, { mats: ['pine', 'plum'], spike: null, forOrder: null, forWho: null });
   assert.strictEqual(r3.product, 'junk');
   assert.deepStrictEqual(r3.tr, {});
+});
+
+// ───────── 第二輪：採集帶特性 ─────────
+test('rollTraits：照本性擲、0～2 種；近 1 級、遠 2～3 級；料沒有特性', () => {
+  assert.deepStrictEqual(E.rollTraits(D, 'catnip', 1, () => 0.99), {});
+  assert.deepStrictEqual(E.rollTraits(D, 'pine', 0, () => 0.1), {}, 'rand<0.3 → 0 種');
+  assert.deepStrictEqual(E.rollTraits(D, 'pine', 0, () => 0.9), { qing: 1 }, '只有一種本性 → 最多 1 種；近處 1 級');
+  const far = E.rollTraits(D, 'plum', 1, () => 0.9);
+  assert.deepStrictEqual(Object.keys(far).sort(), ['hua', 'xiang']);
+  Object.values(far).forEach((lv) => assert.ok(lv >= 2 && lv <= 3, '遠處 2～3 級'));
+  for (let i = 0; i < 200; i++) {
+    const tr = E.rollTraits(D, 'lotus', i / 199, lcg(i + 1));
+    Object.keys(tr).forEach((t) => assert.ok(D.ITEMS.lotus.nature.includes(t)));
+    assert.ok(Object.keys(tr).length <= 2);
+  }
+});
+
+test('地下城：素材帶特性、撿起來進 haul；applyGatherHaul 給 haul 就照份放、帶特性的進 lots', () => {
+  const S = fresh();
+  const run = E.buildGatherDungeon(D, S, 'garden', lcg(7));
+  run.items.forEach((it) => assert.ok(it.tr && typeof it.tr === 'object'));
+  assert.ok(run.items.some((it) => E.traitSum(it.tr) > 0), '一張圖總有幾份帶特性');
+  const before = S.inv.pine || 0;
+  const haul = [{ id: 'pine', tr: { qing: 2 } }, { id: 'pine', tr: {} }, { id: 'catnip', tr: {} }];
+  const r = E.applyGatherHaul(D, S, 'garden', { pine: 2, catnip: 1 }, haul);
+  assert.strictEqual(S.inv.pine, before + 2);
+  assert.deepStrictEqual(S.lots.map((l) => [l.id, l.tr]), [['pine', { qing: 2 }]]);
+  assert.strictEqual(S.inv.catnip, 1);
+  assert.deepStrictEqual(r.haul, haul);
 });

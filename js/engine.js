@@ -58,6 +58,22 @@
     S.lots = S.lots.filter((l) => l !== lot);
     return { ...lot.tr };
   }
+  // 採集到的素材擲特性（§13.2）：偏向素材的本性（ITEMS.nature），0～2 種；
+  // frac＝離出生點的遠近（0 最近、1 最遠）：近 1 級，中 1～2 級，遠 2～3 級。料與沒有本性的素材 → {}。
+  function rollTraits(D, id, frac, rand) {
+    const nat = D.ITEMS[id] && D.ITEMS[id].nature;
+    if (!nat || !nat.length) return {};
+    const r = rand();
+    const n = Math.min(nat.length, r < 0.3 ? 0 : r < 0.8 ? 1 : 2);
+    const order = nat.length > 1 && rand() < 0.5 ? [...nat].reverse() : nat;
+    const tr = {};
+    for (let i = 0; i < n; i++) {
+      const base = frac < 1 / 3 ? 1 : frac < 2 / 3 ? 1 : 2;
+      tr[order[i]] = Math.min(3, base + (frac >= 1 / 3 && rand() < 0.5 ? 1 : 0));
+    }
+    return tr;
+  }
+
   // 合併特性：同特性相加、最高 maxLv 級；只留最強的 maxN 種（平手依 D.TRAITS 的順序）
   function mergeTraits(D, trs, maxLv = 3, maxN = 3) {
     const sum = {};
@@ -539,7 +555,7 @@
       rare: g.rare || g.table.reduce((a, b) => (b[1] < a[1] ? b : a))[0],
       player: { x: gx, y: gy, face: 'up' },
       items: [], guards: [],
-      maxSteps: c.steps, stepsLeft: c.steps, got: {}, picked: 0,
+      maxSteps: c.steps, stepsLeft: c.steps, got: {}, haul: [], picked: 0,
       seen: new Array(W * H).fill(0), over: false, endReason: null, caughtBy: -1,
       cfg: { guardSight: c.guardSight, playerSight: c.playerSight, searchTurns: c.searchTurns, wanderKeep: c.wanderKeep, wanderIdle: c.wanderIdle, guardSpawns: Array.from(c.guardSpawns, (sp) => ({ ...sp })) },
     };
@@ -588,6 +604,10 @@
     for (const [id] of commons) put(id, take());
     const extra = ri(c.extraItems[0], c.extraItems[1]);
     for (let i = 0; i < extra; i++) put(weightedPick(commons, rand), take());
+
+    // 特性：越深處（離出生點步數越多）等級越高。放完素材才擲，不影響上面的擺放
+    const farthest = Math.max(1, ...run.items.map((it) => dist[it.y * W + it.x]));
+    run.items.forEach((it) => { it.tr = rollTraits(D, it.id, dist[it.y * W + it.x] / farthest, rand); });
 
     // 侍衛不在這裡生成：走滿指定步數後才由 gatherStep 放進場（見 gSpawnCell）
     gMarkSeen(run);
@@ -689,8 +709,9 @@
       if (i >= 0) {
         const [it] = run.items.splice(i, 1);
         run.got[it.id] = (run.got[it.id] || 0) + 1;
+        (run.haul = run.haul || []).push({ id: it.id, tr: it.tr || {} });
         run.picked++;
-        ev.push({ t: 'pick', id: it.id, rare: it.rare, x: tx, y: ty });
+        ev.push({ t: 'pick', id: it.id, rare: it.rare, x: tx, y: ty, tr: it.tr || {} });
       }
     }
     run.stepsLeft--;
@@ -777,17 +798,19 @@
   }
 
   // 採集小遊戲・收穫套用（純函式，無 rand）：把這趟撿到的 got 加進包包、slot++、推 dayLog、回 ready。
+  // haul（run.haul，每份的 {id,tr}）有給就照份放進去，帶特性的進 S.lots；沒給就照 got 的數量放一般份（模擬器用）。
   // got 空（被抓／逾時卻兩手空空）→ inv 不變、仍 slot++、dayLog 記「空手而回」。
-  function applyGatherHaul(D, S, loc, got) {
+  function applyGatherHaul(D, S, loc, got, haul) {
     const g = D.GATHER[loc];
     S.slot++;
     const entries = Object.entries(got || {}).filter(([, c]) => c > 0);
-    for (const [id, c] of entries) invAdd(S, id, c);
+    if (haul) haul.forEach((h) => addUnit(S, h.id, h.tr));
+    else for (const [id, c] of entries) invAdd(S, id, c);
     const ready = S.orders.filter((o) => !readyItem(S, o) && recipeOk(D, S, o.product));
     S.dayLog.push(entries.length
       ? `在${g.name}採集：${entries.map(([id, c]) => `${itemName(D, id)}×${c}`).join('、')}`
       : `在${g.name}空手而回`);
-    return { loc, got: got || {}, ready };
+    return { loc, got: got || {}, haul: haul || [], ready };
   }
 
   // 調合（確定性，無 rand）：slot++、放進去的 2～3 樣素材各 -1、findRecipe→成品或 junk；成品入 hand/inv。
@@ -920,7 +943,7 @@
     newState, TITLE_CHECK, computeEnding,
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
-    findRecipe, acceptChance, traitSum, bestLot, addUnit, takeUnit, mergeTraits,
+    findRecipe, acceptChance, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
     buy, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

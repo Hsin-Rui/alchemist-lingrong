@@ -668,7 +668,7 @@
     const gs = gatherScene;
     if (!gs) return;
     stopGatherRuntime(gs);
-    const haul = E.applyGatherHaul(D, S, gs.loc, gs.run.got);
+    const haul = E.applyGatherHaul(D, S, gs.loc, gs.run.got, gs.run.haul);
     gatherResult = { ...haul, ended: gs.run.endReason, by: gs.run.caughtBy };
     gatherScene = null;
     if (A.dungeonBgm) A.dungeonBgm(false);
@@ -981,7 +981,7 @@
           <h3 class="sheet-title">${caught ? '被抓了！' : '採到了！'}</h3>
           ${endMsg ? `<p class="center ${caught ? 'ok' : 'muted'}">${endMsg}</p>` : ''}
           ${entries.length
-            ? `<div class="got">${entries.map(([id, n], i) => `<div class="got-card ${D.ITEMS[id].type}" style="animation-delay:${i * 0.15}s">${tok(id, 'lg')}<span>${itemName(id)}</span><b>+${n}${D.ITEMS[id].type === 'spike' ? ' 料！' : ''}</b></div>`).join('')}</div>`
+            ? `<div class="got">${entries.map(([id, n], i) => `<div class="got-card ${D.ITEMS[id].type}" style="animation-delay:${i * 0.15}s">${tok(id, 'lg')}<span>${itemName(id)}</span><b>+${n}${D.ITEMS[id].type === 'spike' ? ' 料！' : ''}</b>${(gatherResult.haul || []).filter((h) => h.id === id && E.traitSum(h.tr)).map((h) => trChips(h.tr)).join('')}</div>`).join('')}</div>`
             : '<p class="center muted">這趟空手而回……</p>'}
           ${gatherResult.got.petal ? '<p class="center ok">紅花瓣！加上烈酒就能煉出紅花……</p>' : ''}
           ${gatherResult.ready.map((o) => `<p class="ok center">${charName(o.who)}的${itemName(o.product)}：材料湊齊了</p>`).join('')}

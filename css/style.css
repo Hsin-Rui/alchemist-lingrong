@@ -214,7 +214,7 @@ h3 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .dark-sheet .btn.ghost { color: #F1EAF8; border-color: var(--night-line); }
 .modal-tok { display: flex; justify-content: center; }
 .got { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-.got-card { width: 96px; height: 116px; border-radius: 14px; background: #F1E7D6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 13px; animation: popin .45s cubic-bezier(.3,1.6,.5,1) both; }
+.got-card { width: 96px; min-height: 116px; padding: 6px 4px; border-radius: 14px; background: #F1E7D6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 13px; animation: popin .45s cubic-bezier(.3,1.6,.5,1) both; }
 .got-card b { color: var(--ok); }
 .got-card.spike { background: var(--purple); color: #fff; }
 .got-card.spike b { color: var(--amber); }
