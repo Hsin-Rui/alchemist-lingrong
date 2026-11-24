@@ -412,6 +412,25 @@ function connect(url) {
     }
     const steps1 = await ev("Number(document.querySelector('.dg-steps b').textContent)");
     check('地下城中方向鍵只有走路（無焦點框）', !sawBox && steps1 < steps0, `${steps0} → ${steps1}`);
+    // 步數走完：先跳「零溶乏了」的對話框，按鍵跳過後才轉場
+    const slot0 = await ev('__e2e.state().slot');
+    await ev('__e2e.gather().run.stepsLeft = 1');
+    let tiredOk = false;
+    for (const k of ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft']) {
+      await press(k, { wait: 120 });
+      if (await waitFor("(() => { const s = document.querySelector('.dg-say'); return !!s && !s.hidden && s.textContent.includes('乏了'); })()", 900)) { tiredOk = true; break; }
+    }
+    check('步數走完 → 跳出「零溶乏了，決定回宮」', tiredOk);
+    await sleep(600);
+    await press('ArrowDown');
+    check('走累的對話框按鍵跳過 → 結果單', await waitFor("!document.querySelector('.dg') && !!document.querySelector('#app .sheet-layer')", 3000));
+    await press('Enter');
+    await waitFor("!document.querySelector('#app .sheet-layer')", 2000);
+    await G(`S.slot = ${slot0}; __e2e.go("gather");`);
+    await press('ArrowDown');
+    await press('Enter');
+    await waitFor("!!document.querySelector('.dg.on')", 3000);
+    await sleep(900);
     await press('Escape');
     await press('Enter');
     check('地下城 Esc＋Enter 收工（沿用既有按鍵）', await waitFor("!document.querySelector('.dg') && !!document.querySelector('#app .sheet-layer')", 4000));

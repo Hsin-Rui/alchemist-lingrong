@@ -441,7 +441,7 @@
     gatherScene = {
       loc, run: E.buildGatherDungeon(D, S, loc, rand),
       phase: 'intro', t0: 0, anim: null, steps: 0, buffer: null, held: null, heldKey: null, nextAt: 0,
-      bubbles: {}, fx: [], flashUntil: 0, hopFrom: 0, caughtBy: -1, endAt: 0, mosaic: 8, fade: 0,
+      bubbles: {}, fx: [], flashUntil: 0, hopFrom: 0, caughtBy: -1, sayFrom: 0, endAt: 0, mosaic: 8, fade: 0,
       vis: new Set(), sight: [], confirm: false,
       view: { tileset: D.GATHER[loc].tileset, guardSprite: (gi) => guardOf(loc, gi).sprite }, // 給 DV.drawDungeon
     };
@@ -512,8 +512,8 @@
       gs.held = action;
       gs.heldKey = key;
       gs.nextAt = performance.now() + HOLD_MS;
-      // 被抓的那句話：看過一下之後，按任何方向就跳過
-      if (gs.phase === 'ending' && gs.caughtBy >= 0 && performance.now() >= gs.sayFrom + 500) { gs.endAt = 0; return; }
+      // 收尾那句話（被抓／走累了）：看過一下之後，按任何方向就跳過
+      if (gs.phase === 'ending' && gs.sayFrom && performance.now() >= gs.sayFrom + 500) { gs.endAt = 0; return; }
       dungeonAct(action);
     };
     gs.onKeyDown = (e) => {
@@ -632,7 +632,13 @@
           A.sfx('caught');
           break;
         }
-        case 'timeout': gs.phase = 'ending'; gs.endAt = now + 750; A.sfx('timeout'); break;
+        case 'timeout':
+          // 步數走完：零溶乏了，對話框講完（或玩家按鍵）才轉場
+          gs.phase = 'ending'; gs.held = null; gs.buffer = null;
+          gs.sayFrom = now + STEP_MS + 200; gs.endAt = gs.sayFrom + SAY_MS;
+          gs.el.say.innerHTML = `<span>${esc(D.GATHER[gs.loc].tired)}</span>`;
+          A.sfx('timeout');
+          break;
         default: break;
       }
     }
@@ -667,8 +673,8 @@
         else if (gs.held && now >= gs.nextAt) { gs.nextAt = now + REPEAT_MS; dungeonAct(gs.held); }
       }
     } else if (gs.phase === 'ending') {
-      // 被抓：閃白之後侍衛開口，話說完（或玩家按鍵）才轉場
-      if (gs.caughtBy >= 0 && gs.el.say.hidden && now >= gs.sayFrom) gs.el.say.hidden = false;
+      // 被抓：閃白之後侍衛開口；走累了：零溶收工。話說完（或玩家按鍵）才轉場
+      if (gs.sayFrom && gs.el.say.hidden && now >= gs.sayFrom) gs.el.say.hidden = false;
       if (now >= gs.endAt) { gs.phase = 'out'; gs.t0 = now; gs.el.say.hidden = true; A.sfx('exitDungeon'); }
     } else if (gs.phase === 'out') {
       gs.mosaic = 1 + 7 * Math.min(1, t / 300);
@@ -1925,7 +1931,7 @@
   }
   // 測試用：網址後面加 #e2e 時開放狀態給 tools/keyboard-e2e.js 造情境（不影響正常遊戲）
   if (location.hash === '#e2e') {
-    window.__e2e = { state: () => S, screen: () => screen, render, go, openCraft, playDialog };
+    window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, render, go, openCraft, playDialog };
   }
   render();
   preloadImages();

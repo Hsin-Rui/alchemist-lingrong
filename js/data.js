@@ -58,6 +58,7 @@ window.GAME_DATA = (() => {
       bgm: 'gather', // 採集音樂：assets/audio/bgm_gather.lite.mp3（沒有就用 8-bit 合成曲）
       table: [['pine', 3], ['bamboo', 3], ['lotus', 3], ['osmanthus', 3], ['pear', 3], ['jasmine', 3], ['plum', 2], ['catnip', 1.5]],
       intro: '零溶提著小籃子，假裝在御花園賞花……',
+      tired: '零溶乏了，決定回宮。', // 步數走完時的收尾對話框
       // 地形代號 → 像素圖（js/pixelart.js 的 id）。floor／hall 是變體清單；big 是佔 2×2 格的擺設（_0、_1 兩幀）
       tileset: {
         floor: ['grass_0', 'grass_1', 'grass_2'], hall: ['grass_0', 'grass_0', 'grass_1'], // 小徑也鋪草地，可走的地方一眼看得出來
@@ -86,6 +87,7 @@ window.GAME_DATA = (() => {
       bgm: 'gather', // 想讓太醫院用不同曲子：改成 'gather_taiyi'，放 bgm_gather_taiyi.lite.mp3
       table: [['jujube', 3], ['motherwort', 3], ['angelica', 3], ['pearl', 2], ['agarwood', 2], ['cassava', 2], ['liquor', 1.5], ['petal', 0.8], ['musk', 0.6]],
       intro: '趁太醫打瞌睡，零溶偷偷拉開了百子櫃……',
+      tired: '零溶乏了，決定回宮。',
       tileset: {
         floor: ['ty_floor_0', 'ty_floor_1', 'ty_floor_2'], hall: ['ty_floor_0', 'ty_floor_0', 'ty_floor_1'], // 走廊也鋪木地板，可走的地方一眼看得出來
         wallTop: 'ty_wall_top', wallFace: 'ty_wall_face', door: 'ty_door', big: 'ty_stove',
