@@ -68,20 +68,29 @@ header h1 { font-family: var(--serif); font-size: 20px; margin: 0; color: var(--
   const start = () => {
     if (flow) flow.destroy();
     $('log').hidden = true;
+    const stock = sample();
     flow = window.CraftFlow.mount($('flow'), {
-      D, E, stock: sample(), spikes: ['musk', 'safflower', 'cassava', 'catnip'],
-      spikeNote: (id) => `被抓 ${Math.round(D.ITEMS[id].catch * 100)}%`,
+      D, E, stock,
+      spikes: ['musk', 'safflower', 'cassava', 'catnip'].map((id) => ({ id, n: 1, note: `被抓 ${Math.round(D.ITEMS[id].catch * 100)}%` })),
       quick: $('quick').checked,
+      onQuick: (on) => { $('quick').checked = on; try { localStorage.setItem('lingrong-quickcraft', on ? '1' : '0'); } catch { /* 略 */ } },
+      firstSpike: true,
       img: (who) => (who === 'baojuan' ? 'assets/characters/baojuan.webp' : 'assets/characters/lingrong_smile.webp'),
       itemImg: (id) => `assets/items/${id}.webp`,
       sfx: (n, a) => A.sfx(n, a),
-      onDone: (r) => {
+      cook: (sel) => {
+        const product = E.findRecipe(D, sel.mats) || 'junk';
+        const trs = sel.lots.map((u) => (stock.lots.find((l) => l.uid === u) || {}).tr || {});
+        const toInv = D.PRODUCTS[product].out === 'inv';
+        const r = { product, toInv, spike: product === 'junk' || toInv ? null : sel.spike, traits: product === 'junk' ? {} : E.finalTraits(D, trs, sel.stirs, sel.finish) };
         $('log').hidden = false;
-        $('log').innerHTML = `<b>${D.PRODUCTS[r.product].name}</b> 收進道具欄了。<br>撈到：${r.stirs.map((b) => (b.t === 'burnt' ? '焦' : `${D.TRAITS[b.t].name}+${b.v}`)).join('、') || '（沒有）'}・起鍋：${r.zone ? { up: '升', keep: '維持', down: '降' }[r.zone] : '跳過'}${r.spike ? `・加了${D.ITEMS[r.spike].name}` : ''}<br>按「重來」再做一鍋。`;
-        $('flow').innerHTML = '';
+        $('log').innerHTML = `<b>${D.PRODUCTS[product].name}</b>・撈到：${sel.stirs.map((b) => (b.t === 'burnt' ? '焦' : `${D.TRAITS[b.t].name}+${b.v}`)).join('、') || '（沒有）'}・起鍋：${sel.finish ? { up: '升', keep: '維持', down: '降' }[sel.finish] : '跳過'}${r.spike ? `・加了${D.ITEMS[r.spike].name}` : ''}`;
+        return r;
       },
+      actions: () => [{ a: 'lab', v: 'again', label: '收下，再做一鍋', primary: true, def: true }],
     });
   };
+  $('flow').addEventListener('click', (e) => { if (e.target.closest('[data-a="lab"]')) start(); });
   document.addEventListener('pointerdown', () => { A.unlock(); A.playBgm('workshop'); }, { once: true });
   $('again').addEventListener('click', start);
   $('quick').addEventListener('change', () => { try { localStorage.setItem('lingrong-quickcraft', $('quick').checked ? '1' : '0'); } catch { /* 略 */ } start(); });

@@ -318,33 +318,29 @@ function connect(url) {
     await press('Enter');
     check('Enter 按下游標所在「再想想」→ 關閉視窗', !(await hasModal('sleepyes')) && (await scr()) === 'home');
 
-    // ── 調合：重繪後同一素材按鈕仍在就留著，否則回預設 ──
+    // ── 調合（js/craftflow.js）：模組按鈕帶 data-a="cf"，遊戲游標照樣能用；重繪後同一按鈕仍在就留著，否則回預設 ──
     await hideByMouse();
     const mats = await G(`
-      window.__inv = { ...S.inv };
+      window.__inv = { ...S.inv }; window.__lots0 = S.lots.slice(); S.lots = [];
       const ids = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === 'mat').slice(0, 2);
       S.inv = { [ids[0]]: 2, [ids[1]]: 1 };
       __e2e.openCraft(null); return ids;`);
-    await ev("document.querySelector('[data-a=freecraft]').click()"); // 素材格在「自由調合」裡
+    await ev("document.querySelector('[data-v=free]').click()"); // 素材格在「自由調合」裡
     await press('ArrowDown');
     f = await focus();
-    check('調合預設＝第一個可用素材', f && f.key === `mat|${mats[0]}#1`, JSON.stringify(f));
-    check('調合米色素材抽屜（淺色面）框為朱紅', f && f.color === CRIMSON, f && f.color);
-    await shot('craft-drawer');
-    await press('ArrowUp'); await press('ArrowUp');
-    const fw = await focus();
-    check('調合深色工房區框為琥珀', fw && fw.color === AMBER, JSON.stringify(fw));
-    await hideByMouse(); await press('ArrowDown');
+    check('自由調合預設＝第一個可用素材', f && f.key === `cf|mat:${mats[0]}#1`, JSON.stringify(f));
+    check('調合畫面（深色煉金房）框為琥珀', f && f.color === AMBER, f && f.color);
+    await shot('craft-free');
     await press('Enter');
     f = await focus();
-    check('放入素材後重繪：同一素材按鈕仍在 → 留著', f && f.key === `mat|${mats[0]}#1`, JSON.stringify(f));
+    check('放入素材後重繪：同一素材按鈕仍在 → 留著', f && f.key === `cf|mat:${mats[0]}#1`, JSON.stringify(f));
     await press('Enter');
     f = await focus();
     const defAfter = await ev('__t.defKey()');
-    check('素材按鈕停用後 → 回預設', f && f.key === defAfter && !f.key.startsWith(`mat|${mats[0]}`), `${f && f.key} vs ${defAfter}`);
-    await G('S.inv = window.__inv; __e2e.go("home");');
+    check('素材按鈕停用後 → 回預設', f && f.key === defAfter && !f.key.startsWith(`cf|mat:${mats[0]}`), `${f && f.key} vs ${defAfter}`);
+    await G('S.inv = window.__inv; S.lots = window.__lots0; __e2e.go("home");');
 
-    // ── 四階段調合（第二輪 §13.3）：配方冊 → 攪拌 1/2/3 → 加料 → 起鍋 Space；下鍋後 Esc／快捷鍵無效 ──
+    // ── 四階段調合（§13.3）：配方冊 → 撈泡泡（1/2/3）→ 加料 → 起鍋 Space；下鍋後 Esc／快捷鍵無效 ──
     await hideByMouse();
     await G(`window.__inv2 = { ...S.inv }; window.__lots2 = S.lots.slice(); window.__slot2 = S.slot; window.__hand2 = S.hand.slice(); S.slot = 0;
       S.inv = { lotus: 1, osmanthus: 1 }; S.lots = [];
@@ -352,47 +348,45 @@ function connect(url) {
       __e2e.openCraft(null);`);
     await press('ArrowDown');
     f = await focus();
-    check('配方冊預設＝第一道做得出來的配方', f && f.key === 'recipe|cake#1', JSON.stringify(f));
+    check('配方冊預設＝第一道做得出來的配方', f && f.key === 'cf|recipe:cake#1', JSON.stringify(f));
     await press('Enter');
     f = await focus();
-    check('選了配方 → 游標移到「下鍋」', f && f.key === 'craft|#1', JSON.stringify(f));
+    check('選了配方（素材只有一份就自動放好）→ 游標移到「下鍋」', f && f.key === 'cf|cook#1', JSON.stringify(f));
     await press('Enter');
-    const stepOn = () => ev("document.querySelector('.csteps li.on')?.textContent || ''");
-    check('Enter 下鍋 → 開火攪拌', (await stepOn()) === '開火攪拌');
-    f = await focus();
-    check('攪拌預設＝第一顆泡泡', f && f.key === 'bubble|0#1', JSON.stringify(f));
+    const stepOn = () => ev("document.querySelector('.cf-steps li.on')?.textContent.replace(/[0-9]/g, '') || ''");
+    check('Enter 下鍋 → 撈泡泡', (await stepOn()) === '撈泡泡');
+    check('下鍋後沒有返回鍵', !(await ev("!!document.querySelector('.subhead [data-a=go]')")));
     await press('Escape');
-    check('攪拌中 Esc 不會離開', (await scr()) === 'craft' && (await stepOn()) === '開火攪拌');
+    check('撈泡泡中 Esc 不會離開', (await scr()) === 'craft' && (await stepOn()) === '撈泡泡');
+    await sleep(1800);
     await press('1');
-    check('攪拌中按 1 是挑泡泡，不是去小舖', (await scr()) === 'craft' && (await ev("document.querySelector('.drawer h3 small')?.textContent || ''")).includes('第 2／3'));
-    await press('2'); await press('3');
-    check('攪三次 → 加料', (await stepOn()) === '加料');
+    check('撈泡泡中按 1 是撈第一排，不是去小舖', (await scr()) === 'craft');
+    check('撈泡泡結束 → 加料', await waitFor("document.querySelector('.cf-steps li.on')?.textContent.includes('加料')", 14000));
     f = await focus();
-    check('加料預設＝不加料', f && f.key === 'spike|#1', JSON.stringify(f));
+    if (!f) { await press('ArrowDown'); f = await focus(); }
+    check('加料預設＝「就這樣，準備起鍋」', f && f.key === 'cf|go4#1', JSON.stringify(f));
     await press('5');
     check('加料中按 5 不會跑去後宮', (await scr()) === 'craft');
-    for (let m = 0; m < 12 && (await focus())?.key !== 'tofinish|#1'; m++) await press('ArrowDown');
     await press('Enter');
     check('加料 → 起鍋', (await stepOn()) === '起鍋');
-    check('起鍋時珠珠在動', await waitFor("(() => { const b = document.querySelector('.bead'); return b && parseFloat(b.style.left) > 1; })()", 1500));
+    check('起鍋時珠珠在動', await waitFor("(() => { const b = document.querySelector('.cf-bead'); return b && parseFloat(b.style.left) > 1; })()", 1500));
     await press('Space', { wait: 100 });
-    check('Space 停珠珠 → 顯示結果', /火候|還可以|糊了/.test(await ev("document.querySelector('.finish-verdict')?.textContent || ''")));
-    check('起鍋後出現完成視窗', await waitFor("!!document.querySelector('#app .sheet-layer')", 4000));
-    check('成品帶特性標籤或沒有特性都正常顯示', await ev("!!document.querySelector('#app .sheet-layer .sheet-title')"));
+    check('Space 停珠珠 → 顯示升降', /升一級|維持|降一級/.test(await ev("document.querySelector('.cf-verdict')?.textContent || ''")));
+    check('起鍋後出鍋畫面（收下按鈕交回遊戲）', await waitFor("!!document.querySelector('[data-a=craftdone]')", 4000));
     await press('Escape');
-    check('完成視窗 Esc → 回炎洗宮', await waitFor("document.getElementById('app').dataset.screen === 'home'", 3000));
-    // 快速調合：下鍋直接到加料，加料完直接完成
+    check('出鍋畫面 Esc → 回炎洗宮', await waitFor("document.getElementById('app').dataset.screen === 'home'", 3000));
+    // 快速調合：下鍋直接到加料，加料完直接出鍋
     await G(`S.inv = { lotus: 1, osmanthus: 1 }; __e2e.openCraft(null);`);
-    await ev("document.querySelector('[data-a=quickcraft]').classList.contains('on') || document.querySelector('[data-a=quickcraft]').click()");
-    await ev("document.querySelector('[data-a=recipe][data-v=cake]').click()");
-    await ev("document.querySelector('[data-a=craft]').click()");
+    await ev("document.querySelector('[data-v=quick]').classList.contains('on') || document.querySelector('[data-v=quick]').click()");
+    await ev("document.querySelector('[data-v=\"recipe:cake\"]').click()");
+    await ev("document.querySelector('[data-v=cook]').click()");
     check('快速調合：下鍋直接到加料', (await stepOn()) === '加料');
-    await ev("document.querySelector('[data-a=tofinish]').click()");
-    check('快速調合：加料後直接完成', await waitFor("!!document.querySelector('#app .sheet-layer')", 4000));
+    await ev("document.querySelector('[data-v=go4]').click()");
+    check('快速調合：加料後直接出鍋', await waitFor("!!document.querySelector('[data-a=craftdone]')", 4000));
     await ev("document.querySelector('[data-a=craftdone]').click()");
     await G(`__e2e.openCraft(null);`);
-    await ev("document.querySelector('[data-a=quickcraft]').click()"); // 關掉快速調合（記憶體裡的開關也要關）
-    check('快速調合可以關掉', await ev("!document.querySelector('[data-a=quickcraft]').classList.contains('on')"));
+    await ev("document.querySelector('[data-v=quick]').click()"); // 關掉快速調合（記憶體裡的開關也要關）
+    check('快速調合可以關掉', await ev("!document.querySelector('[data-v=quick]').classList.contains('on')"));
     await G(`S.inv = window.__inv2; S.lots = window.__lots2; S.slot = window.__slot2; S.hand = window.__hand2; __e2e.go("home");`);
 
     // ── 採集地下城：方向鍵只有地下城走路；收工後結果單預設 ──
@@ -450,10 +444,10 @@ function connect(url) {
     check('按 2 → 採集', await toScr('2', 'gather'));
     check('子畫面按 3 → 調合', await toScr('3', 'craft'));
     await G('const ids = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === "mat"); S.inv[ids[0]] = (S.inv[ids[0]] || 0) + 2; __e2e.render();');
-    await ev("(document.querySelector('[data-a=recipe]:not([disabled])') || document.querySelector('[data-a=freecraft]')).click(); document.querySelector('[data-a=mat]:not([disabled])')?.click()");
-    const slotsBefore = await ev("document.querySelectorAll('.cslot.filled').length");
+    await ev("document.querySelector('[data-v=free]').click(); document.querySelector('[data-v^=\"mat:\"]:not([disabled])')?.click()");
+    const slotsBefore = await ev("document.querySelectorAll('.cf-pot-mats .cf-slot-btn').length");
     await press('3');
-    check('調合畫面再按 3 不清掉已放的素材', slotsBefore > 0 && (await ev("document.querySelectorAll('.cslot.filled').length")) === slotsBefore, String(slotsBefore));
+    check('調合畫面再按 3 不清掉已放的素材', slotsBefore > 0 && (await ev("document.querySelectorAll('.cf-pot-mats .cf-slot-btn').length")) === slotsBefore, String(slotsBefore));
     check('子畫面按 4 → 送禮', await toScr('4', 'gift'));
     check('子畫面按 5 → 後宮', await toScr('5', 'status'));
     check('後宮按 1 → 小舖', await toScr('1', 'shop'));
@@ -577,34 +571,25 @@ function connect(url) {
         await press('Enter'); // 就寢 → 確認視窗
         continue;
       }
-      if (s === 'craft' && !(await ev("!!document.querySelector('#app .sheet-layer')"))) {
-        // 一路 ↓ 到「開始調合」；按不到（材料不齊）就 ↑← 到返回鍵回宮
+      if (s === 'craft' && !(await ev("!!document.querySelector('[data-a=craftdone]')"))) {
+        // 選素材：Enter 一路按預設（配方 → 每樣挑一份 → 下鍋）；按不動（材料不齊）就 Esc 回宮
+        const stepOn = () => ev("document.querySelector('.cf-steps li.on')?.textContent.replace(/[0-9]/g, '') || ''");
         if (!(await focus())) await press('ArrowDown');
-        let ck = (await focus())?.key;
-        for (let j = 0; j < 40 && ck !== 'craft|#1'; j++) { await press('ArrowDown'); const n = (await focus())?.key; if (n === ck) break; ck = n; }
-        if (ck === 'craft|#1') {
-          await press('Enter'); // 下鍋 → 四階段（§13.3）
-          const stepOn = () => ev("document.querySelector('.csteps li.on')?.textContent || ''");
-          const seen = [];
-          for (let j = 0; j < 20 && !(await ev("!!document.querySelector('#app .sheet-layer')")); j++) {
-            const st = await stepOn();
-            if (st && seen[seen.length - 1] !== st) seen.push(st);
-            if (st === '開火攪拌') await press(String(1 + (j % 3)));
-            else if (st === '加料') {
-              for (let m = 0; m < 12 && (await focus())?.key !== 'tofinish|#1'; m++) await press('ArrowDown');
-              await press('Enter');
-            } else if (st === '起鍋') await press('Space', { wait: 200 });
-            else await sleep(100);
-          }
-          const ok = await waitFor("!!document.querySelector('#app .sheet-layer')", 4000);
-          if (!craftChecked) {
-            check('調合畫面 ↓ 到「下鍋」→ 攪拌（1/2/3）→ 加料 → 起鍋（Space）→ 結果單', ok && seen.join('>') === '開火攪拌>加料>起鍋', seen.join('>'));
-            craftChecked = true;
-          }
-        } else {
-          await pressUntilStable('ArrowUp');
-          await pressUntilStable('ArrowLeft');
-          await press('Enter');
+        for (let j = 0; j < 8 && (await stepOn()) === '選素材'; j++) await press('Enter');
+        if ((await stepOn()) === '選素材') { await press('Escape'); continue; }
+        const seen = [];
+        for (let j = 0; j < 120 && !(await ev("!!document.querySelector('[data-a=craftdone]')")); j++) {
+          const st = await stepOn();
+          if (st && seen[seen.length - 1] !== st) seen.push(st);
+          if (st === '撈泡泡') await press(String(1 + (j % 3)), { wait: 150 });
+          else if (st === '加料') { if (!(await focus())) await press('ArrowDown'); await press('Enter'); }
+          else if (st === '起鍋') await press('Space', { wait: 200 });
+          else await sleep(150);
+        }
+        const ok = await waitFor("!!document.querySelector('[data-a=craftdone]')", 4000);
+        if (!craftChecked) {
+          check('調合：Enter 選素材 → 撈泡泡（1/2/3）→ 加料 → 起鍋（Space）→ 出鍋', ok && seen.join('>') === '撈泡泡>加料>起鍋', seen.join('>'));
+          craftChecked = true;
         }
         continue;
       }

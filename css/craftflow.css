@@ -11,9 +11,9 @@
 .cf-steps li.skip { opacity: .4; text-decoration: line-through; }
 
 /* 舞台：煉金房＋鍋＋包捐 */
-.cf-stage { position: relative; height: 240px; border-radius: 16px; overflow: hidden;
+.cf-stage { position: relative; height: 262px; border-radius: 16px; overflow: hidden;
   background: radial-gradient(ellipse at 50% 110%, rgba(255,140,60,.4), transparent 55%), linear-gradient(180deg, rgba(23,17,30,.5), rgba(23,17,30,.85)), url(../assets/backgrounds/workshop.webp) center 40%/cover, var(--cf-bg); }
-.cf-pot { position: absolute; left: 50%; bottom: 18px; width: 200px; transform: translateX(-50%); height: 150px; }
+.cf-pot { position: absolute; left: 50%; bottom: 6px; width: 200px; transform: translateX(-50%); height: 150px; }
 .cf-pot::before { content: ''; position: absolute; inset: 40px 0 0; border-radius: 0 0 100px 100px / 0 0 90px 90px; background: linear-gradient(180deg, #4a4a52, #1f1f25); box-shadow: inset 0 -10px 20px rgba(0,0,0,.5); }
 .cf-soup { position: absolute; left: -6px; right: -6px; top: 28px; height: 30px; border-radius: 50%; background: #5a4a6a; border: 6px solid #5c5c66; box-shadow: inset 0 0 14px rgba(255,255,255,.25); transition: background .5s; }
 .cf-pot-mats { position: absolute; left: 0; right: 0; top: -12px; display: flex; justify-content: center; gap: 6px; }
@@ -109,3 +109,30 @@
 @keyframes cf-steam { from { transform: scale(.5); opacity: 1; } to { transform: translateY(-80px) scale(2.2); opacity: 0; } }
 @keyframes cf-peek { 0%, 100% { transform: scaleX(-1); } 50% { transform: scaleX(-1) translateX(-6px) rotate(3deg); } }
 @media (prefers-reduced-motion: reduce) { .cf-stage.armed .cf-helper, .cf-drop, .cf-steam { animation: none; } }
+
+/* 遊戲整合後補的元件 */
+.cf-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.cf-row h3 { margin: 0; }
+.cf-quick { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; border: 1.5px solid var(--cf-line); background: transparent; color: var(--cf-ink); font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.2; cursor: pointer; }
+.cf-quick i { width: 30px; height: 18px; border-radius: 999px; background: var(--cf-bg2); position: relative; flex: none; transition: background .2s; }
+.cf-quick i::after { content: ''; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--cf-muted); transition: transform .2s, background .2s; }
+.cf-quick.on i { background: var(--cf-amber-d); }
+.cf-quick.on i::after { transform: translateX(12px); background: var(--cf-amber); }
+.cf-quick small { font-weight: 400; color: var(--cf-muted); font-size: 11px; }
+.cf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.cf-mat-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; border-radius: 10px; border: 2px solid transparent; background: var(--cf-bg2); color: var(--cf-ink); font-family: inherit; font-size: 13px; cursor: pointer; }
+.cf-mat-btn small { color: var(--cf-muted); font-size: 11px; }
+.cf-mat-btn:disabled { opacity: .4; cursor: not-allowed; }
+.cf-slot-btn { padding: 0; border: none; background: none; cursor: pointer; border-radius: 50%; }
+.cf-preview { position: absolute; left: -40px; right: -40px; top: 104px; text-align: center; font: 900 15px 'Noto Serif TC', serif; color: var(--cf-amber); text-shadow: 0 2px 4px rgba(0,0,0,.8); }
+.cf-n { color: var(--cf-muted); font-weight: 400; }
+.cf-pill.good { background: rgba(111,207,151,.18); color: var(--cf-ok); }
+.cf-pill.bad { background: rgba(194,72,72,.22); color: #F09090; }
+.cf-pill.neutral { background: rgba(255,255,255,.08); color: var(--cf-muted); }
+.cf-acts { flex-direction: row; }
+.cf-acts .cf-btn { flex: 1; }
+.cf-btn.ghost { background: transparent; color: var(--cf-ink); border: 1.5px solid var(--cf-line); box-shadow: none; }
+.cf-tok.junk { background: #222; color: #888; }
+.cf-stage.done.junk .cf-tok.big { box-shadow: 0 0 0 4px #444; }
+.cf-pour { position: absolute; left: 50%; top: 20px; margin-left: -20px; z-index: 3; animation: cf-pour 1s ease-in forwards; }
+@keyframes cf-pour { 0% { transform: translateY(-40px) rotate(0); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(120px) rotate(200deg) scale(.4); opacity: 0; } }

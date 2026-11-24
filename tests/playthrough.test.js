@@ -57,6 +57,8 @@ function bootGame({ hash = '' } = {}) {
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   sandbox.window.GameAudio = { sfx() {}, playBgm() {}, toggleMute() {}, isMuted() { return false; }, unlock() {} };
+  // 調合流程模組（js/craftflow.js）要真的 DOM，這裡換成替身：記下遊戲傳進去的選項，測試直接呼叫 cook／onStep
+  sandbox.window.CraftFlow = { mount(el, o) { sandbox.__cf = o; return { destroy() { sandbox.__cfDestroyed = (sandbox.__cfDestroyed || 0) + 1; }, step: () => 1 }; } };
 
   const ctx = vm.createContext(sandbox);
   vm.runInContext(read('js/data.js'), ctx, { filename: 'data.js' });
@@ -192,44 +194,45 @@ test('引擎雙匯出、原始碼不碰 DOM/localStorage，且 computeEnding 為
   assert.ok(r1.main && typeof r1.rank === 'number' && Array.isArray(r1.opening), '結局結構不完整');
 });
 
-test('四階段調合：一般流程經過攪拌與起鍋；快速調合跳過攪拌與起鍋；成品帶特性', () => {
+test('調合：遊戲把素材、料的預測交給調合模組；cook 扣素材做成品；下鍋後鎖返回鍵；快速調合記在瀏覽器', () => {
   const g = bootGame({ hash: '#e2e' });
   g.click('start');
   for (let i = 0; i < 30 && /data-a="skip"/.test(g.app._html); i++) g.click('skip');
   const S = g.win.__e2e.state();
   const E = g.win.GameEngine;
   E.addUnit(S, 'lotus', { tian: 2 });
+  const uid = S.lots[S.lots.length - 1].uid;
   const hand0 = S.hand.length;
+  const lotus0 = S.inv.lotus;
   g.click('craftfor', '');
-  g.click('recipe', 'cake');
-  g.click('craft');
-  assert.ok(/data-a="bubble"/.test(g.app._html), '下鍋後進攪拌');
+  const o = g.win.__cf;
+  assert.ok(o && o.stock === S, '模組拿到遊戲的素材');
+  assert.ok(o.spikes.some((x) => x.id === 'cassava'), '料的清單');
+  assert.strictEqual(o.firstSpike, true, '第一次加料要播 G1–G3');
+  assert.ok(/data-a="go" data-v="home"/.test(g.app._html), '還沒下鍋：有返回鍵');
+  o.onStep(2);
+  g.win.__e2e.render();
   assert.ok(!/data-a="go" data-v="home"/.test(g.app._html), '下鍋後沒有返回鍵');
-  for (let i = 0; i < 3; i++) g.click('bubble', '0');
-  assert.ok(/data-a="tofinish"/.test(g.app._html), '攪三次後到加料');
-  g.click('tofinish');
-  assert.ok(/data-a="finish"/.test(g.app._html), '到起鍋');
-  g.click('finish');
-  assert.ok(/完成！藕粉桂花糖糕/.test(g.app._html), '起鍋後出結果');
+  const res = o.cook({ mats: ['lotus', 'osmanthus'], lots: [uid, null], stirs: [{ t: 'tian', v: 1 }], spike: null, finish: 'up' });
+  assert.strictEqual(res.product, 'cake');
+  assert.strictEqual(JSON.stringify(res.traits), '{"tian":3}', '甜蜜 2 ＋泡泡 1 ＋起鍋升（封頂 3）');
   assert.strictEqual(S.hand.length, hand0 + 1);
-  assert.ok(E.traitSum(S.hand[S.hand.length - 1].tr) >= 2, '成品帶特性（甜蜜 2 起跳，再加泡泡）');
+  assert.strictEqual(S.inv.lotus, lotus0 - 1, '藕粉少一份');
+  assert.ok(!S.lots.some((l) => l.uid === uid), '用掉的是指定的那份（帶特性）');
+  o.onStep(5);
+  const acts = o.actions(res);
+  assert.ok(acts.every((x) => x.a === 'craftdone') && acts.some((x) => x.def), '結果按鈕交回遊戲');
   g.click('craftdone', 'home');
-  // 快速調合
+  assert.strictEqual(g.win.__e2e.screen(), 'home');
+  assert.ok(g.win.__cfDestroyed >= 1, '離開調合就收掉模組');
+  o.onSeen('spike');
+  assert.strictEqual(S.seenSpike, true);
   g.click('craftfor', '');
-  g.click('quickcraft');
-  assert.strictEqual(g.win.localStorage.getItem('lingrong-quickcraft'), '1', '開關記在瀏覽器');
-  S.inv.lotus = (S.inv.lotus || 0) + 1; S.inv.osmanthus = (S.inv.osmanthus || 0) + 1;
-  g.click('recipe', 'cake');
-  g.click('craft');
-  assert.ok(!/data-a="bubble"/.test(g.app._html) && /data-a="tofinish"/.test(g.app._html), '快速調合直接到加料');
-  g.click('tofinish');
-  assert.ok(/完成！藕粉桂花糖糕/.test(g.app._html), '加料後直接完成，不起鍋');
-  g.click('craftdone', 'home');
-  // 配錯：直接黑暗料理
-  g.click('craftfor', '');
-  g.click('freecraft', '1');
+  assert.strictEqual(g.win.__cf.firstSpike, false, '加過料就不再播 G1–G3');
+  g.win.__cf.onQuick(true);
+  assert.strictEqual(g.win.localStorage.getItem('lingrong-quickcraft'), '1', '快速調合記在瀏覽器');
+  // 配錯：黑暗料理
   S.inv.pine = 2;
-  g.click('mat', 'pine'); g.click('mat', 'pine');
-  g.click('craft');
-  assert.ok(/碰！失敗了/.test(g.app._html), '配錯直接失敗，不進攪拌');
+  const bad = g.win.__cf.cook({ mats: ['pine', 'pine'], lots: [null, null], stirs: [], spike: null, finish: null });
+  assert.strictEqual(bad.product, 'junk');
 });

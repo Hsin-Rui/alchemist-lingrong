@@ -26,15 +26,12 @@ const click = (sel) => `document.querySelector(${JSON.stringify(sel)}).click();`
 
 // 劇本：[名稱, 依序執行的頁面內 JS（每段之間會等一下讓畫面重繪）]
 const SCENES = {
-  'craft-book': [SETUP + "__e2e.openCraft(null);", click('[data-a=recipe][data-v=cake]')],
-  'craft-free': [SETUP + "__e2e.openCraft(null);", click('[data-a=freecraft]')],
-  'craft-stir': [SETUP + "__e2e.openCraft(null);", click('[data-a=recipe][data-v=cake]'), click('[data-a=craft]')],
-  'craft-spike': [SETUP + "__e2e.openCraft(null);", click('[data-a=recipe][data-v=cake]'), click('[data-a=craft]'),
-    click('[data-a=bubble]'), click('[data-a=bubble]'), click('[data-a=bubble]'), click('[data-a=spike][data-v=cassava]')],
-  'craft-finish': [SETUP + "__e2e.openCraft(null);", click('[data-a=recipe][data-v=cake]'), click('[data-a=craft]'),
-    click('[data-a=bubble]'), click('[data-a=bubble]'), click('[data-a=bubble]'), click('[data-a=tofinish]')],
-  'craft-result': [SETUP + "__e2e.openCraft(null);", click('[data-a=recipe][data-v=cake]'), click('[data-a=craft]'),
-    click('[data-a=bubble]'), click('[data-a=bubble]'), click('[data-a=bubble]'), click('[data-a=tofinish]'), click('[data-a=finish]'), 'WAIT2500'],
+  'craft-book': [SETUP + "__e2e.openCraft(null);"],
+  'craft-lots': [SETUP + "__e2e.openCraft(null);", click('[data-v="recipe:cake"]')],
+  'craft-free': [SETUP + "__e2e.openCraft(null);", click('[data-v=free]')],
+  'craft-bubble': [SETUP + "__e2e.openCraft(null);", click('[data-v="recipe:cake"]'), click('[data-v="lot:0:0"]'), click('[data-v="lot:1:0"]'), click('[data-v=cook]'), 'WAIT2800'],
+  'craft-spike': [SETUP + "__e2e.openCraft(null);", click('[data-v="recipe:cake"]'), click('[data-v="lot:0:0"]'), click('[data-v="lot:1:0"]'), click('[data-v=cook]'), 'WAIT10500', click('[data-v="spike:cassava"]'), 'WAIT1500'],
+  'craft-result': [SETUP + "__e2e.openCraft(null);", click('[data-v=quick]'), click('[data-v="recipe:cake"]'), click('[data-v="lot:0:0"]'), click('[data-v="lot:1:0"]'), click('[data-v=cook]'), click('[data-v=go4]'), 'WAIT1500', "localStorage.setItem('lingrong-quickcraft', '0');"],
   shop: [SETUP + "__e2e.go('shop');", "document.querySelector('.scroll').scrollTop = 99999;"],
 };
 

@@ -600,3 +600,6 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
   .cslot { width: 46px; height: 46px; }
   .cslot span { max-width: 42px; }
 }
+
+/* 調合畫面：流程本體是 js/craftflow.js（css/craftflow.css），這裡只給外框留白 */
+.craft-screen .cf-host { padding: 10px 14px 28px; }

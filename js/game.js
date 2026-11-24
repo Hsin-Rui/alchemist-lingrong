@@ -11,20 +11,14 @@
   let dlg = null; // { lines, i, done, bg }；播放中另記 lockUntil（防連按）、veilLine／veilAt（暗幕從哪一句、何時開始）
   let modal = null; // { title, body }
   let busy = false; // 動畫進行中，暫停輸入
-  // 調合進行中的選擇（四階段，§13.3）：stage 1 選素材、2 開火攪拌、3 加料、4 起鍋
-  const newCraftSel = (forOrder = null, forWho = null) => ({ stage: 1, free: false, mats: [], lots: [], spike: null, forOrder, forWho, stirs: [], bubbles: null, zone: null, beadT0: 0 });
+  // 調合（四階段，§13.3）：流程本體在 js/craftflow.js；這裡只記從哪張訂單進來、目前第幾階段（鎖返回鍵用）
+  const newCraftSel = (forOrder = null, forWho = null) => ({ stage: 1, forOrder, forWho });
   let craftSel = newCraftSel();
-  let beadRaf = 0;
-  // 調合的一次性演出（只在下一次重繪時播，播完就清掉，免得每次重繪都重播）：{ k:'drop'|'stir'|'spike'|'spikedrop', c:顏色 }
-  let craftFx = null;
-  // 快速調合（§13.3）：跳過攪拌與起鍋。記在這台裝置的瀏覽器裡，跟靜音一樣
+  let craftFlow = null; // CraftFlow.mount 的回傳
+  let craftHost = null; // 模組畫在這個 div 裡；每次 render() 換頁面時把它搬回 .cf-mount
+  // 快速調合（§13.3）：跳過撈泡泡與起鍋。記在這台裝置的瀏覽器裡，跟靜音一樣
   let quickCraft = false;
   try { quickCraft = localStorage.getItem('lingrong-quickcraft') === '1'; } catch { /* 無痕模式等 */ }
-  function toggleQuick() {
-    quickCraft = !quickCraft;
-    try { localStorage.setItem('lingrong-quickcraft', quickCraft ? '1' : '0'); } catch { /* 忽略 */ }
-    render();
-  }
   let craftResult = null;
   let gatherResult = null;
   let gatherScene = null; // 採集地下城的外殼狀態（進場時建立、離場時清空）
@@ -715,102 +709,61 @@
     A.sfx(haul.got[gs.run.rare] ? 'evil' : 'gather');
   }
 
+  function closeCraft() {
+    if (!craftFlow) return;
+    craftFlow.destroy();
+    craftFlow = null;
+    craftHost = null;
+    A.playBgm('main');
+  }
+
   function openCraft(orderId) {
+    closeCraft();
     const o = S.orders.find((x) => x.id === orderId);
-    craftSel = newCraftSel(o ? o.id : null, o ? o.who : isTarget(S.flip) ? S.flip : null);
-    if (o) D.PRODUCTS[o.product].recipe.forEach((id) => { if (have(id) >= 1) craftSel.mats.push(id); });
+    const who = o ? o.who : isTarget(S.flip) ? S.flip : null;
+    craftSel = newCraftSel(o ? o.id : null, who);
+    craftResult = null;
+    craftHost = document.createElement('div');
+    craftHost.className = 'cf-host';
+    craftFlow = window.CraftFlow.mount(craftHost, {
+      D, E, stock: S, rand,
+      spikes: Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === 'spike').map((id) => {
+        const n = have(id);
+        const p = who ? E.predict(D, S, who, id, o ? 'deliver' : 'gift') : null;
+        return { id, n, note: p ? `${p.txt}・${p.riskTxt.replace('被抓風險：', '風險')}` : null, cls: p && p.cls, sub: n ? D.ITEMS[id].desc : `缺貨・${sourcesOf(id).map((x) => x.label).join('、')}` };
+      }),
+      forProduct: o ? o.product : null,
+      forWho: o ? D.CHARS[o.who].name : null,
+      quick: quickCraft,
+      onQuick: (on) => { quickCraft = on; try { localStorage.setItem('lingrong-quickcraft', on ? '1' : '0'); } catch { /* 忽略 */ } },
+      firstSpike: !S.seenSpike,
+      onSeen: (k) => { if (k === 'spike') S.seenSpike = true; },
+      cook: (sel) => {
+        craftResult = E.craft(D, S, { ...sel, forOrder: craftSel.forOrder, forWho: craftSel.forWho });
+        const r = craftResult;
+        return { product: r.product, traits: r.tr, spike: r.spike, toInv: r.toInv, lostSpike: r.lostSpike };
+      },
+      actions: () => {
+        const r = craftResult;
+        const done = S.slot >= R.slotsPerDay;
+        const canDeliver = !done && !grounded() && r.order && r.product !== 'junk' && !r.toInv;
+        const out = [{ a: 'craftdone', v: 'home', label: done ? '天色晚了，回宮' : '回炎洗宮', def: !canDeliver, primary: !canDeliver }];
+        if (canDeliver) out.push({ a: 'craftdone', v: 'deliver', label: `直接送去${D.CHARS[r.order.who].palace}`, primary: true, def: true });
+        return out;
+      },
+      onStep: (n) => { if (n !== craftSel.stage) cursor.key = null; craftSel.stage = n; },
+      onRender: () => { if (screen === 'craft') { syncHeader(); syncCursor(true); } },
+      img: (w) => `assets/characters/${D.CHARS[w].imgs._ || Object.values(D.CHARS[w].imgs)[0]}.webp`,
+      itemImg: (id) => `assets/items/${id}.webp`,
+      sfx: (n, a) => A.sfx(n, a),
+    });
+    A.playBgm('workshop');
     go('craft');
   }
-
-  const PLAIN = 0; // craftSel.lots 裡的 0＝指定用一般份（沒特性）
-  // 每格用哪一份素材：有指定（craftSel.lots[i]）就用指定的，沒有就跟引擎一樣自動挑特性最多的那份
-  // 回 uids（給引擎：沒指定的格子填 null，讓引擎用同樣規則自動挑）、trs（每格的特性）、resolved（每格實際用哪份，一般份＝PLAIN）
-  function craftLots() {
-    const taken = [];
-    const resolved = [];
-    const trs = craftSel.mats.map((id, i) => {
-      const want = craftSel.lots[i];
-      const l = want === PLAIN ? null : want != null ? S.lots.find((x) => x.uid === want) : E.bestLot(S, id, taken);
-      if (l) taken.push(l.uid);
-      resolved.push(l ? l.uid : PLAIN);
-      return l ? l.tr : {};
-    });
-    return { uids: craftSel.mats.map((id, i) => (craftSel.lots[i] != null ? craftSel.lots[i] : null)), trs, resolved };
-  }
-  // 鍋裡現在的特性（給畫面預覽）：素材＋已挑的泡泡；第 3 步起只留最強 3 種
-  function craftPotTr() {
-    const { trs } = craftLots();
-    return craftSel.stage >= 3 ? E.finalTraits(D, trs, craftSel.stirs) : craftSel.stirs.reduce(E.stirTraits, E.potTraits(D, trs));
-  }
-
-  // 下鍋：配錯或煉紅花 → 直接完成；否則進攪拌
-  function startCook() {
-    if (craftSel.mats.length < 2 || busy) return;
-    const result = E.findRecipe(D, craftSel.mats);
-    if (!result || D.PRODUCTS[result].out === 'inv') { craftSel.spike = null; doCraft(); return; }
-    craftFx = { k: 'drop' };
-    if (quickCraft) { cursor.key = null; craftSel.stage = 3; render(); return; } // 快速調合：直接到加料
-    cursor.key = null;
-    craftSel.stage = 2;
-    craftSel.bubbles = E.rollBubbles(D, E.potTraits(D, craftLots().trs), rand);
-    A.sfx('bubble');
-    render();
-  }
-  function pickBubble(i) {
-    if (craftSel.stage !== 2 || !craftSel.bubbles || !craftSel.bubbles[i]) return;
-    craftSel.stirs.push(craftSel.bubbles[i]);
-    craftFx = { k: 'stir', c: D.TRAITS[craftSel.bubbles[i].t].color };
-    A.sfx('pick');
-    if (craftSel.stirs.length >= R.craft.stirs) { craftSel.stage = 3; craftSel.bubbles = null; cursor.key = null; }
-    else craftSel.bubbles = E.rollBubbles(D, E.potTraits(D, craftLots().trs), rand);
-    render();
-  }
-  function toFinish() {
-    if (craftSel.stage !== 3 || busy) return;
-    if (craftSel.spike) craftFx = { k: 'spikedrop' };
-    if (quickCraft) { render(); doCraft(); return; } // 快速調合：不起鍋，成品只帶素材的特性
-    cursor.key = null;
-    craftSel.stage = 4;
-    craftSel.beadT0 = performance.now();
-    render();
-  }
-  // 珠珠位置（0～100）：beadMs 來回一趟的三角波
-  function beadPos(t) {
-    const ms = R.craft.beadMs;
-    const ph = (((t - craftSel.beadT0) % ms) + ms) % ms / ms;
-    return ph < 0.5 ? ph * 200 : 200 - ph * 200;
-  }
-  function beadLoop() {
-    if (screen !== 'craft' || craftSel.stage !== 4 || craftSel.zone) { beadRaf = 0; return; }
-    const el = app.querySelector('.bead');
-    if (el) el.style.left = `${beadPos(performance.now())}%`;
-    beadRaf = requestAnimationFrame(beadLoop);
-  }
-  function stopBead() {
-    if (craftSel.stage !== 4 || craftSel.zone || busy) return;
-    const pos = beadPos(performance.now());
-    craftSel.beadAt = pos;
-    craftSel.zone = E.finishZone(D, pos);
-    A.sfx(craftSel.zone === 'up' ? 'ding' : craftSel.zone === 'down' ? 'fail' : 'click');
-    render();
-    busy = true;
-    setTimeout(() => { busy = false; doCraft(); }, 800);
-  }
-
-  function doCraft() {
-    if (craftSel.mats.length < 2 || busy) return;
-    busy = true;
-    A.sfx('bubble');
-    app.querySelector('.cauldron')?.classList.add('brewing');
-    const sel = { ...craftSel, lots: craftLots().uids, finish: craftSel.zone || null };
-    setTimeout(() => {
-      busy = false;
-      craftResult = E.craft(D, S, sel);
-      const { product, spike, toInv } = craftResult;
-      craftSel = newCraftSel();
-      A.sfx(product === 'junk' ? 'boom' : spike || toInv ? 'evil' : 'ding');
-      render();
-    }, 1400);
+  // 下鍋後藏起返回鍵：只換頁首，不整頁重畫（模組自己的畫面還在動）
+  function syncHeader() {
+    const back = app.querySelector('.subhead .icon-btn[data-a="go"]');
+    if (back && craftSel.stage > 1) back.replaceWith(Object.assign(document.createElement('span'), { className: 'icon-btn' }));
   }
 
   // itemId：指定要送哪一個成品（剛調合好的那個）；沒指定就送最新做好的
@@ -1129,137 +1082,10 @@
     craft() {
       const order = S.orders.find((o) => o.id === craftSel.forOrder);
       const who = craftSel.forWho;
-      const stage = craftSel.stage;
-      const [a, b, c3] = craftSel.mats;
-      const enough = craftSel.mats.length >= 2;
-      const avail = (id) => have(id) - craftSel.mats.filter((m) => m === id).length;
-      const slot = (id, i) => `<button class="cslot ${id ? 'filled' : ''}" data-a="unmat" data-v="${i}" aria-label="${id ? `移除${itemName(id)}` : '空格'}" ${stage > 1 ? 'disabled' : ''}>${id ? `${tok(id, 'lg')}<span>${itemName(id)}</span>` : `<span>${i === 2 ? '可不放' : '素材'}</span>`}</button>`;
-      const result = enough ? E.findRecipe(D, craftSel.mats) : null;
-      const toInv = result && D.PRODUCTS[result].out === 'inv';
-      const preview = enough ? (result ? `→ ${itemName(result)}` : '→ ？？？（好像不太對）') : '放入兩、三樣素材';
-      const potTr = result && !toInv ? craftPotTr() : {};
-      const owned = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat');
-      // 配方只差一樣時，把缺的那樣也列出來（停用、標出哪裡有）：例如有紅花瓣沒烈酒，玩家才知道要去小舖買烈酒
-      const missing = [];
-      Object.values(D.PRODUCTS).forEach((p) => {
-        if (!p.recipe) return;
-        const lack = p.recipe.filter((id) => !have(id));
-        if (lack.length === 1 && !missing.includes(lack[0])) missing.push(lack[0]);
-      });
-      const mats = [...owned, ...missing];
-      const spikes = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === 'spike');
-      const matDef = craftSel.mats.length < 2 ? mats.find((id) => avail(id) > 0) : null; // 第三格選放，預設焦點不指它
-      const spikeRow = (id) => {
-        const it = D.ITEMS[id];
-        const n = have(id);
-        const p = who ? E.predict(D, S, who, id, order ? 'deliver' : 'gift') : null;
-        const on = craftSel.spike === id;
-        return `<button class="srow ${on ? 'on' : ''}" data-a="spike" data-v="${id}"${DEF(on)} ${n ? '' : 'disabled'}>
-          ${tok(id)}<span class="srow-main"><b>${it.name}</b> <small>×${n}</small><small class="src">${n ? it.desc : `缺貨・${sourcesOf(id).map((s) => s.label).join('、')}`}</small></span>
-          ${p ? `<span class="pred ${p.cls}">${p.txt}<small>${p.riskTxt}</small></span>` : ''}</button>`;
-      };
-      let popup = '';
-      if (craftResult) {
-        const r = craftResult;
-        const done = S.slot >= R.slotsPerDay;
-        const canDeliver = !done && !grounded() && r.order && r.product !== 'junk' && !r.toInv;
-        const msg = r.product === 'junk'
-          ? `配方不對，變成「一坨黑黑的東西」${r.lostSpike ? `，${itemName(r.lostSpike)}也一起燒掉了` : ''}。`
-          : r.toInv ? '紅色的汁液在瓶中閃閃發光……這可是猛藥。' : r.spike ? `偷偷加了一點${itemName(r.spike)}……呵呵呵。` : '正正經經，童叟無欺。';
-        popup = `<div class="sheet-layer"><div class="sheet dark-sheet">
-          <div class="craft-pop">${tok(r.product, 'xl')}</div>
-          <h3 class="sheet-title">${r.product === 'junk' ? '碰！失敗了……' : `完成！${itemName(r.product)}`}</h3>
-          ${trChips(r.tr, 'center')}
-          <p class="center">${msg}</p>
-          <div class="row-btns">
-            <button class="btn ghost" data-a="craftdone" data-v="home"${DEF(!canDeliver)}>${done ? '天色晚了，回宮' : '回炎洗宮'}</button>
-            ${canDeliver ? `<button class="btn primary" data-a="craftdone" data-v="deliver" data-def>直接送去${D.CHARS[r.order.who].palace}</button>` : ''}
-          </div></div></div>`;
-      }
-      // 各階段的下半部
-      const STEPS = ['選素材', '開火攪拌', '加料', '起鍋'];
-      const skipped = (i) => quickCraft && (i === 1 || i === 3);
-      const steps = `<ol class="csteps">${STEPS.map((t, i) => `<li class="${skipped(i) ? 'skip' : i + 1 === stage ? 'on' : i + 1 < stage ? 'done' : ''}">${t}</li>`).join('')}</ol>
-        ${stage === 1 ? `<button class="quick-toggle ${quickCraft ? 'on' : ''}" data-a="quickcraft" role="switch" aria-checked="${quickCraft}"><i></i>快速調合<small>跳過攪拌與起鍋</small></button>` : ''}`;
-      let panel = '';
-      let cta = '';
-      if (stage === 1 && craftSel.free) {
-        panel = `<h3>自由調合 <small>挑兩、三樣丟進鍋裡，配錯了會怎樣……誰知道呢</small></h3>
-            <div class="matgrid">${mats.length ? mats.map((id) => (have(id)
-              ? `<button class="mat" data-a="mat" data-v="${id}"${DEF(id === matDef)} ${avail(id) <= 0 || craftSel.mats.length >= 3 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}${lotCount(id) ? `・<b class="has-tr">${lotCount(id)} 份有特性</b>` : ''}</small></button>`
-              : `<button class="mat lack" data-a="mat" data-v="${id}" disabled>${tok(id)}<span>${itemName(id)}</span><small>缺・${locName(sourcesOf(id)[0].loc)}</small></button>`)).join('') : '<p class="muted">沒有素材，先去採集或小舖吧。</p>'}</div>
-            <button class="linkbtn" data-a="freecraft" data-v="0">回到配方冊</button>`;
-        cta = `<button class="btn amber wide big" data-a="craft"${DEF(enough && !matDef)} ${enough ? '' : 'disabled'}>下鍋（花 1 個時辰）</button>`;
-      } else if (stage === 1) {
-        // 配方冊：每道標示可以做或缺什麼；點了自動放好素材（§13.3 第一階段）
-        const cur = result && !craftSel.free ? result : null;
-        const lack = (p) => [...new Set(p.recipe.filter((id) => have(id) < p.recipe.filter((x) => x === id).length))];
-        const book = Object.entries(D.PRODUCTS).filter(([, p]) => p.recipe).map(([pid, p]) => {
-          const miss = lack(p);
-          return `<button class="rrow ${cur === pid ? 'on' : ''}" data-a="recipe" data-v="${pid}"${DEF(!cur && !miss.length && pid === Object.keys(D.PRODUCTS).find((q) => D.PRODUCTS[q].recipe && !lack(D.PRODUCTS[q]).length))} ${miss.length ? 'disabled' : ''}>
-            ${tok(pid)}<span class="rrow-main"><b>${p.name}</b><small>${p.recipe.map(itemName).join(' ＋ ')}</small></span>
-            ${miss.length ? `<span class="pill miss">缺 ${miss.map(itemName).join('、')}</span>` : '<span class="pill ok">可以做</span>'}</button>`;
-        }).join('');
-        // 選好配方後：每種素材要用哪一份（一般份／帶特性的各份）
-        const { resolved } = craftLots();
-        const lotPick = cur ? craftSel.mats.map((id, i) => {
-          const plain = have(id) - lotCount(id);
-          const opts = [];
-          if (plain > 0) opts.push({ uid: PLAIN, tr: {}, label: `一般 ×${plain}` });
-          S.lots.filter((l) => l.id === id).forEach((l) => opts.push({ uid: l.uid, tr: l.tr }));
-          if (opts.length < 2) return '';
-          return `<div class="lotgroup"><h4>${itemName(id)}</h4><div class="lotopts">${opts.map((o) => {
-            const on = resolved[i] === o.uid;
-            return `<button class="lotopt ${on ? 'on' : ''}" data-a="lot" data-v="${i}:${o.uid}">${o.label ? `<small>${o.label}</small>` : trChips(o.tr)}</button>`;
-          }).join('')}</div></div>`;
-        }).join('') : '';
-        panel = `<h3>配方冊 <small>點一道，素材自動放好</small></h3>
-            <div class="rlist">${book}</div>
-            ${lotPick ? `<h3>用哪一份？ <small>同一種素材，採集來的可能帶特性</small></h3>${lotPick}` : ''}
-            <button class="linkbtn" data-a="freecraft" data-v="1">不看配方，自由調合</button>`;
-        cta = `<button class="btn amber wide big" data-a="craft"${DEF(!!cur)} ${enough ? '' : 'disabled'}>下鍋（花 1 個時辰）</button>`;
-      } else if (stage === 2) {
-        const n = craftSel.stirs.length;
-        panel = `<h3>開火攪拌 <small>第 ${n + 1}／${R.craft.stirs} 次・挑一顆泡泡留在鍋裡</small></h3>
-            <div class="bubbles-pick">${craftSel.bubbles.map((bb, i) => `<button class="bubble-btn ${bb.v > 1 ? 'big' : ''}" style="--c:${D.TRAITS[bb.t].color}" data-a="bubble" data-v="${i}"${DEF(i === 0)} aria-label="${D.TRAITS[bb.t].name} 加 ${bb.v}">
-              <span class="bk">${i + 1}</span><span class="bn">${D.TRAITS[bb.t].name}</span><span class="bv">+${bb.v}${bb.v > 1 ? ' 大泡泡' : ''}</span></button>`).join('')}</div>
-            <p class="muted">素材有的特性，那種泡泡就比較常冒出來。同一種最多 3 級，攪完只留最強的 3 種。</p>`;
-      } else if (stage === 3) {
-        panel = `<h3>要加什麼料？ ${who ? `<small>依${charName(who)}目前狀態預測</small>` : ''}</h3>
-            <div class="slist">
-              ${spikes.map(spikeRow).join('')}
-              <button class="srow ${craftSel.spike ? '' : 'on'}" data-a="spike" data-v=""${DEF(!craftSel.spike)}><span class="tok tok-none"><span class="tok-ch">無</span></span><span class="srow-main"><b>不加料</b><small class="src">正正經經，賞銀全拿</small></span>${who ? '<span class="pred neutral">正經</span>' : ''}</button>
-            </div>`;
-        cta = `<button class="btn amber wide big" data-a="tofinish">${quickCraft ? (craftSel.spike ? '偷偷撒進去，完成' : '就這樣，完成') : craftSel.spike ? '偷偷撒進去，準備起鍋' : '就這樣，準備起鍋'}</button>`;
-      } else {
-        const z = craftSel.zone;
-        const top = Object.entries(potTr).sort((x, y) => y[1] - x[1])[0];
-        panel = `<h3>起鍋！ <small>珠珠停在哪，決定${top ? `「${D.TRAITS[top[0]].name}」` : '特性'}升級還是降級</small></h3>
-            <div class="finish-bar">${R.craft.zones.map(([w, zz]) => `<span class="fz ${zz}" style="width:${w}%">${zz === 'up' ? '升' : zz === 'down' ? '降' : ''}</span>`).join('')}
-              <i class="bead ${z ? 'hit' : ''}" style="left:${z ? craftSel.beadAt : 0}%"></i></div>
-            <p class="finish-verdict ${z || ''}">${z ? { up: '完美火候！', keep: '還可以', down: '哎呀，糊了一點……' }[z] : '中間金色升一級，兩頭紅色降一級'}</p>`;
-        cta = `<button class="btn amber wide big" data-a="finish" data-def ${z ? 'disabled' : ''}>起鍋！（Space）</button>`;
-      }
       const sub = order ? `給${charName(order.who)}（${statusShort(order.who)}）` : who ? `料的預測以今晚侍寢的${charName(who)}為準` : '試試看會做出什麼';
-      return `<div class="screen theme-dark">
-        ${subHeader(order ? `調合・${itemName(order.product)}` : craftSel.free ? '自由調合' : result && stage > 1 ? `調合・${itemName(result)}` : '調合', sub, true, false, stage === 1)}
-        <div class="scroll">
-          <div class="workshop ${stage > 1 ? 'lit' : ''} ${craftFx ? `fx-${craftFx.k}` : ''}" ${craftFx && craftFx.c ? `style="--fxc:${craftFx.c}"` : ''}>
-            ${portrait('lingrong', craftSel.spike ? 'evil' : 'smile', 'ws-portrait')}
-            ${craftFx && craftFx.k === 'spike' ? '<span class="hehe">嘿嘿……</span>' : ''}
-            <div class="cauldron">
-              <div class="cslots">${slot(a, 0)}${slot(b, 1)}${slot(c3, 2)}
-                <span class="cslot spike ${craftSel.spike ? 'filled' : ''}" aria-label="料">${craftSel.spike ? `${tok(craftSel.spike, 'lg')}<span>${itemName(craftSel.spike)}</span>` : '<span>料</span>'}</span></div>
-              <div class="pot"><i class="ladle"></i><div class="pot-rim"></div><div class="pot-body" ${stage > 1 && Object.keys(potTr).length ? `style="--liq:${liquid(potTr)}"` : ''}>${preview}${trChips(potTr, 'sm')}</div><div class="pot-legs"><i></i><i></i></div>
-                <div class="flames"><i></i><i></i><i></i></div>
-                <div class="bubbles"><i></i><i></i><i></i><i></i><i></i></div>
-                ${craftFx && craftFx.k === 'spikedrop' && craftSel.spike ? `<span class="spike-drop">${tok(craftSel.spike)}</span>` : ''}</div>
-            </div>
-          </div>
-          <div class="drawer">${steps}${panel}</div>
-        </div>
-        ${cta ? `<div class="footer-cta dark">${cta}</div>` : ''}
-        ${popup}
+      return `<div class="screen theme-dark craft-screen">
+        ${subHeader(order ? `調合・${itemName(order.product)}` : '調合', sub, true, false, craftSel.stage === 1)}
+        <div class="scroll"><div class="cf-mount"></div></div>
       </div>`;
     },
 
@@ -1560,8 +1386,8 @@
       S.result.fxDone = true;
       playResultFx();
     }
-    if (screen === 'craft' && craftSel.stage === 4 && !craftSel.zone && !beadRaf && typeof requestAnimationFrame === 'function') beadRaf = requestAnimationFrame(beadLoop);
-    if (screen === 'craft') craftFx = null;
+    if (screen === 'craft' && craftHost) app.querySelector('.cf-mount')?.replaceWith(craftHost);
+    else if (screen !== 'craft' && craftFlow) closeCraft();
     syncCursor(true);
   }
 
@@ -1705,7 +1531,7 @@
   function escBack() {
     if (modal) { if (!modal.lock) act('closemodal'); return; }
     if (screen === 'gather' && gatherResult) { act('gatherdone', 'home'); return; }
-    if (screen === 'craft' && craftResult) { act('craftdone', 'home'); return; }
+    if (screen === 'craft' && craftResult && craftSel.stage === 5) { act('craftdone', 'home'); return; }
     if (screen === 'craft' && craftSel.stage > 1) return; // 下鍋後不能中途退出
     if (screen === 'result') { act('resultdone'); return; }
     if (SUB_SCREENS.has(screen)) act('go', 'home');
@@ -1731,12 +1557,8 @@
       }
       return;
     }
-    // 四階段調合：攪拌時 1／2／3 挑泡泡（不當導覽快捷鍵）；起鍋時 Space／Enter 停珠珠
-    if (screen === 'craft' && !craftResult && !app.querySelector('.sheet-layer')) {
-      if (craftSel.stage === 2 && ['1', '2', '3'].includes(k)) { e.preventDefault(); if (!e.repeat) act('bubble', Number(k) - 1); return; }
-      if (craftSel.stage === 4 && (k === ' ' || k === 'Enter')) { e.preventDefault(); if (!e.repeat) act('finish'); return; }
-      if (craftSel.stage > 1 && HOTKEYS[k]) { e.preventDefault(); return; } // 下鍋後不能用快捷鍵離開
-    }
+    // 四階段調合：撈泡泡的 1／2／3、起鍋的空白鍵由 js/craftflow.js 自己接；下鍋後不能用快捷鍵離開
+    if (screen === 'craft' && craftSel.stage > 1 && HOTKEYS[k]) { e.preventDefault(); return; }
     if (NAV_DIRS[k]) {
       e.preventDefault();
       moveCursor(NAV_DIRS[k]);
@@ -1778,7 +1600,7 @@
   window.addEventListener('resize', () => { if (cursor.on) syncCursor(); });
 
   // ───────── 事件 ─────────
-  const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'dgquit', 'dgstay', 'craft', 'bubble', 'finish', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
+  const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'dgquit', 'dgstay', 'cf', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
   app.addEventListener('click', (e) => {
     const el = e.target.closest('[data-a]');
     if (!el || el.disabled || busy) return;
@@ -1817,21 +1639,12 @@
         break;
       }
       case 'craftfor': openCraft(v ? Number(v) : null); break;
-      case 'mat': if (craftSel.mats.length < 3) { craftSel.mats.push(v); craftSel.lots = []; } render(); break;
-      case 'recipe': craftSel.mats = [...D.PRODUCTS[v].recipe]; craftSel.lots = []; craftSel.free = false; cursor.key = null; render(); break; // 選好配方 → 游標回預設（下鍋）
-      case 'lot': { const [i, uid] = v.split(':').map(Number); craftSel.lots[i] = uid; render(); break; }
-      case 'freecraft': craftSel.free = v === '1'; craftSel.mats = []; craftSel.lots = []; render(); break;
-      case 'unmat': craftSel.mats.splice(Number(v), 1); craftSel.lots = []; render(); break;
-      case 'spike': craftSel.spike = v && craftSel.spike !== v ? v : null; if (craftSel.spike) { craftFx = { k: 'spike' }; A.sfx('evil'); } render(); break;
-      case 'craft': startCook(); break;
-      case 'bubble': pickBubble(Number(v)); break;
-      case 'tofinish': toFinish(); break;
-      case 'quickcraft': toggleQuick(); break;
-      case 'finish': stopBead(); break;
+      case 'cf': break; // 調合模組的按鈕：js/craftflow.js 自己處理
       case 'craftdone': {
         const r = craftResult;
         if (!r) { go('home'); break; }
         craftResult = null;
+        closeCraft();
         finishAction(() => (v === 'deliver' && r.order ? doDeliver(r.order.id, r.itemId) : go('home')));
         break;
       }

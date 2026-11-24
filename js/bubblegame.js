@@ -6,6 +6,7 @@
 //   traits：{ id: { name, color } }（D.TRAITS）
 //   pot：鍋裡原有的特性 { tian: 2, ... }（決定哪種泡泡比較常冒）
 //   cfg：見 DEFAULTS
+//   lines：蓋掉部分台詞（例如教學模式的開場），可省略
 //   sfx(name, arg)：音效（可省略）；img(who)：立繪網址（可省略，沒有就用字）
 //   onDone({ stirs, caught, escaped })：結束時呼叫；stirs 給 GameEngine.finalTraits 用（{t,v} 或 {t:'burnt'}）
 //   回傳 { destroy() }
@@ -54,6 +55,7 @@ window.BubbleGame = (() => {
     const img = opts.img || (() => null);
     const weights = Object.keys(traits).map((t) => [t, 1 + cfg.natureWeight * (pot[t] || 0)]);
     const totalW = weights.reduce((a, [, w]) => a + w, 0);
+    const lines = { ...LINES, ...(opts.lines || {}) };
     const keyboard = !(window.matchMedia && window.matchMedia('(hover: none)').matches);
 
     const face = (who) => {
@@ -91,7 +93,7 @@ window.BubbleGame = (() => {
     function say(kind, pri = 1, vars = {}) {
       const now = st.t;
       if (now < st.sayUntil && pri <= st.sayPri) return;
-      const [who, text] = pick(LINES[kind], rand);
+      const [who, text] = pick(lines[kind], rand);
       sayEl.hidden = false;
       sayEl.className = `bbl-say who-${who}`;
       sayEl.querySelector('b').textContent = NAMES[who];
