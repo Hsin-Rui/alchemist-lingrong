@@ -1,0 +1,55 @@
+# epic-materials-recipes 的 story，表格順序＝建造順序。
+[[entry]]
+id = 1
+type = "story"
+title = "新配方、新素材與新料上線（含三素材調合）"
+description = "data.js 換成 §7、§8 的配方、素材、料與特性定義；引擎能認兩樣或三樣素材的配方；現有調合畫面多一格；新料的出糗台詞與宮女下單台詞到位。"
+verify = "單元測試通過；在遊戲裡能做出 7 道新配方（含歲寒三友茶），訂單由宮女開口；整局 harness 跑完無錯。"
+covers = ["R1", "R3"]
+after = []
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "素材一份一份記，成品繼承特性"
+description = "引擎加入帶特性的素材份（S.lots），調合時挑特性最多的那份，成品帶上合併後的特性並顯示在畫面上。"
+verify = "單元測試涵蓋份的增減與特性合併；調合畫面與成品看得到特性。"
+covers = ["R1", "R2"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "採集來的素材帶特性，新的採集素材表與像素圖"
+description = "地下城擺放新素材並依距離擲特性，撿回來的進 S.lots；兩張地圖換新素材表；補新素材的像素圖。"
+verify = "單元測試涵蓋擲特性與距離；gather-bot 跑完；採集結算畫面看得到特性。"
+covers = ["R1", "R2"]
+after = [2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "小舖什麼都買得到，多的素材能賣"
+description = "小舖販售除紅花瓣以外的所有東西；新增賣素材（售價一半＋每級特性 1 兩，不花時辰）。"
+verify = "單元測試涵蓋買賣價格；在小舖能買新素材、賣掉帶特性的素材拿到正確銀兩。"
+covers = ["R1"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Refactor sweep"
+description = "整理本 epic 留下的重複與暫時程式碼，更新模擬器與 e2e 讓它們用新資料跑。"
+verify = "node --test tests/、tools/simulate.js --quick、tools/gather-bot.js、tools/keyboard-e2e.js 全部通過。"
+covers = ["R1"]
+after = [1, 2, 3, 4]
+hitl = false
+risk = "low"

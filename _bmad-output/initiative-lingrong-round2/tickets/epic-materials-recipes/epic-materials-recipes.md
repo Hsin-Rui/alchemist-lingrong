@@ -7,7 +7,7 @@ covers: [R1, R3, R11]
 sources: []
 companions: []
 after: []
-refined: false
+refined: true
 risk: medium
 ---
 
@@ -20,6 +20,17 @@ risk: medium
 ## Outcome
 
 玩家一開局就玩到原作梗的新配方，採集回來的素材看得出特性差異。
+
+## Requirements
+
+- R1 (parent R1): 新配方 7 道＋紅花；12 種正經素材以「一份一份」記錄；除紅花瓣外所有東西小舖都買得到；採集的素材依本性隨機帶 0–2 個特性（離出生點越遠等級越高），小舖的沒有；多的素材可在小舖賣（售價一半＋每級特性 1 兩）。
+- R2 (parent R3): 五種特性（香氣、甜蜜、華麗、清雅、濃郁）各 1–3 級；本 epic 讓成品直接繼承所用素材的特性（同特性相加、最高 3 級、最多 3 種），也就是 §13.3 的「快速調合」結果；攪拌與起鍋屬於 epic-craft-stages。
+- R3 (parent R11): 本 epic 碰到的台詞依台詞總表定稿：新料的出糗台詞（F1–F14）、訂單需求句（C1–C18）與宮女開口下單（B12–B14）。
+
+## Constraints
+
+- 規則放在 DOM-free 引擎並有單元測試；遊戲畫面不出現英文、不出現「安嬪」（initiative Constraints）。
+- 現有的存檔外功能（地下城、夜晚、結局）行為不變，只換素材。
 
 ## Done when
 
@@ -38,3 +49,11 @@ risk: medium
 
 - parent — _bmad-output/initiative-lingrong-round2/initiative-lingrong-round2.md, section Requirements (R1, R3, R11)
 - design — docs/game-design.md
+
+## Notes
+
+- Decision: 2026-11-24 epic 只取 initiative 的 R1、R3、R11，不另外問使用者（設計文件已定案）。
+- Decision: 2026-11-24 資料結構：`S.inv[id]` 維持總數，另以 `S.lots` 記帶特性的那幾份（uid、id、tr）；沒特性的就是一般份。舊程式碼用總數的地方不必改。
+- Decision: 2026-11-24 訂單需求句換新配方時一併改成宮女開口（B12–B14），因為新的需求句是宮女的口吻；宮女立繪、包捐代交仍屬 epic-visit-palaces。
+- Decision: 2026-11-24 新料的被抓基礎機率先沿用舊值 15%，新數值與遮掩屬於 epic-visit-palaces。
+- Decision: 2026-11-24 tracer：story 1（新資料＋三素材調合）。
