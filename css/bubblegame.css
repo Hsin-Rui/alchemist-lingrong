@@ -1,0 +1,61 @@
+/* 撈泡泡小遊戲（js/bubblegame.js）。前綴 bbl-，不跟遊戲其他樣式衝突。 */
+.bbl { --bbl-ink: #F1EAF8; --bbl-muted: #A897C0; --bbl-amber: #F4C66A; --bbl-crimson: #C24848;
+  display: flex; flex-direction: column; gap: 8px; color: var(--bbl-ink); outline: none; user-select: none; -webkit-user-select: none; }
+.bbl-top { display: flex; align-items: center; gap: 10px; }
+.bbl-ladle { display: flex; gap: 6px; padding: 5px 8px; border-radius: 999px; background: rgba(0,0,0,.35); border: 1.5px solid rgba(244,198,106,.45); }
+.bbl-slot { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 13px; font-weight: 900; line-height: 1;
+  border: 2px dashed rgba(255,255,255,.3); color: transparent; }
+.bbl-slot small { display: block; font-size: 9px; }
+.bbl-slot.on { border: none; color: #241B30; background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.75), var(--c) 50%); animation: bbl-pop .35s cubic-bezier(.3,1.6,.5,1) both; flex-direction: column; }
+.bbl-slot.big { box-shadow: 0 0 0 3px var(--bbl-amber), 0 0 14px var(--bbl-amber); }
+.bbl-slot.burnt { border: none; color: #bbb; background: radial-gradient(circle at 35% 30%, #666, #111 60%); animation: bbl-pop .35s both; }
+.bbl-fire { flex: 1; height: 12px; border-radius: 999px; background: rgba(0,0,0,.4); overflow: hidden; }
+.bbl-fire b { display: block; height: 100%; width: 100%; border-radius: inherit; background: linear-gradient(90deg, #ff7b2e, #ffe08a); }
+.bbl.hurry .bbl-fire b { background: linear-gradient(90deg, #c2381f, #ff7b2e); animation: bbl-blink .5s infinite alternate; }
+
+.bbl-arena { position: relative; height: 360px; border-radius: 16px; overflow: hidden; touch-action: none;
+  background: radial-gradient(ellipse at 50% 108%, rgba(255,140,60,.45), transparent 55%), linear-gradient(180deg, rgba(23,17,30,.55), rgba(23,17,30,.85)), url(../assets/backgrounds/workshop.webp) center/cover, #241B30; }
+.bbl-lanes { position: absolute; inset: 0; display: flex; pointer-events: none; }
+.bbl-lanes i { flex: 1; border-right: 1px dashed rgba(255,255,255,.07); display: flex; align-items: flex-start; justify-content: center; padding-top: 6px; }
+.bbl-lanes i:last-child { border-right: none; }
+.bbl-lanes kbd { font: 700 11px/1 sans-serif; color: var(--bbl-muted); padding: 3px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.3); }
+.bbl-lanes i.miss { animation: bbl-miss .3s; }
+.bbl-surface { position: absolute; left: -10%; right: -10%; bottom: -34px; height: 70px; border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 30%, #7a5a9a, #3a2a4f 70%); box-shadow: 0 -4px 20px rgba(183,132,240,.35); animation: bbl-simmer 1.2s ease-in-out infinite alternate; }
+
+.bbl-b { position: absolute; left: 0; top: 0; z-index: 2; width: calc(var(--r) * 2); height: calc(var(--r) * 2); padding: 0; border: none; border-radius: 50%; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: #241B30; font: 900 13px/1 'Noto Sans TC', sans-serif;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.8), var(--c) 48%, color-mix(in srgb, var(--c) 65%, #000) 100%);
+  box-shadow: inset 0 -3px 6px rgba(0,0,0,.25); will-change: transform; -webkit-tap-highlight-color: transparent; }
+.bbl-b::before { content: ''; position: absolute; inset: -10px; border-radius: 50%; } /* 手指好點：點擊範圍比泡泡大一圈 */
+.bbl-b small { font-size: 10px; }
+.bbl-b.big { font-size: 15px; box-shadow: 0 0 0 3px var(--bbl-amber), 0 0 18px var(--bbl-amber), inset 0 -3px 6px rgba(0,0,0,.25); }
+.bbl-b.burnt { color: #ccc; background: radial-gradient(circle at 35% 30%, #777, #222 55%, #000); box-shadow: 0 0 10px rgba(0,0,0,.8); }
+.bbl-b.caught { animation: bbl-fly .4s ease-in forwards; pointer-events: none; }
+.bbl-b.popped { animation: bbl-burst .3s ease-out forwards; pointer-events: none; }
+
+.bbl-helper { position: absolute; left: 6px; bottom: 0; width: 74px; height: 96px; pointer-events: none; transform-origin: 50% 100%; }
+.bbl-helper img { width: 100%; height: 100%; object-fit: cover; object-position: top; filter: drop-shadow(0 2px 4px rgba(0,0,0,.6)); }
+.bbl-helper span { position: absolute; bottom: 8px; left: 10px; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: #5f9a7a; font-weight: 900; font-size: 22px; }
+.bbl-helper.fanning { animation: bbl-fan .5s ease-in-out 2; }
+.bbl-say { position: absolute; left: 82px; right: 10px; bottom: 14px; padding: 8px 11px; border-radius: 12px; pointer-events: none; z-index: 1;
+  background: rgba(251,243,222,.95); color: #2E2228; font-size: 14px; font-weight: 700; line-height: 1.4; animation: bbl-pop .25s both; }
+.bbl-say b { display: block; font-size: 11px; color: #5f9a7a; }
+.bbl-say.who-lingrong b { color: #6b7fc8; }
+.bbl-say[hidden] { display: none; }
+.bbl-banner { position: absolute; left: 0; right: 0; top: 38%; text-align: center; font: 900 34px/1 'Noto Serif TC', serif; color: var(--bbl-amber);
+  text-shadow: 0 3px 0 #6b3a10, 0 0 18px rgba(255,160,60,.6); pointer-events: none; animation: bbl-pop .4s cubic-bezier(.3,1.6,.5,1) both; z-index: 3; }
+.bbl-banner[hidden] { display: none; }
+.bbl-hint { margin: 0; font-size: 12px; color: var(--bbl-muted); text-align: center; }
+.bbl.shake .bbl-arena { animation: bbl-shake .35s; }
+
+@keyframes bbl-pop { from { transform: scale(.3); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes bbl-fly { to { translate: var(--fx) var(--fy); scale: .4; opacity: .2; } }
+@keyframes bbl-burst { to { scale: 1.6; opacity: 0; } }
+@keyframes bbl-simmer { to { transform: translateY(-4px) scaleX(1.02); } }
+@keyframes bbl-blink { to { opacity: .55; } }
+@keyframes bbl-fan { 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
+@keyframes bbl-shake { 25% { transform: translateX(-6px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-3px); } }
+@keyframes bbl-miss { 0% { background: rgba(194,72,72,.35); } 100% { background: transparent; } }
+@media (max-width: 380px) { .bbl-slot { width: 38px; height: 38px; } .bbl-arena { height: 330px; } }
+@media (prefers-reduced-motion: reduce) { .bbl-surface, .bbl-helper.fanning, .bbl.shake .bbl-arena { animation: none; } }

@@ -1171,3 +1171,9 @@ test('craft：lots 填 0（PLAIN）＝指定用一般份；沒有一般份時退
   assert.strictEqual(S2.inv.lotus, 1);
   assert.strictEqual(S2.lots.length, 1);
 });
+
+test('stirTraits：焦泡讓最強的特性 −1，降到 0 就消失', () => {
+  assert.deepStrictEqual(E.stirTraits({ tian: 2, xiang: 1 }, { t: 'burnt' }), { tian: 1, xiang: 1 });
+  assert.deepStrictEqual(E.stirTraits({ qing: 1 }, { t: 'burnt' }), {});
+  assert.deepStrictEqual(E.stirTraits({}, { t: 'burnt' }), {}, '鍋裡沒特性 → 不變');
+});

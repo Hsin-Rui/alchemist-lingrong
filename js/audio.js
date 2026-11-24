@@ -104,12 +104,29 @@ window.GameAudio = (() => {
     enterDungeon() { const t = ctx.currentTime; [262, 330, 392, 523, 659].forEach((f, i) => blip(f, t + i * 0.06, 0.09, 0.1)); },
     exitDungeon() { const t = ctx.currentTime; [659, 523, 392, 330, 262].forEach((f, i) => blip(f, t + i * 0.06, 0.09, 0.1)); },
     gong() { const t = ctx.currentTime; [98, 147, 196].forEach((f) => pluck(f, t, 2.5, 0.25, 'sine')); },
+    // 撈泡泡：n＝第幾顆（0 起），越撈音越高
+    bubCatch(n = 0) { const t = ctx.currentTime, f = 520 * Math.pow(1.26, n); sweep(f, f * 2.2, t, 0.09, 0.18); pluck(f * 2, t + 0.05, 0.25, 0.1, 'sine'); },
+    bubBig() { const t = ctx.currentTime; sweep(300, 1400, t, 0.15, 0.2); [1047, 1319, 1568].forEach((f, i) => pluck(f, t + 0.08 + i * 0.06, 0.3, 0.12, 'sine')); },
+    bubBurnt() { const t = ctx.currentTime; noise(t, 0.35, 0.35, 900); sweep(260, 70, t, 0.35, 0.25, 'sawtooth'); },
+    bubEscape() { sweep(900, 1500, ctx.currentTime, 0.05, 0.05); },
+    fan() { const t = ctx.currentTime; for (let i = 0; i < 3; i++) noise(t + i * 0.12, 0.1, 0.25, 1600); },
+    meow() {
+      const t = ctx.currentTime;
+      [0, 0.22, 0.38].forEach((d, i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter(), b = 600 + i * 90;
+        o.type = 'sawtooth'; f.type = 'bandpass'; f.Q.value = 4;
+        o.frequency.setValueAtTime(b, t + d); o.frequency.linearRampToValueAtTime(b * 1.5, t + d + 0.1); o.frequency.linearRampToValueAtTime(b * 0.8, t + d + 0.3);
+        f.frequency.setValueAtTime(900, t + d); f.frequency.linearRampToValueAtTime(2200, t + d + 0.12); f.frequency.linearRampToValueAtTime(700, t + d + 0.3);
+        g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.25, t + d + 0.04); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.32);
+        o.connect(f).connect(g).connect(master); o.start(t + d); o.stop(t + d + 0.35);
+      });
+    },
   };
 
-  function sfx(name) {
+  function sfx(name, arg) {
     if (muted || !ensureCtx() || !SFX[name]) return;
     if (ctx.state === 'suspended') ctx.resume();
-    SFX[name]();
+    SFX[name](arg);
   }
 
   // ───── 合成背景音樂：五聲音階小曲（宮商角徵羽） ─────

@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>撈泡泡試玩台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=Noto+Serif+TC:wght@700;900&display=swap">
+<link rel="stylesheet" href="css/bubblegame.css">
+<style>
+/* 試玩台：手機一欄（最寬 480px）。上面是小遊戲本體，下面是結果與調參數面板。單一深色調，沿用遊戲「煉金房」的夜色。 */
+:root {
+  --night: #241B30; --night-2: #3A2D4B; --line: #4E3F63; --text: #F1EAF8; --muted: #A897C0;
+  --amber: #F4C66A; --amber-shadow: #A47B2A; --paper: #FBF3DE;
+  --serif: 'Noto Serif TC', 'Songti TC', serif; --sans: 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #17111E; color: var(--text); font-family: var(--sans); }
+.app { max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--night); display: flex; flex-direction: column; gap: 14px;
+  padding-block: 14px 28px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header h1 { font-family: var(--serif); font-size: 21px; margin: 0; color: var(--amber); letter-spacing: .06em; }
+header p { margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+h2 { font-family: var(--serif); font-size: 16px; margin: 0 0 8px; color: var(--amber); }
+.panel { background: var(--night-2); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.btn { flex: 1; min-height: 48px; border-radius: 12px; border: none; font: 700 16px var(--sans); cursor: pointer; background: var(--amber); color: var(--night); box-shadow: 0 4px 0 var(--amber-shadow); }
+.btn.ghost { flex: 0 0 auto; padding: 0 14px; background: transparent; color: var(--text); border: 1.5px solid var(--line); box-shadow: none; font-size: 14px; min-height: 40px; }
+.btn:active { transform: translateY(2px); }
+:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.stage { min-height: 420px; }
+.idle { height: 420px; border-radius: 16px; display: grid; place-items: center; text-align: center; padding: 20px; color: var(--muted); font-size: 14px; line-height: 1.7;
+  background: linear-gradient(180deg, rgba(23,17,30,.6), rgba(23,17,30,.9)), url(assets/backgrounds/workshop.webp) center/cover; }
+.trs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tr { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 7px; border-radius: 999px; font-size: 12px; font-weight: 700; color: var(--night); background: var(--c); }
+.tr i { font-style: normal; font-size: 10px; letter-spacing: 1px; }
+.tr.burnt { background: #222; color: #bbb; }
+.muted { color: var(--muted); font-size: 13px; }
+.arrow { color: var(--muted); }
+.pot { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.pot label { display: flex; flex-direction: column; gap: 4px; align-items: center; font-size: 12px; font-weight: 700; }
+.pot select { width: 100%; }
+select, input[type=number] { background: var(--night); color: var(--text); border: 1.5px solid var(--line); border-radius: 8px; padding: 6px; font: 14px var(--sans); min-width: 0; }
+.knobs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.knobs label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.knobs input[type=number] { width: 100%; }
+.knobs .check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 14px; }
+.copied { font-size: 12px; color: var(--amber); }
+textarea { width: 100%; min-height: 70px; background: var(--night); color: var(--text); border: 1.5px solid var(--line); border-radius: 8px; font: 12px ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>撈泡泡試玩台</h1>
+    <p>調合第二階段的測試版本。這裡調好的模組會直接裝進遊戲。素材預設成「藕粉桂花糖糕」，參數可以在下面改。</p>
+  </header>
+
+  <div class="stage" id="stage"><div class="idle">按下「開火」開始<br>點泡泡撈起來；電腦也可以按 1／2／3</div></div>
+
+  <div class="row">
+    <button class="btn" id="start" type="button">開火</button>
+    <button class="btn ghost" id="mute" type="button">音效：開</button>
+  </div>
+
+  <section class="panel" id="result" hidden>
+    <h2>這一鍋</h2>
+    <div class="row"><span class="muted">撈到</span><div class="trs" id="caught"></div></div>
+    <div class="row"><span class="muted">素材</span><div class="trs" id="before"></div><span class="arrow">→</span><span class="muted">成品</span><div class="trs" id="after"></div></div>
+    <div class="muted" id="stats"></div>
+  </section>
+
+  <section class="panel">
+    <h2>鍋裡的素材</h2>
+    <div class="row">
+      <label class="muted" for="recipe">照配方</label>
+      <select id="recipe"></select>
+    </div>
+    <div class="pot" id="pot"></div>
+    <p class="muted" style="margin:0">鍋裡已有的特性，那種顏色的泡泡就冒得比較多。</p>
+  </section>
+
+  <section class="panel">
+    <h2>手感參數</h2>
+    <div class="knobs" id="knobs"></div>
+    <div class="row">
+      <button class="btn ghost" id="reset" type="button">恢復預設</button>
+      <button class="btn ghost" id="copy" type="button">複製參數給 Claude</button>
+      <span class="copied" id="copied"></span>
+    </div>
+    <textarea id="dump" readonly hidden aria-label="參數"></textarea>
+  </section>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/bubblegame.js"></script>
+<script>
+(() => {
+  const D = window.GAME_DATA, E = window.GameEngine, A = window.GameAudio, BG = window.BubbleGame;
+  const $ = (id) => document.getElementById(id);
+  const KEY = 'lingrong-bubble-lab';
+  const KNOBS = [
+    ['duration', '火候（毫秒）', 1000], ['slots', '勺子格數', 1], ['spawnMs', '平均幾毫秒冒一顆', 50],
+    ['riseMin', '最快飄到頂（毫秒）', 100], ['riseMax', '最慢飄到頂（毫秒）', 100], ['natureWeight', '已有特性加權（每級）', 1],
+    ['bigChance', '金邊機率（0～1）', 0.01], ['burntChance', '焦泡機率（0～1）', 0.01], ['fanEvery', '包捐搧火間隔（毫秒）', 100],
+    ['fanCount', '搧火一次冒幾顆', 1],
+  ];
+  const defaults = () => ({ ...BG.DEFAULTS, riseMin: BG.DEFAULTS.riseMs[0], riseMax: BG.DEFAULTS.riseMs[1], fanEvery: BG.DEFAULTS.fanEvery[0] });
+  let knob = defaults();
+  try { Object.assign(knob, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* 無痕模式 */ }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(knob)); } catch { /* 略 */ } };
+  const cfg = () => ({ ...knob, riseMs: [knob.riseMin, Math.max(knob.riseMin, knob.riseMax)], fanEvery: [knob.fanEvery, knob.fanEvery * 1.4] });
+
+  // ── 鍋裡的素材 ──
+  let pot = {};
+  const recipes = Object.entries(D.PRODUCTS).filter(([, p]) => p.recipe && !p.out);
+  $('recipe').innerHTML = recipes.map(([id, p]) => `<option value="${id}">${p.name}（${p.recipe.map((m) => D.ITEMS[m].name).join('＋')}）</option>`).join('') + '<option value="">自己設定</option>';
+  const fromRecipe = (id) => {
+    // 每樣素材當成帶 1 級本性（像近處採到的）
+    const trs = D.PRODUCTS[id].recipe.map((m) => Object.fromEntries((D.ITEMS[m].nature || []).map((t) => [t, 1])));
+    return E.potTraits(D, trs);
+  };
+  const renderPot = () => {
+    $('pot').innerHTML = Object.entries(D.TRAITS).map(([t, d]) => `<label for="pot-${t}"><span class="tr" style="--c:${d.color}">${d.name}</span>
+      <select id="pot-${t}" data-t="${t}">${[0, 1, 2, 3].map((v) => `<option${(pot[t] || 0) === v ? ' selected' : ''}>${v}</option>`).join('')}</select></label>`).join('');
+  };
+  $('recipe').value = 'cake';
+  pot = fromRecipe('cake');
+  renderPot();
+  $('recipe').addEventListener('change', (e) => { if (e.target.value) { pot = fromRecipe(e.target.value); renderPot(); } });
+  $('pot').addEventListener('change', (e) => {
+    const t = e.target.dataset.t;
+    if (!t) return;
+    const v = Number(e.target.value);
+    if (v) pot[t] = v; else delete pot[t];
+    $('recipe').value = '';
+  });
+
+  // ── 參數 ──
+  const renderKnobs = () => {
+    $('knobs').innerHTML = KNOBS.map(([k, label, step]) => `<label for="k-${k}">${label}<input id="k-${k}" type="number" step="${step}" min="0" value="${knob[k]}" data-k="${k}"></label>`).join('')
+      + `<label class="check" for="k-fan"><input id="k-fan" type="checkbox" data-k="fan"${knob.fan ? ' checked' : ''}> 包捐會搧火</label>`;
+  };
+  renderKnobs();
+  $('knobs').addEventListener('input', (e) => {
+    const k = e.target.dataset.k;
+    if (!k) return;
+    knob[k] = e.target.type === 'checkbox' ? e.target.checked : Number(e.target.value);
+    save();
+  });
+  $('reset').addEventListener('click', () => { knob = defaults(); save(); renderKnobs(); });
+  $('copy').addEventListener('click', () => {
+    const txt = JSON.stringify(cfg(), null, 0);
+    $('dump').hidden = false;
+    $('dump').value = txt;
+    const ok = () => { $('copied').textContent = '已複製'; };
+    try { navigator.clipboard.writeText(txt).then(ok, () => { $('dump').select(); $('copied').textContent = '請手動複製下方文字'; }); } catch { $('dump').select(); }
+  });
+
+  // ── 開火 ──
+  const chip = (t, lv) => `<span class="tr" style="--c:${D.TRAITS[t].color}">${D.TRAITS[t].name}<i>${'●'.repeat(lv)}${'○'.repeat(Math.max(0, 3 - lv))}</i></span>`;
+  const chips = (tr) => Object.keys(tr).length ? Object.entries(tr).sort((a, b) => b[1] - a[1]).map(([t, v]) => chip(t, v)).join('') : '<span class="muted">（沒有特性）</span>';
+  let game = null;
+  $('start').addEventListener('click', () => {
+    A.unlock();
+    if (game) game.destroy();
+    $('result').hidden = true;
+    $('start').textContent = '重來';
+    const potNow = { ...pot };
+    game = BG.mount($('stage'), {
+      traits: D.TRAITS, pot: potNow, cfg: cfg(),
+      sfx: (n, a) => A.sfx(n, a),
+      img: (who) => (who === 'baojuan' ? 'assets/characters/baojuan.webp' : 'assets/characters/lingrong_smile.webp'),
+      onDone: (r) => {
+        $('result').hidden = false;
+        $('caught').innerHTML = r.stirs.length ? r.stirs.map((b) => (b.t === 'burnt' ? '<span class="tr burnt">焦</span>' : `<span class="tr" style="--c:${D.TRAITS[b.t].color}">${D.TRAITS[b.t].name} +${b.v}</span>`)).join('') : '<span class="muted">一顆都沒撈到</span>';
+        $('before').innerHTML = chips(E.finalTraits(D, [potNow], []));
+        $('after').innerHTML = chips(E.finalTraits(D, [potNow], r.stirs));
+        $('stats').textContent = `跑掉 ${r.escaped} 顆・${r.why === 'full' ? '撈滿提早收工' : '火熄了'}（成品還沒算起鍋那一步）`;
+        $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      },
+    });
+    $('stage').querySelector('.bbl').focus();
+  });
+  $('mute').addEventListener('click', () => { const m = A.toggleMute(); $('mute').textContent = `音效：${m ? '關' : '開'}`; });
+  $('mute').textContent = `音效：${A.isMuted() ? '關' : '開'}`;
+})();
+</script>
+</body>
+</html>

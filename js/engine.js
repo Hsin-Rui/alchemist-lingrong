@@ -76,8 +76,15 @@
     }
     return out;
   }
-  // 套一顆泡泡：該特性 +v，最高 3 級（回新物件，不改傳入的）
-  const stirTraits = (tr, b) => ({ ...tr, [b.t]: Math.min(3, ((tr || {})[b.t] || 0) + b.v) });
+  // 套一顆泡泡：該特性 +v，最高 3 級（回新物件，不改傳入的）。
+  // 焦泡（b.t === 'burnt'）：最強的那種特性 −1（平手取先出現的），降到 0 就消失
+  const stirTraits = (tr, b) => {
+    if (b.t !== 'burnt') return { ...tr, [b.t]: Math.min(3, ((tr || {})[b.t] || 0) + b.v) };
+    const out = { ...tr };
+    const top = Object.keys(out).sort((x, y) => out[y] - out[x])[0];
+    if (top) { out[top]--; if (out[top] <= 0) delete out[top]; }
+    return out;
+  };
   // 珠珠停在 pos（0～100，橫條的百分比位置）屬於哪一區：'down'|'keep'|'up'
   function finishZone(D, pos) {
     let x = 0;
