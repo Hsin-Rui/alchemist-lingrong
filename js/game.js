@@ -785,8 +785,14 @@
     const enter = D.VISIT_ENTER[who] || [];
     if (r.empty) { playDialog([...enter, ...D.VISIT_EMPTY[who]], () => go('result'), D.CHARS[who].bg); return; }
     if (r.refused) { playDialog([...enter, ...D.REFUSE[r.who]], () => go('result'), D.CHARS[r.who].bg); return; }
-    A.sfx('pop');
-    playDialog([...enter, ...outcomeLines(r.who, r.spike, r)], () => go('result'), D.CHARS[r.who].bg);
+    A.sfx(r.reaction === 'love' ? 'ding' : 'pop');
+    // 收下：被抓 → 太醫那段；否則先說反應（E 組），有料得手再接加料的結果
+    const lines = r.caught ? outcomeLines(r.who, r.spike, r) : [...visitReact(r), ...(r.outcome && r.outcome !== 'plain' ? outcomeLines(r.who, r.spike, r) : [])];
+    playDialog([...enter, ...lines], () => go('result'), D.CHARS[r.who].bg);
+  }
+  function visitReact(r) {
+    const V = D.VISIT_REACT[r.who];
+    return (r.reaction === 'hate' && V.hateP[r.product]) || V[r.reaction] || V.plain;
   }
 
   function sleepEarly() {
@@ -1166,10 +1172,17 @@
       const done = S.slot >= R.slotsPerDay;
       const hurt = r.caught ? false : r.favDelta < 0;
       // 被抓暗幕：一開始 0.45，章落下後 0.62（playResultFx 播）；重繪時直接維持 0.62
-      return `<div class="screen result bg-${c.bg}${tier ? ` fx-${tier}` : ''}${r.caught ? ' fx-caught' : ''}${shake ? ' fx-shake' : ''}">
+      const love = r.kind === 'gift' && r.reaction === 'love' && !r.refused && !r.caught;
+      const meh = r.kind === 'gift' && !r.caught && (r.reaction === 'hate' || r.reaction === 'mixed') && !r.refused;
+      // 拜訪的演出：投其所好＝花瓣＋大字；嫌棄、又愛又嫌＝嫌棄立繪；拒收＝零溶尷尬、禮物彈回
+      const who0 = r.caught ? 'doctor' : r.refused && r.kind === 'gift' ? 'lingrong' : r.who;
+      const expr = r.refused && r.kind === 'gift' ? 'shock' : hurt ? 'oops' : meh ? 'meh' : 'happy';
+      return `<div class="screen result bg-${c.bg}${tier ? ` fx-${tier}` : ''}${r.caught ? ' fx-caught' : ''}${shake ? ' fx-shake' : ''}${love ? ' fx-love' : ''}">
         ${r.caught ? `<div class="fx-veil${r.fxDone ? ' settled' : ''}"></div>` : ''}
+        ${love ? `<div class="petals" aria-hidden="true">${'<i></i>'.repeat(14)}</div><div class="love-banner">投其所好！<b>友好 +${r.friendDelta}</b></div>` : ''}
         <div class="result-stage">
-          ${portrait(r.caught ? 'doctor' : r.who, hurt ? 'oops' : 'happy', 'result-portrait')}
+          ${portrait(who0, expr, 'result-portrait')}
+          ${r.refused && r.kind === 'gift' && r.product ? `<span class="gift-bounce">${tok(r.product, 'lg')}</span>` : ''}
           <div class="stamp ${stampCls}">${stamp}</div>
           ${r.favDelta ? `<div class="float-num minus">${r.favDelta}</div>` : ''}
         </div>

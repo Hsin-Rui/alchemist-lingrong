@@ -113,9 +113,9 @@ window.GAME_DATA = (() => {
   const CHARS = {
     lingrong: { name: '零溶', color: '#7b8fd1', face: '零', imgs: { smile: 'lingrong_smile', evil: 'lingrong_evil', shock: 'lingrong_shock' } },
     baojuan: { name: '包捐', color: '#5f9a7a', face: '捐', imgs: { _: 'baojuan' } },
-    huafei: { name: '滑妃', color: '#d0453b', face: '滑', palace: '一捆宮', bg: 'yikun', maid: 'songzhi', imgs: { happy: 'huafei_happy', oops: 'huafei_oops' } },
-    meizhuang: { name: '審沒裝', color: '#d99a2b', face: '審', palace: '嫌福宮', bg: 'xianfu', maid: 'caiyue', imgs: { happy: 'meizhuang_happy', oops: 'meizhuang_oops' } },
-    zhenhuan: { name: '真環', color: '#e07f9c', face: '環', palace: '睡慾軒', bg: 'suiyu', maid: 'chuijinxi', imgs: { happy: 'zhenhuan_happy', oops: 'zhenhuan_oops' } },
+    huafei: { name: '滑妃', color: '#d0453b', face: '滑', palace: '一捆宮', bg: 'yikun', maid: 'songzhi', imgs: { happy: 'huafei_happy', oops: 'huafei_oops', meh: 'huafei_meh' } },
+    meizhuang: { name: '審沒裝', color: '#d99a2b', face: '審', palace: '嫌福宮', bg: 'xianfu', maid: 'caiyue', imgs: { happy: 'meizhuang_happy', oops: 'meizhuang_oops', meh: 'meizhuang_meh' } },
+    zhenhuan: { name: '真環', color: '#e07f9c', face: '環', palace: '睡慾軒', bg: 'suiyu', maid: 'chuijinxi', imgs: { happy: 'zhenhuan_happy', oops: 'zhenhuan_oops', meh: 'zhenhuan_meh' } },
     huangshang: { name: '黃上', color: '#d4a800', face: '黃', imgs: { _: 'huangshang', happy: 'huangshang_happy' } },
     huanghou: { name: '黃后', color: '#7a4e9a', face: '后', imgs: { _: 'huanghou' } },
     doctor: { name: '太醫溫十粗', color: '#4f7a8a', face: '溫', imgs: { _: 'doctor' } },
@@ -254,10 +254,35 @@ window.GAME_DATA = (() => {
     zhenhuan: [['zhenhuan', 'happy', '姐妹之間，不必拘禮。']],
   };
 
+  // 拒收（E18、E20、E21）＋零溶的內心話（E22）
   const REFUSE = {
-    huafei: [['huafei', 'happy', '本宮缺你這點東西？拿走拿走，別髒了本宮的地。'], ['lingrong', 'shock', '（……被轟出來了。）']],
-    meizhuang: [['meizhuang', 'happy', '妹妹的心意我領了，東西就不必了。'], ['lingrong', 'shock', '（姐姐……還在跟我客氣嗎？）']],
-    zhenhuan: [['zhenhuan', 'happy', '無功不受祿，妹妹收回去吧。'], ['lingrong', 'shock', '（她在防我？）']],
+    huafei: [['huafei', 'meh', '本宮缺妳這點東西？拿走拿走，別髒了本宮的地。'], ['lingrong', 'shock', '（……被轟出來了。）']],
+    meizhuang: [['meizhuang', 'meh', '妹妹的心意我領了，東西……還是拿回去吧。'], ['lingrong', 'shock', '（姐姐……還在跟我客氣嗎？）']],
+    zhenhuan: [['zhenhuan', 'happy', '妹妹客氣了。吹緊吸，替我送安妹妹回去。'], ['lingrong', 'shock', '（她在防我？）']],
+  };
+  // 收下伴手禮的反應（E7–E17、E26–E28）：hateP＝不喜歡的成品專屬句，沒有就用 hate
+  const VISIT_REACT = {
+    huafei: {
+      plain: [['huafei', 'happy', '放著吧。']],
+      love: [['huafei', 'happy', '這正是本宮想要的！安妹妹妳倒是比那些奴才機靈。']],
+      hate: [['huafei', 'meh', '這麼寡淡的東西，也好意思拿來？']],
+      hateP: { tonic: [['huafei', 'meh', '安胎藥？安妹妹這是在笑本宮？']] },
+      mixed: [['huafei', 'meh', '東西是好東西……可惜味道寡淡了些。']],
+    },
+    meizhuang: {
+      plain: [['meizhuang', 'happy', '妹妹有心了。']],
+      love: [['meizhuang', 'happy', '妹妹怎麼知道我喜歡這個？知我者，妹妹也。']],
+      hate: [['meizhuang', 'meh', '這……太花俏了些，不太合我的性子。']],
+      hateP: {},
+      mixed: [['meizhuang', 'meh', '我很喜歡，只是……下回別弄得這麼花俏。']],
+    },
+    zhenhuan: {
+      plain: [['zhenhuan', 'happy', '謝謝妹妹，我收下了。']],
+      love: [['zhenhuan', 'happy', '妹妹真懂我。這份心意，我記下了。']],
+      hate: [['zhenhuan', 'meh', '這味道太重了……我聞著不太舒服。']],
+      hateP: { zuotai: [['zhenhuan', 'meh', '坐胎藥？……妹妹的好意，我心領了。']] },
+      mixed: [['zhenhuan', 'meh', '妹妹有心了。只是這味道……稍微重了點。']],
+    },
   };
 
   // 加料結果（共通版，{n} 會換成對方名字）
@@ -400,6 +425,6 @@ window.GAME_DATA = (() => {
 
   return {
     TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
-    request, THANKS, REFUSE, VISIT_ENTER, VISIT_EMPTY, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
+    request, THANKS, REFUSE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
   };
 })();

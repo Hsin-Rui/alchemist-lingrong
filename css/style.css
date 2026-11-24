@@ -603,3 +603,23 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 
 /* 調合畫面：流程本體是 js/craftflow.js（css/craftflow.css），這裡只給外框留白 */
 .craft-screen .cf-host { padding: 10px 14px 28px; }
+
+/* 拜訪：投其所好（花瓣＋大字）、拒收（禮物彈回） */
+.result { position: relative; }
+.petals { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 3; }
+.petals i { position: absolute; top: -20px; width: 14px; height: 10px; border-radius: 10px 0 10px 0; background: #f4a7bf; opacity: .9; animation: petal 3.2s linear infinite; }
+.petals i:nth-child(odd) { background: #fbd0dc; }
+.petals i:nth-child(1) { left: 4%; animation-delay: 0s; } .petals i:nth-child(2) { left: 12%; animation-delay: .7s; }
+.petals i:nth-child(3) { left: 20%; animation-delay: 1.5s; } .petals i:nth-child(4) { left: 28%; animation-delay: .3s; }
+.petals i:nth-child(5) { left: 36%; animation-delay: 2.1s; } .petals i:nth-child(6) { left: 44%; animation-delay: 1.1s; }
+.petals i:nth-child(7) { left: 52%; animation-delay: .5s; } .petals i:nth-child(8) { left: 60%; animation-delay: 2.5s; }
+.petals i:nth-child(9) { left: 68%; animation-delay: 1.3s; } .petals i:nth-child(10) { left: 76%; animation-delay: .1s; }
+.petals i:nth-child(11) { left: 84%; animation-delay: 1.8s; } .petals i:nth-child(12) { left: 92%; animation-delay: .9s; }
+.petals i:nth-child(13) { left: 16%; animation-delay: 2.8s; } .petals i:nth-child(14) { left: 72%; animation-delay: 2.3s; }
+@keyframes petal { 0% { transform: translate(0, 0) rotate(0); } 50% { transform: translate(24px, 45vh) rotate(160deg); } 100% { transform: translate(-10px, 95vh) rotate(340deg); opacity: .2; } }
+.love-banner { position: absolute; left: 0; right: 0; top: 9%; z-index: 4; text-align: center; font-family: var(--serif); font-weight: 900; font-size: 30px; color: #c2185b; text-shadow: 0 2px 0 #fff, 0 0 14px rgba(255,255,255,.9); animation: stamp .5s cubic-bezier(.2,1.4,.4,1) .1s both; pointer-events: none; }
+.love-banner b { display: block; font-size: 22px; color: var(--gold); }
+.fx-love .stamp { display: none; }
+.gift-bounce { position: absolute; left: 50%; bottom: 40%; margin-left: -28px; animation: giftbounce .9s cubic-bezier(.3,1.5,.5,1) .3s both; }
+@keyframes giftbounce { 0% { transform: translate(90px, -120px) scale(.6); opacity: 0; } 60% { transform: translate(0, 10px) scale(1.1); opacity: 1; } 100% { transform: translate(0, 0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .petals { display: none; } .gift-bounce, .love-banner { animation: none; } }

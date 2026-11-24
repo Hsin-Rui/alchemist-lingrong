@@ -1223,3 +1223,15 @@ test('stirTraits：焦泡讓最強的特性 −1，降到 0 就消失', () => {
   assert.deepStrictEqual(E.stirTraits({ qing: 1 }, { t: 'burnt' }), {});
   assert.deepStrictEqual(E.stirTraits({}, { t: 'burnt' }), {}, '鍋裡沒特性 → 不變');
 });
+
+test('拜訪台詞：三位妃嬪都有四種反應與拒收；嫌棄專屬句對到不喜歡的成品；沒有「安嬪」', () => {
+  for (const who of D.TARGETS) {
+    const V = D.VISIT_REACT[who];
+    for (const k of ['plain', 'love', 'hate', 'mixed']) assert.ok(V[k] && V[k].length, `${who} ${k}`);
+    for (const p of Object.keys(V.hateP)) assert.ok(D.PREFS[who].hateP.includes(p), `${who} 的 ${p} 專屬句要是她不喜歡的成品`);
+    assert.ok(D.REFUSE[who].length && D.VISIT_ENTER[who].length && D.VISIT_EMPTY[who].length);
+    assert.ok(D.CHARS[who].imgs.meh, `${who} 有嫌棄立繪`);
+  }
+  const all = JSON.stringify([D.VISIT_REACT, D.REFUSE, D.VISIT_ENTER, D.VISIT_EMPTY]);
+  assert.ok(!all.includes('安嬪'));
+});
