@@ -1109,3 +1109,49 @@ test('小舖：除了紅花瓣什麼都賣；賣素材＝售價一半＋每級�
   assert.strictEqual(E.sell(D, S, 'musk').ok, false, '料不收');
   assert.strictEqual(E.sellPrice(D, 'pine', {}), 3);
 });
+
+// ───────── 第二輪：四階段調合 ─────────
+test('rollBubbles：3 顆不同特性；鍋裡有的特性比較常冒；大泡泡 +2', () => {
+  const b = E.rollBubbles(D, {}, lcg(3));
+  assert.strictEqual(b.length, 3);
+  assert.strictEqual(new Set(b.map((x) => x.t)).size, 3);
+  b.forEach((x) => assert.ok(D.TRAITS[x.t] && (x.v === 1 || x.v === 2)));
+  assert.deepStrictEqual(E.rollBubbles(D, {}, () => 0).map((x) => x.v), [2, 2, 2], 'rand 0 → 都是大泡泡');
+  assert.deepStrictEqual(E.rollBubbles(D, {}, () => 0.99).map((x) => x.v), [1, 1, 1]);
+  let hit = 0;
+  const r = lcg(11);
+  for (let i = 0; i < 400; i++) if (E.rollBubbles(D, { nong: 3 }, r).some((x) => x.t === 'nong')) hit++;
+  assert.ok(hit > 360, `濃郁 3 級的鍋，幾乎每次都冒濃郁（${hit}/400）`);
+});
+
+test('finishZone：14／29／14／29／14 分區', () => {
+  assert.strictEqual(E.finishZone(D, 0), 'down');
+  assert.strictEqual(E.finishZone(D, 13.9), 'down');
+  assert.strictEqual(E.finishZone(D, 14), 'keep');
+  assert.strictEqual(E.finishZone(D, 43), 'up');
+  assert.strictEqual(E.finishZone(D, 56.9), 'up');
+  assert.strictEqual(E.finishZone(D, 57), 'keep');
+  assert.strictEqual(E.finishZone(D, 86), 'down');
+  assert.strictEqual(E.finishZone(D, 100), 'down');
+});
+
+test('finalTraits：素材＋泡泡（最高 3 級）→ 只留 3 種 → 起鍋只動最強那種', () => {
+  const trs = [{ xiang: 2 }, { tian: 1 }];
+  const stirs = [{ t: 'xiang', v: 2 }, { t: 'hua', v: 1 }, { t: 'qing', v: 1 }];
+  assert.deepStrictEqual(E.finalTraits(D, trs, stirs), { xiang: 3, tian: 1, hua: 1 }, '香氣封頂 3；四種砍成三種（平手依順序）');
+  assert.deepStrictEqual(E.finalTraits(D, trs, stirs, 'up'), { xiang: 3, tian: 1, hua: 1 }, '已經 3 級升不上去');
+  assert.deepStrictEqual(E.finalTraits(D, trs, stirs, 'down'), { xiang: 2, tian: 1, hua: 1 });
+  assert.deepStrictEqual(E.applyFinish(D, { qing: 1 }, 'down'), {}, '降到 0 就消失');
+  assert.deepStrictEqual(E.applyFinish(D, {}, 'up'), {}, '沒有特性不變');
+  assert.deepStrictEqual(E.applyFinish(D, { tian: 2, hua: 2 }, 'up'), { tian: 3, hua: 2 }, '平手依特性順序');
+});
+
+test('craft：帶攪拌與起鍋 → 成品特性照 finalTraits；省略＝快速調合', () => {
+  const S = fresh();
+  E.addUnit(S, 'lotus', { tian: 1 });
+  const r = E.craft(D, S, { mats: ['lotus', 'osmanthus'], stirs: [{ t: 'tian', v: 1 }, { t: 'xiang', v: 2 }, { t: 'qing', v: 1 }], finish: 'up', spike: null, forOrder: null, forWho: null });
+  assert.deepStrictEqual(r.tr, { xiang: 3, tian: 2, qing: 1 }, '甜蜜與香氣平手 2 級，起鍋升香氣（特性順序在前）');
+  const S2 = fresh();
+  E.addUnit(S2, 'lotus', { tian: 1 });
+  assert.deepStrictEqual(E.craft(D, S2, { mats: ['lotus', 'osmanthus'], spike: null }).tr, { tian: 1 });
+});

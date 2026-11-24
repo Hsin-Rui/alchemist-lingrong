@@ -515,3 +515,26 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .trc i { font-style: normal; font-size: 9px; letter-spacing: 1px; }
 .pot-body .trs { display: flex; justify-content: center; margin-top: 4px; }
 .has-tr { color: #8E2B2B; font-weight: 700; }
+
+/* ───── 四階段調合（第二輪 §13.3） ───── */
+.csteps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; list-style: none; padding: 0; margin: 0 0 10px; counter-reset: cs; }
+.csteps li { counter-increment: cs; text-align: center; font-size: 12px; padding: 4px 0; border-radius: 6px; background: #EADFCB; color: var(--muted); }
+.csteps li::before { content: counter(cs) ' '; font-weight: 700; }
+.csteps li.on { background: var(--crimson); color: #FBEFD9; font-weight: 700; }
+.csteps li.done { color: var(--ink); }
+.bubbles-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 10px; }
+.bubble-btn { aspect-ratio: 1; border: none; border-radius: 50%; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: #241B30; font-weight: 700;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.75), var(--c) 45%, color-mix(in srgb, var(--c) 60%, #000) 100%); }
+.bubble-btn .bk { font-size: 11px; opacity: .7; }
+.bubble-btn .bn { font-family: var(--serif); font-size: 18px; }
+.bubble-btn .bv { font-size: 12px; }
+.bubble-btn.big { box-shadow: 0 0 0 3px var(--amber), 0 0 14px var(--c); }
+.finish-bar { position: relative; display: flex; height: 48px; border-radius: 12px; overflow: hidden; border: 2px solid #CBB894; margin: 6px 0; }
+.finish-bar .fz { display: grid; place-items: center; font-size: 12px; font-weight: 700; background: #EADFCB; color: var(--muted); }
+.finish-bar .fz.up { background: var(--amber); color: #241B30; }
+.finish-bar .fz.down { background: #C24848; color: #fff; }
+.bead { position: absolute; top: 50%; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #d7e6ff 50%, #7c8fb8); box-shadow: 0 0 8px rgba(255,255,255,.8); }
+.bead.hit { animation: beadhit .5s; }
+@keyframes beadhit { 50% { transform: scale(1.6); } }
+.finish-verdict { text-align: center; font-weight: 700; min-height: 1.6em; }
+.finish-verdict.up { color: #8E6A12; } .finish-verdict.down { color: #B42B2B; }

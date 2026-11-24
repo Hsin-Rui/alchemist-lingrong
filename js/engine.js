@@ -58,6 +58,47 @@
     S.lots = S.lots.filter((l) => l !== lot);
     return { ...lot.tr };
   }
+  // ───────── 四階段調合（§13.3）─────────
+  // 素材的特性先倒進鍋（同特性相加、最高 3 級，這時還不砍種類）
+  const potTraits = (D, trs) => mergeTraits(D, trs, 3, Infinity);
+  // 開火攪拌：冒 bubbles 顆不同特性的泡泡。每種特性基本權重 1，鍋裡已有的特性每級 +natureWeight；
+  // 每顆有 bigChance 是大泡泡（+bigValue），其餘 +1。回 [{ t, v }]
+  function rollBubbles(D, pot, rand) {
+    const C = D.RULES.craft;
+    const pool = Object.keys(D.TRAITS).map((t) => [t, 1 + C.natureWeight * ((pot && pot[t]) || 0)]);
+    const out = [];
+    for (let i = 0; i < C.bubbles && pool.length; i++) {
+      const t = weightedPick(pool, rand);
+      pool.splice(pool.findIndex(([k]) => k === t), 1);
+      out.push({ t, v: rand() < C.bigChance ? C.bigValue : 1 });
+    }
+    return out;
+  }
+  // 套一顆泡泡：該特性 +v，最高 3 級（回新物件，不改傳入的）
+  const stirTraits = (tr, b) => ({ ...tr, [b.t]: Math.min(3, ((tr || {})[b.t] || 0) + b.v) });
+  // 珠珠停在 pos（0～100，橫條的百分比位置）屬於哪一區：'down'|'keep'|'up'
+  function finishZone(D, pos) {
+    let x = 0;
+    for (const [w, z] of D.RULES.craft.zones) { x += w; if (pos < x) return z; }
+    return D.RULES.craft.zones[D.RULES.craft.zones.length - 1][1];
+  }
+  // 起鍋：只作用在最強的那種特性（平手依 D.TRAITS 順序）；升到最高 3 級、降到 0 就消失。沒有特性 → 不變
+  function applyFinish(D, tr, zone) {
+    const order = Object.keys(D.TRAITS);
+    const top = Object.keys(tr || {}).sort((a, b) => tr[b] - tr[a] || order.indexOf(a) - order.indexOf(b))[0];
+    if (!top || zone === 'keep') return { ...tr };
+    const out = { ...tr, [top]: Math.min(3, tr[top] + (zone === 'up' ? 1 : -1)) };
+    if (out[top] <= 0) delete out[top];
+    return out;
+  }
+  // 成品特性：素材的特性 → 依序套攪拌挑的泡泡 → 只留最強 3 種 → 套起鍋結果
+  function finalTraits(D, trs, stirs, zone) {
+    let tr = potTraits(D, trs);
+    (stirs || []).forEach((b) => { tr = stirTraits(tr, b); });
+    tr = mergeTraits(D, [tr]);
+    return zone ? applyFinish(D, tr, zone) : tr;
+  }
+
   // 採集到的素材擲特性（§13.2）：偏向素材的本性（ITEMS.nature），0～2 種；
   // frac＝離出生點的遠近（0 最近、1 最遠）：近 1 級，中 1～2 級，遠 2～3 級。料與沒有本性的素材 → {}。
   function rollTraits(D, id, frac, rand) {
@@ -828,7 +869,8 @@
 
   // 調合（確定性，無 rand）：slot++、放進去的 2～3 樣素材各 -1、findRecipe→成品或 junk；成品入 hand/inv。
   // craftSel.lots：與 mats 同位置的素材份 uid（null／省略 → 自動挑特性最多的那份，沒有就用一般份）。
-  // 成品帶上所用素材合併後的特性（§13.3 快速調合的結果）；黑暗料理和紅花沒有特性。
+  // craftSel.stirs：攪拌挑的泡泡 [{t,v}]；craftSel.finish：起鍋結果 'up'|'keep'|'down'（兩者省略＝快速調合）。
+  // 成品特性見 finalTraits；黑暗料理和紅花沒有特性。
   function craft(D, S, craftSel) {
     const mats = craftSel.mats.filter(Boolean);
     S.slot++;
@@ -846,7 +888,7 @@
     const spike = toInv ? null : craftSel.spike;
     if (spike) invAdd(S, spike, -1);
     if (toInv) invAdd(S, product);
-    const tr = product === 'junk' ? {} : mergeTraits(D, trs);
+    const tr = product === 'junk' ? {} : finalTraits(D, trs, craftSel.stirs, craftSel.finish);
     const item = toInv ? null : { id: ++S.seq, product, spike: product === 'junk' ? null : spike, forOrder: null, tr };
     // 從訂單進來的就送那張訂單；否則先找調合時預測的對象（forWho）要這個成品、還沒備好的訂單，
     // 再找任何還沒備好的同品項訂單。找到就把成品綁在那張訂單上。
@@ -957,6 +999,7 @@
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
     findRecipe, acceptChance, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
+    potTraits, rollBubbles, stirTraits, finishZone, applyFinish, finalTraits,
     buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

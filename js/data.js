@@ -128,6 +128,13 @@ window.GAME_DATA = (() => {
   const RULES = {
     days: 10,
     slotsPerDay: 3,
+    // 四階段調合（game-design §13.3–13.4）：攪拌次數、每次冒幾顆、大泡泡機率；
+    // 起鍋橫條由左到右的分區寬度（%）與效果；珠珠來回一趟的毫秒數
+    craft: {
+      stirs: 3, bubbles: 3, bigChance: 0.2, bigValue: 2, natureWeight: 3,
+      zones: [[14, 'down'], [29, 'keep'], [14, 'up'], [29, 'keep'], [14, 'down']],
+      beadMs: 1600,
+    },
     silver: 100,
     favor: { lingrong: 15, huafei: 60, meizhuang: 40, zhenhuan: 45 },
     friend: { huafei: 10, meizhuang: 40, zhenhuan: 50 },

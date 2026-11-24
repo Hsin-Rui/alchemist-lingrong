@@ -512,9 +512,24 @@ function connect(url) {
         let ck = (await focus())?.key;
         for (let j = 0; j < 40 && ck !== 'craft|#1'; j++) { await press('ArrowDown'); const n = (await focus())?.key; if (n === ck) break; ck = n; }
         if (ck === 'craft|#1') {
-          await press('Enter');
+          await press('Enter'); // 下鍋 → 四階段（§13.3）
+          const stepOn = () => ev("document.querySelector('.csteps li.on')?.textContent || ''");
+          const seen = [];
+          for (let j = 0; j < 20 && !(await ev("!!document.querySelector('#app .sheet-layer')")); j++) {
+            const st = await stepOn();
+            if (st && seen[seen.length - 1] !== st) seen.push(st);
+            if (st === '開火攪拌') await press(String(1 + (j % 3)));
+            else if (st === '加料') {
+              for (let m = 0; m < 12 && (await focus())?.key !== 'tofinish|#1'; m++) await press('ArrowDown');
+              await press('Enter');
+            } else if (st === '起鍋') await press('Space', { wait: 200 });
+            else await sleep(100);
+          }
           const ok = await waitFor("!!document.querySelector('#app .sheet-layer')", 4000);
-          if (!craftChecked) { check('調合畫面 ↓ 到「開始調合」→ 結果單', ok); craftChecked = true; }
+          if (!craftChecked) {
+            check('調合畫面 ↓ 到「下鍋」→ 攪拌（1/2/3）→ 加料 → 起鍋（Space）→ 結果單', ok && seen.join('>') === '開火攪拌>加料>起鍋', seen.join('>'));
+            craftChecked = true;
+          }
         } else {
           await pressUntilStable('ArrowUp');
           await pressUntilStable('ArrowLeft');
