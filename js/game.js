@@ -749,6 +749,7 @@
         const canDeliver = !done && !grounded() && r.order && r.product !== 'junk' && !r.toInv;
         const out = [{ a: 'craftdone', v: 'home', label: done ? '天色晚了，回宮' : '回炎洗宮', def: !canDeliver, primary: !canDeliver }];
         if (canDeliver) out.push({ a: 'craftdone', v: 'deliver', label: `直接送去${D.CHARS[r.order.who].palace}`, primary: true, def: true });
+        if (r.order && r.product !== 'junk' && !r.toInv) out.push({ a: 'craftdone', v: 'proxy', label: '包捐代交' });
         return out;
       },
       onStep: (n) => { if (n !== craftSel.stage) cursor.key = null; craftSel.stage = n; },
@@ -767,11 +768,19 @@
   }
 
   // itemId：指定要送哪一個成品（剛調合好的那個）；沒指定就送最新做好的
-  function doDeliver(orderId, itemId = null) {
-    if (needOut()) return;
-    const r = E.deliver(D, S, orderId, itemId, rand);
+  // how：'self' 親自送（要出門）；'proxy' 包捐代交（禁足也行、不花時辰、只拿賞銀）
+  function doDeliver(orderId, itemId = null, how = 'self') {
+    if (how === 'self' && needOut()) return;
+    const r = E.deliver(D, S, orderId, itemId, rand, how);
     if (r.noItem) { go('home'); return; }
     A.sfx('pop');
+    if (r.proxy) {
+      // 包捐跑腿：出發、（加了料就接加料的結果）、回來
+      const [go1, back] = D.PROXY_LINES;
+      const mid = r.caught || (r.outcome && r.outcome !== 'plain') ? outcomeLines(r.who, r.spike, r) : [];
+      playDialog([go1, ...mid, ...(r.caught ? [] : [back])], () => go('result'), r.caught ? D.CHARS[r.who].bg : 'yanxi');
+      return;
+    }
     playDialog(outcomeLines(r.who, r.spike, r), () => go('result'), D.CHARS[r.who].bg);
   }
 
@@ -878,19 +887,22 @@
     </div>`;
   }
 
+  // 包捐每天一句（台詞總表 H 組）：由上往下，符合第一個條件就說那一句
   function hintLine() {
-    if (grounded()) return `禁足中……只能在宮裡煉東西了。（到第 ${S.groundUntil} 天）`;
-    const f = S.flip;
-    if (isTarget(f) && !S.conc[f].debuff && S.hand.some((h) => h.spike)) return `今晚是${charName(f)}侍寢……手上這份「心意」，該送過去了。`;
     const ready = S.orders.find((o) => readyItem(o));
-    if (ready) return `東西做好了，該送去給${charName(ready.who)}了。`;
+    if (grounded() && ready) return '小主禁足中，東西做好了就交給奴婢跑腿吧。'; // H1
+    if (grounded()) return `禁足中……只能在宮裡煉東西了。（到第 ${S.groundUntil} 天）`; // H2 待抄經（epic 4）上線再換
+    const f = S.flip;
+    if (isTarget(f) && !S.conc[f].debuff && S.hand.some((h) => h.spike)) return `今晚是${charName(f)}侍寢……手上這份「心意」，該送過去了。`; // H3
+    if (ready) return `東西做好了，親自送去給${charName(ready.who)}，交情會更好。`; // H4
     for (const o of S.orders) {
       const miss = D.PRODUCTS[o.product].recipe.find((id) => !have(id));
-      if (miss) return `${itemName(miss)}不夠，得去${locName(sourcesOf(miss)[0].loc)}一趟。`;
+      if (miss) return `${itemName(miss)}不夠，可以去${locName(sourcesOf(miss).find((x) => x.loc !== 'shop')?.loc || sourcesOf(miss)[0].loc)}採，或在小舖買。`; // H5
     }
-    if (S.orders.some((o) => recipeOk(o.product))) return '材料都齊了，來調合吧！';
+    if (S.orders.some((o) => recipeOk(o.product))) return '材料都齊了，來調合吧！'; // H6
+    if (!S.orders.length) return '今天沒有訂單，小主可以去各宮走動走動。'; // H7
     const preg = D.TARGETS.find((t) => S.conc[t].status === 'pregnant');
-    if (preg) return `${charName(preg)}有喜了呢……（呵）`;
+    if (preg) return `${charName(preg)}有喜了呢……（呵）`; // H8
     return D.IDLE[(S.day + S.slot) % D.IDLE.length];
   }
 
@@ -916,7 +928,7 @@
   }
 
   // 主畫面預設：第一張訂單卡的主要按鈕（可按時）；否則導覽列「採集」
-  const orderMainOk = (o) => (readyItem(o) ? !grounded() : recipeOk(o.product));
+  const orderMainOk = (o) => (readyItem(o) ? true : recipeOk(o.product)); // 備好的訂單禁足時也能代交
   const DEF = (on) => (on ? ' data-def' : '');
 
   function orderCard(o, i) {
@@ -928,7 +940,10 @@
     if (item) {
       body = `<div class="ready">${item.spike ? tok(item.spike) : tok(item.product)}
           <span>成品已備好・${item.spike ? `偷加了${itemName(item.spike)}` : '正正經經'}</span></div>
-        <button class="btn primary wide" data-a="deliver" data-v="${o.id}"${DEF(isDef)} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中，不能出門' : `送去${c.palace}`}</button>`;
+        <div class="row-btns deliver-btns">
+          <button class="btn primary" data-a="deliver" data-v="${o.id}"${DEF(isDef && !grounded())} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中，不能出門' : `親自送去${c.palace}`}</button>
+          <button class="btn ghost" data-a="proxy" data-v="${o.id}"${DEF(isDef && grounded())}>包捐代交<small>只拿賞銀</small></button>
+        </div>`;
     } else {
       const rows = D.PRODUCTS[o.product].recipe.map((id) => {
         const n = have(id);
@@ -1152,7 +1167,7 @@
       const shake = tier === 'heavy' && !r.fxDone && !dlg; // 只有「重」在蓋章時晃一次；重繪不再晃
       const lines = [];
       if (r.kind === 'deliver') {
-        lines.push(`<div class="rline">${tok(r.product, 'sm')}<span>${r.caught ? '東西被沒收了' : `訂單完成・${itemName(r.product)}`}${r.useless ? '<small>（味道怪怪的，賞銀減半、不加友好）</small>' : ''}</span>
+        lines.push(`<div class="rline">${tok(r.product, 'sm')}<span>${r.caught ? '東西被沒收了' : `${r.proxy ? '包捐代交' : '訂單完成'}・${itemName(r.product)}`}${r.useless ? '<small>（味道怪怪的，賞銀減半、不加友好）</small>' : ''}</span>
           <b class="gold">銀 +${r.reward}${!r.caught && r.friendDelta ? `　友好 +${r.friendDelta}` : ''}</b></div>`);
       } else if (r.empty) {
         lines.push(`<div class="rline"><span class="tok tok-none sm"><span class="tok-ch">空</span></span><span>空手拜訪${c.palace}，聊了一會兒</span><b class="gold">友好 +${r.friendDelta}</b></div>`);
@@ -1669,10 +1684,12 @@
         if (!r) { go('home'); break; }
         craftResult = null;
         closeCraft();
+        if (v === 'proxy' && r.order) { doDeliver(r.order.id, r.itemId, 'proxy'); break; } // 代交不花時辰，不用先檢查天黑
         finishAction(() => (v === 'deliver' && r.order ? doDeliver(r.order.id, r.itemId) : go('home')));
         break;
       }
       case 'deliver': doDeliver(Number(v)); break;
+      case 'proxy': doDeliver(Number(v), null, 'proxy'); break;
       case 'giftto': giftWho = v || (isTarget(S.flip) ? S.flip : null); go('gift'); break;
       case 'giftwho': giftWho = v; render(); break;
       case 'gift': doVisit(giftWho, v ? Number(v) : null); break;

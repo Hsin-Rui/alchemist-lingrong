@@ -165,6 +165,8 @@ window.GAME_DATA = (() => {
     pillowMax: 60,
     // 友好
     deliverFriend: 5,
+    deliverTraitStep: 3, // 親自交：成品特性總和每 3 級，友好再 +1（§14.4）
+    zuotaiChance: 0.25, // 滑妃的普通訂單換成坐胎藥的機率（她以為自己還能生）
     rejectFriend: -1,
     lateFriend: -5,
     caughtFriend: -30,
@@ -242,6 +244,11 @@ window.GAME_DATA = (() => {
     zhenhuan: [['zhenhuan', 'happy', '妹妹真是貼心。'], ['lingrong', 'smile', '姐姐別客氣，妹妹只是想對姐姐好。']],
   };
 
+  // 包捐代交（D7 出發、D8 回來）
+  const PROXY_LINES = [
+    ['baojuan', '_', '奴婢這就替小主跑一趟！'],
+    ['baojuan', '_', '送到了！賞銀在這兒……不過娘娘問，小主怎麼沒親自來？'],
+  ];
   // 拜訪各宮：進門（E1–E3）、空手（E4–E6）
   const VISIT_ENTER = {
     huafei: [['huafei', 'happy', '喲，稀客。安妹妹今天怎麼有空來一捆宮？']],
@@ -425,6 +432,6 @@ window.GAME_DATA = (() => {
 
   return {
     TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
-    request, THANKS, REFUSE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
+    request, THANKS, REFUSE, PROXY_LINES, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
   };
 })();

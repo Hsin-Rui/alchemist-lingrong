@@ -515,10 +515,37 @@ test('startDay：逾期扣友好＋移除、tired→slot=1、重置 bribe、回�
   assert.deepStrictEqual(rep.newOrders, []);
 });
 
+test('startDay：滑妃的普通訂單有機會換成坐胎藥；有喜時照舊安胎藥', () => {
+  const S = fresh();
+  // flip(0)、orderCount(0)→1 張？用 0.75 取 2 張，第一張滑妃：prod(0)→yunv、坐胎藥骰(0)→換成坐胎藥
+  const rep = E.startDay(D, S, seq([0, 0.75, 0, 0, 0, 0, 0]));
+  assert.deepStrictEqual(rep.newOrders[0], { who: 'huafei', product: 'zuotai' });
+});
+
+test('deliver：親自交友好＝5＋特性總和每 3 級 +1；包捐代交只拿賞銀、不加友好、不花時辰', () => {
+  const mk = (tr) => { const S = fresh(); S.orders = [{ id: 1, who: 'meizhuang', product: 'cake', due: 3 }]; S.hand = [{ id: 1, product: 'cake', spike: null, forOrder: 1, tr }]; return S; };
+  let S = mk({});
+  assert.strictEqual(E.deliver(D, S, 1, null, ONE).friendDelta, 5);
+  assert.strictEqual(S.slot, 1);
+  S = mk({ tian: 3, qing: 3, xiang: 3 });
+  assert.strictEqual(E.deliver(D, S, 1, null, ONE).friendDelta, 8);
+  S = mk({ tian: 3, qing: 2 });
+  assert.strictEqual(E.deliver(D, S, 1, null, ONE).friendDelta, 6);
+  S = mk({ tian: 3, qing: 3, xiang: 3 });
+  const silver0 = S.silver;
+  const r = E.deliver(D, S, 1, null, ONE, 'proxy');
+  assert.strictEqual(r.proxy, true);
+  assert.strictEqual(r.friendDelta, 0);
+  assert.strictEqual(S.friend.meizhuang, 40);
+  assert.strictEqual(S.silver, silver0 + D.PRODUCTS.cake.reward);
+  assert.strictEqual(S.slot, 0, '代交不花時辰');
+  assert.strictEqual(S.orders.length, 0);
+});
+
 test('startDay：生成新訂單（weightedPick 數量＋隨機抽對象與品項）', () => {
   const S = fresh();
-  // seq：flip(0)→lingrong、orderCount(0.75)→2 張、who1(0)→huafei、prod1(0)→yunv、who2(0)→meizhuang、prod2(0)→yunv
-  const rep = E.startDay(D, S, seq([0, 0.75, 0, 0, 0, 0]));
+  // seq：flip(0)→lingrong、orderCount(0.75)→2 張、who1(0)→huafei、prod1(0)→yunv、滑妃坐胎藥骰(0.9)→不換、who2(0)→meizhuang、prod2(0)→yunv
+  const rep = E.startDay(D, S, seq([0, 0.75, 0, 0, 0.9, 0, 0]));
   assert.strictEqual(rep.newOrders.length, 2);
   assert.deepStrictEqual(rep.newOrders[0], { who: 'huafei', product: 'yunv' });
   assert.deepStrictEqual(rep.newOrders[1], { who: 'meizhuang', product: 'yunv' });

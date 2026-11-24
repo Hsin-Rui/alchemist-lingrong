@@ -623,3 +623,5 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .gift-bounce { position: absolute; left: 50%; bottom: 40%; margin-left: -28px; animation: giftbounce .9s cubic-bezier(.3,1.5,.5,1) .3s both; }
 @keyframes giftbounce { 0% { transform: translate(90px, -120px) scale(.6); opacity: 0; } 60% { transform: translate(0, 10px) scale(1.1); opacity: 1; } 100% { transform: translate(0, 0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .petals { display: none; } .gift-bounce, .love-banner { animation: none; } }
+.deliver-btns .btn { flex: 1; }
+.deliver-btns .btn small { display: block; font-size: 11px; font-weight: 400; opacity: .8; }

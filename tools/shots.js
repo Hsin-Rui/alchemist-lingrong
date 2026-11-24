@@ -36,6 +36,8 @@ const SCENES = {
   'visit-love': [SETUP + "S.hand.push({ id: 900, product: 'cake', spike: null, tr: { tian: 2 } }); S.friend.meizhuang = 90; __e2e.go('home');", click('[data-a=giftto]'), click('[data-a=giftwho][data-v=meizhuang]'), click('[data-a=gift][data-v=\"900\"]'), "for (let i = 0; i < 10 && document.querySelector('[data-a=skip]'); i++) document.querySelector('[data-a=skip]').click();", 'WAIT800'],
   'visit-hate': [SETUP + "S.hand.push({ id: 900, product: 'tonic', spike: null, tr: {} }); S.friend.huafei = 90; __e2e.go('home');", click('[data-a=giftto]'), click('[data-a=giftwho][data-v=huafei]'), click('[data-a=gift][data-v=\"900\"]'), "for (let i = 0; i < 10 && document.querySelector('[data-a=skip]'); i++) document.querySelector('[data-a=skip]').click();", 'WAIT900'],
   'visit-refused': [SETUP + "S.result = { kind: 'gift', who: 'huafei', product: 'tonic', spike: null, refused: true, reaction: 'hate', friendDelta: 0 }; __e2e.go('result');", 'WAIT1200'],
+  'order-ready': [SETUP + "S.orders = [{ id: 901, who: 'zhenhuan', product: 'cake', due: S.day + 2 }]; S.hand.push({ id: 902, product: 'cake', spike: null, forOrder: 901, tr: { tian: 3 } }); __e2e.go('home');"],
+  'order-grounded': [SETUP + "S.orders = [{ id: 901, who: 'zhenhuan', product: 'cake', due: S.day + 2 }]; S.hand.push({ id: 902, product: 'cake', spike: null, forOrder: 901, tr: {} }); S.groundUntil = S.day + 1; __e2e.go('home');"],
   shop: [SETUP + "__e2e.go('shop');", "document.querySelector('.scroll').scrollTop = 99999;"],
 };
 

@@ -937,12 +937,14 @@
 
   // 交貨：移訂單＋手牌，applySpike，未被抓給 reward（無效×uselessRewardRate）＋deliverFriend，設 S.result。
   // itemId：指定要送哪一個成品（剛調合好的那個）；沒指定就送最新做好的。找不到成品 → { noItem:true }
-  function deliver(D, S, orderId, itemId, rand) {
+  // how：'self' 親自交（花 1 時辰、賞銀＋友好 5＋特性總和每 3 級 +1）；'proxy' 包捐代交（不花時辰、只拿賞銀，禁足也能用）
+  function deliver(D, S, orderId, itemId, rand, how = 'self') {
     const R = D.RULES;
+    const proxy = how === 'proxy';
     const order = S.orders.find((o) => o.id === orderId);
     const item = order && ((itemId && S.hand.find((h) => h.id === itemId && canFill(S, order, h))) || readyItem(S, order));
     if (!item) return { noItem: true };
-    S.slot++;
+    if (!proxy) S.slot++;
     S.orders = S.orders.filter((o) => o !== order);
     S.hand = S.hand.filter((h) => h !== item);
     const who = order.who;
@@ -952,11 +954,11 @@
     if (!res.caught) {
       const base = D.PRODUCTS[item.product].reward;
       reward = res.useless ? Math.round(base * R.uselessRewardRate) : base;
-      if (!res.useless) friendDelta = addFriend(S, who, R.deliverFriend);
+      if (!res.useless && !proxy) friendDelta = addFriend(S, who, R.deliverFriend + Math.floor(traitSum(item.tr) / R.deliverTraitStep));
       S.silver += reward;
     }
-    S.result = { kind: 'deliver', who, product: item.product, spike: item.spike, reward, friendDelta, ...res };
-    S.dayLog.push(`交貨給${charName(D, who)}：${res.caught ? '被抓！' : `賞銀 +${reward}`}${res.label ? `，${res.label}` : ''}`);
+    S.result = { kind: 'deliver', who, product: item.product, spike: item.spike, reward, friendDelta, proxy, ...res };
+    S.dayLog.push(`${proxy ? '包捐代交' : '交貨'}給${charName(D, who)}：${res.caught ? '被抓！' : `賞銀 +${reward}`}${res.label ? `，${res.label}` : ''}`);
     return S.result;
   }
 
@@ -1022,7 +1024,9 @@
     const cands = D.TARGETS.filter((t) => S.orders.filter((o) => o.who === t).length < R.maxOpenOrdersPerChar);
     for (let i = 0; i < n && cands.length; i++) {
       const who = cands.splice(Math.floor(rand() * cands.length), 1)[0];
-      const product = S.conc[who].status === 'pregnant' ? 'tonic' : pick(D.NORMAL_ORDERS, rand);
+      let product = S.conc[who].status === 'pregnant' ? 'tonic' : pick(D.NORMAL_ORDERS, rand);
+      // 滑妃不知道自己不孕，不時點坐胎藥（只對她多擲一次，別人的骰序不變）
+      if (who === 'huafei' && product !== 'tonic' && rand() < R.zuotaiChance) product = 'zuotai';
       S.orders.push({ id: ++S.seq, who, product, due: S.day + R.orderDays - 1 });
       report.newOrders.push({ who, product });
     }
