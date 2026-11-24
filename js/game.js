@@ -15,6 +15,14 @@
   const newCraftSel = (forOrder = null, forWho = null) => ({ stage: 1, free: false, mats: [], lots: [], spike: null, forOrder, forWho, stirs: [], bubbles: null, zone: null, beadT0: 0 });
   let craftSel = newCraftSel();
   let beadRaf = 0;
+  // 快速調合（§13.3）：跳過攪拌與起鍋。記在這台裝置的瀏覽器裡，跟靜音一樣
+  let quickCraft = false;
+  try { quickCraft = localStorage.getItem('lingrong-quickcraft') === '1'; } catch { /* 無痕模式等 */ }
+  function toggleQuick() {
+    quickCraft = !quickCraft;
+    try { localStorage.setItem('lingrong-quickcraft', quickCraft ? '1' : '0'); } catch { /* 忽略 */ }
+    render();
+  }
   let craftResult = null;
   let gatherResult = null;
   let gatherScene = null; // 採集地下城的外殼狀態（進場時建立、離場時清空）
@@ -727,6 +735,7 @@
     if (craftSel.mats.length < 2 || busy) return;
     const result = E.findRecipe(D, craftSel.mats);
     if (!result || D.PRODUCTS[result].out === 'inv') { craftSel.spike = null; doCraft(); return; }
+    if (quickCraft) { craftSel.stage = 3; render(); return; } // 快速調合：直接到加料
     craftSel.stage = 2;
     craftSel.bubbles = E.rollBubbles(D, E.potTraits(D, craftLots().trs), rand);
     A.sfx('bubble');
@@ -741,7 +750,8 @@
     render();
   }
   function toFinish() {
-    if (craftSel.stage !== 3) return;
+    if (craftSel.stage !== 3 || busy) return;
+    if (quickCraft) { doCraft(); return; } // 快速調合：不起鍋，成品只帶素材的特性
     craftSel.stage = 4;
     craftSel.beadT0 = performance.now();
     render();
@@ -1150,7 +1160,9 @@
       }
       // 各階段的下半部
       const STEPS = ['選素材', '開火攪拌', '加料', '起鍋'];
-      const steps = `<ol class="csteps">${STEPS.map((t, i) => `<li class="${i + 1 === stage ? 'on' : i + 1 < stage ? 'done' : ''}">${t}</li>`).join('')}</ol>`;
+      const skipped = (i) => quickCraft && (i === 1 || i === 3);
+      const steps = `<ol class="csteps">${STEPS.map((t, i) => `<li class="${skipped(i) ? 'skip' : i + 1 === stage ? 'on' : i + 1 < stage ? 'done' : ''}">${t}</li>`).join('')}</ol>
+        ${stage === 1 ? `<button class="quick-toggle ${quickCraft ? 'on' : ''}" data-a="quickcraft" role="switch" aria-checked="${quickCraft}"><i></i>快速調合<small>跳過攪拌與起鍋</small></button>` : ''}`;
       let panel = '';
       let cta = '';
       if (stage === 1 && craftSel.free) {
@@ -1200,7 +1212,7 @@
               ${spikes.map(spikeRow).join('')}
               <button class="srow ${craftSel.spike ? '' : 'on'}" data-a="spike" data-v=""${DEF(!craftSel.spike)}><span class="tok tok-none"><span class="tok-ch">無</span></span><span class="srow-main"><b>不加料</b><small class="src">正正經經，賞銀全拿</small></span>${who ? '<span class="pred neutral">正經</span>' : ''}</button>
             </div>`;
-        cta = `<button class="btn amber wide big" data-a="tofinish">${craftSel.spike ? `偷偷撒進去，準備起鍋` : '就這樣，準備起鍋'}</button>`;
+        cta = `<button class="btn amber wide big" data-a="tofinish">${quickCraft ? (craftSel.spike ? '偷偷撒進去，完成' : '就這樣，完成') : craftSel.spike ? '偷偷撒進去，準備起鍋' : '就這樣，準備起鍋'}</button>`;
       } else {
         const z = craftSel.zone;
         const top = Object.entries(potTr).sort((x, y) => y[1] - x[1])[0];
@@ -1792,6 +1804,7 @@
       case 'craft': startCook(); break;
       case 'bubble': pickBubble(Number(v)); break;
       case 'tofinish': toFinish(); break;
+      case 'quickcraft': toggleQuick(); break;
       case 'finish': stopBead(); break;
       case 'craftdone': {
         const r = craftResult;

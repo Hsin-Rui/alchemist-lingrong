@@ -77,7 +77,7 @@ function bootGame({ hash = '' } = {}) {
   function click(a, v) {
     clickHandler({ target: { closest: () => ({ dataset: { a, v }, disabled: false }) }, stopPropagation() {}, preventDefault() {} });
   }
-  return { app, parseButtons, click };
+  return { app, parseButtons, click, win: sandbox };
 }
 
 // 自動玩一輪，回傳 { endedScreen, clicks, screens }
@@ -190,4 +190,46 @@ test('引擎雙匯出、原始碼不碰 DOM/localStorage，且 computeEnding 為
   const r2 = E.computeEnding(D, S, []);
   assert.deepStrictEqual(r1, r2, 'computeEnding 對同一輸入不穩定');
   assert.ok(r1.main && typeof r1.rank === 'number' && Array.isArray(r1.opening), '結局結構不完整');
+});
+
+test('四階段調合：一般流程經過攪拌與起鍋；快速調合跳過攪拌與起鍋；成品帶特性', () => {
+  const g = bootGame({ hash: '#e2e' });
+  g.click('start');
+  for (let i = 0; i < 30 && /data-a="skip"/.test(g.app._html); i++) g.click('skip');
+  const S = g.win.__e2e.state();
+  const E = g.win.GameEngine;
+  E.addUnit(S, 'lotus', { tian: 2 });
+  const hand0 = S.hand.length;
+  g.click('craftfor', '');
+  g.click('recipe', 'cake');
+  g.click('craft');
+  assert.ok(/data-a="bubble"/.test(g.app._html), '下鍋後進攪拌');
+  assert.ok(!/data-a="go" data-v="home"/.test(g.app._html), '下鍋後沒有返回鍵');
+  for (let i = 0; i < 3; i++) g.click('bubble', '0');
+  assert.ok(/data-a="tofinish"/.test(g.app._html), '攪三次後到加料');
+  g.click('tofinish');
+  assert.ok(/data-a="finish"/.test(g.app._html), '到起鍋');
+  g.click('finish');
+  assert.ok(/完成！藕粉桂花糖糕/.test(g.app._html), '起鍋後出結果');
+  assert.strictEqual(S.hand.length, hand0 + 1);
+  assert.ok(E.traitSum(S.hand[S.hand.length - 1].tr) >= 2, '成品帶特性（甜蜜 2 起跳，再加泡泡）');
+  g.click('craftdone', 'home');
+  // 快速調合
+  g.click('craftfor', '');
+  g.click('quickcraft');
+  assert.strictEqual(g.win.localStorage.getItem('lingrong-quickcraft'), '1', '開關記在瀏覽器');
+  S.inv.lotus = (S.inv.lotus || 0) + 1; S.inv.osmanthus = (S.inv.osmanthus || 0) + 1;
+  g.click('recipe', 'cake');
+  g.click('craft');
+  assert.ok(!/data-a="bubble"/.test(g.app._html) && /data-a="tofinish"/.test(g.app._html), '快速調合直接到加料');
+  g.click('tofinish');
+  assert.ok(/完成！藕粉桂花糖糕/.test(g.app._html), '加料後直接完成，不起鍋');
+  g.click('craftdone', 'home');
+  // 配錯：直接黑暗料理
+  g.click('craftfor', '');
+  g.click('freecraft', '1');
+  S.inv.pine = 2;
+  g.click('mat', 'pine'); g.click('mat', 'pine');
+  g.click('craft');
+  assert.ok(/碰！失敗了/.test(g.app._html), '配錯直接失敗，不進攪拌');
 });
