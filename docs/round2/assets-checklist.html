@@ -1,0 +1,75 @@
+<title>零溶素材清單</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Noto+Serif+TC:wght@700;900&display=swap">
+<style>
+/* 版面：單欄清單，依類別分組；每項一張卡：勾選、檔名、放哪、什麼時候用到、可展開的提示詞與複製鈕。 */
+:root { --bg:#FBF6EC; --card:#FFFFFF; --ink:#2E2228; --muted:#76666D; --line:#E6D8BD; --accent:#8E2B2B; --ok:#2F7A4F; --tint:#F3EBDD;
+  --serif:'Noto Serif TC','Songti TC',serif; --sans:'Noto Sans TC',-apple-system,'PingFang TC',sans-serif; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#1C1621; --card:#261E2C; --ink:#F1EAF4; --muted:#B5A6BC; --line:#3D3146; --accent:#F09090; --ok:#7FD3A0; --tint:#2F2636; color-scheme:dark; } }
+:root[data-theme="dark"] { --bg:#1C1621; --card:#261E2C; --ink:#F1EAF4; --muted:#B5A6BC; --line:#3D3146; --accent:#F09090; --ok:#7FD3A0; --tint:#2F2636; color-scheme:dark; }
+*{box-sizing:border-box} body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+h1{font-family:var(--serif);color:var(--accent);margin:0;font-size:26px}
+.lead{color:var(--muted);font-size:14px;margin:6px 0 14px}
+.prog{display:flex;align-items:center;gap:10px;font-size:14px;margin-bottom:8px}
+.prog .bar{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}.prog i{display:block;height:100%;background:var(--ok);width:0;transition:width .3s}
+h2{font-family:var(--serif);font-size:18px;margin:24px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.card.done{opacity:.6}.card.done .t{text-decoration:line-through}
+.top{display:flex;gap:10px;align-items:flex-start}
+.top input{width:20px;height:20px;margin-top:3px;accent-color:var(--ok);flex:none}
+.t{font-weight:700}.req{font-size:11px;font-weight:700;padding:0 7px;border-radius:999px;border:1.5px solid var(--accent);color:var(--accent);margin-left:6px;vertical-align:2px}
+.req.opt{border-color:var(--muted);color:var(--muted)}
+.meta{font-size:13px;color:var(--muted);margin-top:2px}.meta code{font-size:12.5px;background:var(--tint);padding:1px 5px;border-radius:4px;color:var(--ink);word-break:break-all}
+details{margin-top:8px}summary{cursor:pointer;font-size:13px;color:var(--accent);font-weight:700}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--tint);border-radius:8px;padding:10px;font-size:13px;margin:8px 0 6px;max-height:360px;overflow:auto}
+button.cp{font-family:inherit;font-size:13px;border:1.5px solid var(--accent);color:var(--accent);background:transparent;border-radius:999px;padding:3px 12px;cursor:pointer}
+.how{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:14px}
+.how ol{margin:6px 0 0;padding-left:20px}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+</style>
+<div class="wrap">
+<h1>零溶素材清單</h1>
+<p class="lead">第二輪改版要的圖片和音訊。勾選只記在你這台裝置的瀏覽器裡。圖沒到之前，遊戲會先用文字代替，不會壞。</p>
+<div class="prog"><span id="cnt"></span><span class="bar"><i id="bar"></i></span></div>
+<div class="how"><b>用法</b><ol>
+<li>開一個新的 ChatGPT 對話，先貼「專案脈絡」（下面可複製），回「了解」後再生圖。</li>
+<li>每張圖都附上零溶標準圖（<code>assets/characters/lingrong_smile.png</code>），再貼該項的提示詞。</li>
+<li>生好的檔案直接丟給我就好，我負責切圖、壓縮、放進對的資料夾。</li></ol>
+<details><summary>專案脈絡（步驟 0，先貼這段）</summary><pre id="ctx"></pre><button class="cp" data-copy="ctx">複製</button></details></div>
+<div id="list"></div>
+</div>
+<script>
+(() => {
+const ITEMS = [{"id": "a41", "g": "道具圖示", "t": "4-1 新素材總表（7 格）", "f": "sheet_materials2.png", "dir": "assets/items/", "w": "epic 1 已用到（目前用文字代替）", "req": true, "p": "（附上零溶標準圖和 3-1 的道具總表，作為畫風參考）\n請用跟附圖完全相同的畫風與圖示規格，畫一張道具總表：\n- 正方形畫布，平均分成 3×3 格，只畫前 7 格，後 2 格留空；格子之間留白，每格一個道具，置中、大小一致\n- 可愛的 Q 版小物件，粗外框線，像手機遊戲的道具圖示；透明背景，不要格線、不要文字\n\n依序是：\n1. 松針（一小束翠綠的松針，帶一顆小松果）\n2. 竹葉（兩三片青翠的竹葉）\n3. 藕粉（一個小瓷碗，裝著淡粉白色的粉末，旁邊一截蓮藕）\n4. 梨花（一小枝雪白的梨花）\n5. 梅花（一小枝紅梅）\n6. 益母草（一小束紫花綠葉的草藥）\n7. 沉香（一塊深褐色、帶油亮紋路的香木，冒出一縷淡煙）", "n": "給我總表就好，我來切成 7 張"}, {"id": "a42", "g": "道具圖示", "t": "4-2 新的料（2 格）", "f": "sheet_spikes2.png", "dir": "assets/items/", "w": "epic 1 已用到", "req": true, "p": "（附上零溶標準圖和 3-2 的道具總表，作為畫風參考）\n請用跟附圖完全相同的畫風與圖示規格，畫一張橫式道具總表（寬:高 = 2:1），左右 2 格：\n- 要可愛但帶一點邪惡感（例如冒紫煙），透明背景，不要格線、不要文字\n1. 木薯粉（一個小紙包，袋口露出白色粉末，旁邊有一個漫畫式的「漩渦」量眩符號）\n2. 貓薄荷（一小束薄荷葉綁成香囊，周圍飄著幾個貓掌印和愛心）", "n": "木薯粉、貓薄荷"}, {"id": "a43", "g": "道具圖示", "t": "4-3 新成品總表（5 格）", "f": "sheet_products2.png", "dir": "assets/items/", "w": "epic 1、4", "req": true, "p": "（附上零溶標準圖和 3-3 的道具總表，作為畫風參考）\n請用跟附圖完全相同的畫風與圖示規格，畫一張道具總表：\n- 正方形畫布，排成 3 欄 × 2 列，只畫前 5 格，最後 1 格留空；精緻、閃閃發亮\n- 透明背景，不要格線、不要文字\n1. 神仙玉女粉（一個描金的小粉盒，打開露出珍珠白的香粉，旁邊一支粉撲）\n2. 歲寒三友茶（一個青瓷蓋碗，茶湯清綠，飄著松針、竹葉和一朵小紅梅）\n3. 舒痕膠（一個小巧的白玉圓盒，裡面是透明微光的膏）\n4. 坐胎藥（一碗深褐色湯藥，碗上畫著小小的胖娃娃圖案，冒著熱氣）\n5. 後宮心經（一本線裝小冊子，封面空白（不要寫字），上面有一兩滴墨漬，旁邊一支毛筆）", "n": "安胎藥、糖糕、帳中香沿用舊圖"}, {"id": "a44", "g": "角色立繪", "t": "4-4 三位宮女", "f": "maid_songzhi.png、maid_caiyue.png、maid_chuijinxi.png", "dir": "assets/characters/", "w": "已在早上下訂單時出場（目前用字代替）", "req": true, "p": "（附上零溶標準圖和包捐的圖）\n請用跟附圖完全相同的畫風，畫三張宮女立繪（每張一個角色，分開生成）。服裝比主子樸素，是宮女的打扮：\n1. 送吱：滑妃的宮女，跟主子一樣趾高氣昂，紅色系宮女服，抬著下巴、手捧一張訂單卷軸\n2. 踩月：審沒裝的宮女，穩重有禮，橘黃色系宮女服，雙手交疊微微行禮\n3. 吹緊吸：真環的宮女，溫和聰慧、年紀稍長，粉色系宮女服，微笑著遞出一張訂單卷軸\n規格：Q版、全身、正面、單一角色、透明背景、直式、無文字。", "n": "三張分開生成"}, {"id": "a45", "g": "角色立繪", "t": "4-5 三位妃嬪・嫌棄", "f": "huafei_meh.png、meizhuang_meh.png、zhenhuan_meh.png", "dir": "assets/characters/", "w": "epic 3 拜訪各宮", "req": true, "p": "（附上該角色得意／溫和的圖）\n請畫同一個角色，服裝與畫風完全不變，改成「收到不喜歡的禮物，嫌棄」的樣子：\n- 表情：皺眉、嘴角下撇、斜眼看著手上的東西\n- 姿勢：手拿著禮物伸得遠遠的，或用扇子掩住口鼻\n- 搞笑誇張，不要太兇\n規格同前：全身、透明背景、直式、無文字。", "n": "每次附上該角色原本的圖"}, {"id": "a46", "g": "角色立繪", "t": "4-6 宣旨太監（選做）", "f": "eunuch.png", "dir": "assets/characters/", "w": "epic 6 結局", "req": false, "p": "（附上零溶標準圖）\n請用跟附圖完全相同的畫風，畫一位清宮太監：手持拂塵、雙手展開一卷黃色聖旨、表情嚴肅但有點滑稽。\n規格：Q版、全身、正面、單一角色、透明背景、直式、無文字。", "n": ""}, {"id": "a47", "g": "角色立繪", "t": "4-7 貓咪鬧場（選做）", "f": "cats.png", "dir": "assets/characters/", "w": "epic 3 貓薄荷出包", "req": false, "p": "（附上零溶標準圖）\n請用跟附圖相同的畫風，畫一群（5～6 隻）各種花色的 Q 版小貓疊成一團、張嘴喵喵叫、很興奮的樣子。透明背景，不要文字。", "n": ""}, {"id": "a48a", "g": "背景", "t": "4-8 煉金房（選做）", "f": "workshop.png", "dir": "assets/backgrounds/", "w": "epic 2 四階段調合", "req": false, "p": "炎洗宮的煉金房內部，中央一口大鍋、爐火、藥櫃與瓶罐（調合畫面用）。直式、無人物、無文字。（附上零溶標準圖，請用相同畫風）", "n": ""}, {"id": "a48b", "g": "背景", "t": "4-8 書桌一角（選做）", "f": "study.png", "dir": "assets/backgrounds/", "w": "epic 4 抄經", "req": false, "p": "炎洗宮的書桌一角，紙墨、硯台、油燈，夜晚氣氛（抄經用）。直式、無人物、無文字。（附上零溶標準圖，請用相同畫風）", "n": ""}, {"id": "m1", "g": "音樂", "t": "調合背景音樂（選做）", "f": "bgm_workshop.mp3", "dir": "assets/audio/", "w": "epic 2", "req": false, "p": "Whimsical alchemy workshop music, bubbling marimba and celesta,\nguzheng harmonics, soft pizzicato, magical potion brewing,\ncurious and slightly sinister, 95 BPM, cozy game loop, instrumental", "n": "給我原檔，我來壓 lite 版"}, {"id": "m2", "g": "音樂", "t": "抄經背景音樂（選做）", "f": "bgm_sutra.mp3", "dir": "assets/audio/", "w": "epic 4", "req": false, "p": "Quiet Chinese guqin and soft wooden fish, slow meditative temple mood with a hint of comedic boredom,\nsparse notes, 70 BPM, seamless loop, instrumental, no vocals", "n": ""}, {"id": "m3", "g": "音效", "t": "貓叫（選做）", "f": "sfx_meow.mp3", "dir": "assets/audio/", "w": "epic 3", "req": false, "p": "Several cute cartoon cats meowing excitedly at once, comedic, 3 seconds", "n": ""}, {"id": "m4", "g": "音效", "t": "蓋章（選做）", "f": "sfx_stamp.mp3", "dir": "assets/audio/", "w": "epic 6", "req": false, "p": "Heavy wooden seal stamp thud on paper with a small gong ring, 1.5 seconds", "n": ""}];
+const CTX = "我正在開發一款網頁小遊戲，接下來會請你幫我生成一系列遊戲美術素材。請先閱讀以下說明，記住這些設定，之後每次生圖都要遵守。這則訊息先不用生圖，回覆「了解」即可。\n\n【遊戲簡介】\n遊戲名稱：《煉金術士零溶——逆襲a零溶》\n這是一款同人搞笑（kuso）小遊戲，靈感來自清宮劇的後宮鬥爭，玩法參考日本的「鍊金術士」系列：主角在自己的宮殿裡經營一間煉金工房，接其他妃嬪的訂單，做出安神香、糕點、養顏膏等東西，再偷偷「加料」整她們。整體調性是誇張、惡趣味、不正經的喜劇，不是嚴肅宮鬥劇。\n\n【畫風規格（所有圖片都要一致）】\n- Q版大頭比例（約 2.5～3 頭身），可愛、圓潤\n- 清朝宮廷風的服裝與場景（旗頭、宮裝、宮殿建築）\n- 2D 插畫，乾淨的線條，柔和的賽璐璐上色，色彩明亮飽和\n- 像手機遊戲或日系獨立遊戲的角色立繪\n- 表情要誇張、有喜劇感\n\n【重要限制】\n- 所有角色都是原創設計，不要模仿任何真實演員或真人的長相\n- 圖片裡不要出現任何文字、字母、浮水印或簽名\n- 不要有血腥、恐怖或寫實的暴力畫面，「壞事」用搞笑誇張的方式表現\n- 角色立繪：全身、正面或微側、單一角色、透明背景（做不到就用純白背景）\n- 背景圖：直式構圖、不要有人物\n- 這些素材會用在手機直式畫面的網頁遊戲中\n\n【角色一覽】\n1. 零溶（主角）：安嬪，外表柔弱乖巧的小家碧玉，其實是腹黑的煉金術士\n2. 包捐：零溶的貼身宮女，忠心又精明的跑腿小幫手\n3. 滑妃：囂張華麗的寵妃，紅金色系\n4. 審沒裝：端莊穩重的妃嬪，橘黃色系，菊花意象\n5. 真環：溫柔清秀但眼神精明的妃嬪，粉白色系，梅花意象\n6. 黃上：皇帝，只在搞笑結果畫面中客串\n7. 太醫溫十粗：抓到主角加料的太醫，一本正經的書呆子\n8. 黃后：後宮之主，表面慈祥、城府極深\n\n了解後請回覆「了解」，我會一張一張請你畫。";
+const KEY = 'lingrong-assets-v1';
+let done = {}; try { done = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(done)); } catch (e) {} };
+const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+document.getElementById('ctx').textContent = CTX;
+function render() {
+  const groups = [...new Set(ITEMS.map((i) => i.g))];
+  document.getElementById('list').innerHTML = groups.map((g) => `<h2>${esc(g)}</h2>` + ITEMS.filter((i) => i.g === g).map((i) => `
+    <div class="card ${done[i.id] ? 'done' : ''}">
+      <div class="top"><input type="checkbox" id="c-${i.id}" data-id="${i.id}" ${done[i.id] ? 'checked' : ''}>
+        <label for="c-${i.id}"><span class="t">${esc(i.t)}</span><span class="req ${i.req ? '' : 'opt'}">${i.req ? '必要' : '選做'}</span>
+        <div class="meta">檔名 <code>${esc(i.f)}</code>・放在 <code>${esc(i.dir)}</code></div>
+        <div class="meta">用在：${esc(i.w)}${i.n ? `・${esc(i.n)}` : ''}</div></label></div>
+      <details><summary>提示詞</summary><pre id="p-${i.id}">${esc(i.p)}</pre><button class="cp" data-copy="p-${i.id}">複製</button></details>
+    </div>`).join('')).join('');
+  const n = ITEMS.filter((i) => done[i.id]).length;
+  document.getElementById('cnt').textContent = `已完成 ${n} / ${ITEMS.length}（必要 ${ITEMS.filter((i) => i.req && done[i.id]).length} / ${ITEMS.filter((i) => i.req).length}）`;
+  document.getElementById('bar').style.width = `${n / ITEMS.length * 100}%`;
+}
+document.addEventListener('change', (e) => { const id = e.target.dataset && e.target.dataset.id; if (!id) return; done[id] = e.target.checked; save(); render(); });
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-copy]'); if (!b) return;
+  const el = document.getElementById(b.dataset.copy);
+  try { await navigator.clipboard.writeText(el.textContent); b.textContent = '已複製'; }
+  catch (err) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = '已選取，請按複製'; }
+  setTimeout(() => { b.textContent = '複製'; }, 1500);
+});
+render();
+})();
+</script>

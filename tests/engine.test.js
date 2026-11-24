@@ -192,10 +192,10 @@ test('settleNight：有 debuff → 侍寢出包、serveFailFavor、無枕邊風�
   const S = fresh();
   const who = 'zhenhuan';
   S.flip = who;
-  S.conc[who].debuff = 'itch';
+  S.conc[who].debuff = 'catnip';
   const rep = E.settleNight(D, S, { sing: false, rand: ZERO });
   assert.strictEqual(rep.serve.kind, 'debuff');
-  assert.strictEqual(rep.serve.debuff, 'itch');
+  assert.strictEqual(rep.serve.debuff, 'catnip');
   assert.strictEqual(rep.serve.favDelta, D.RULES.serveFailFavor); // -10
   assert.strictEqual(S.favor[who], 45 + D.RULES.serveFailFavor); // 35
   assert.strictEqual(rep.pillow, null);
@@ -324,8 +324,8 @@ test('gather：slot++、採 2+(rand<0.5?1:0) 個、各 weightedPick 入庫、回
   const S = fresh();
   const r = E.gather(D, S, 'garden', ZERO);
   assert.strictEqual(S.slot, 1);
-  assert.deepStrictEqual(r.got, { jasmine: 3 });
-  assert.strictEqual(S.inv.jasmine, 1 + 3); // 開局 1
+  assert.deepStrictEqual(r.got, { pine: 3 });
+  assert.strictEqual(S.inv.pine, 1 + 3); // 開局 1
   assert.strictEqual(r.loc, 'garden');
   assert.deepStrictEqual(r.ready, []);
   assert.ok(S.dayLog.some((l) => l.includes('採集')));
@@ -333,28 +333,29 @@ test('gather：slot++、採 2+(rand<0.5?1:0) 個、各 weightedPick 入庫、回
   const S2 = fresh();
   const r2 = E.gather(D, S2, 'garden', () => 0.5);
   assert.deepStrictEqual(r2.got, { osmanthus: 2 });
-  // ready：湊齊訂單材料時回報（此處已有 sandalwood，採到 jasmine → 安神香齊）
+  // ready：湊齊訂單材料時回報（此處缺松針，採到松針 → 歲寒三友茶齊）
   const S3 = fresh();
-  S3.orders = [{ id: 1, who: 'meizhuang', product: 'incense', due: 3 }];
-  const r3 = E.gather(D, S3, 'garden', ZERO); // 採到 jasmine
-  assert.ok(r3.ready.some((o) => o.product === 'incense'));
+  delete S3.inv.pine;
+  S3.orders = [{ id: 1, who: 'meizhuang', product: 'suihan', due: 3 }];
+  const r3 = E.gather(D, S3, 'garden', ZERO); // 採到 pine
+  assert.ok(r3.ready.some((o) => o.product === 'suihan'));
 });
 
 test('craft：成功入手牌、材料 -1、slot++；配方錯 → junk、stats.junk++', () => {
-  // 成功：檀香+茉莉 → 安神香
+  // 成功：沉香+梨花 → 梨花帳中香
   const S = fresh();
-  const r = E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: null, forOrder: null, forWho: null });
+  const r = E.craft(D, S, { mats: ['agarwood', 'pear'], spike: null, forOrder: null, forWho: null });
   assert.strictEqual(r.product, 'incense');
   assert.strictEqual(r.toInv, false);
   assert.strictEqual(S.slot, 1);
-  assert.strictEqual(S.inv.sandalwood, undefined, '材料用掉（1→0 刪鍵）');
-  assert.strictEqual(S.inv.jasmine, undefined);
+  assert.strictEqual(S.inv.agarwood, undefined, '材料用掉（1→0 刪鍵）');
+  assert.strictEqual(S.inv.pear, undefined);
   assert.strictEqual(S.hand.length, 1);
   assert.strictEqual(S.hand[0].product, 'incense');
   assert.strictEqual(r.itemId, S.hand[0].id);
   // junk：亂配
   const S2 = fresh();
-  const r2 = E.craft(D, S2, { mats: ['sandalwood', 'honey'], spike: null, forOrder: null, forWho: null });
+  const r2 = E.craft(D, S2, { mats: ['agarwood', 'plum'], spike: null, forOrder: null, forWho: null });
   assert.strictEqual(r2.product, 'junk');
   assert.strictEqual(S2.stats.junk, 1);
   assert.strictEqual(S2.hand[0].product, 'junk');
@@ -365,7 +366,7 @@ test('craft：加料成品 item.spike 帶料、料 -1；煉紅花 toInv 入庫�
   // 加料：安神香 + 麝香
   const S = fresh();
   S.inv.musk = 1;
-  const r = E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: 'musk', forOrder: null, forWho: null });
+  const r = E.craft(D, S, { mats: ['agarwood', 'pear'], spike: 'musk', forOrder: null, forWho: null });
   assert.strictEqual(r.spike, 'musk');
   assert.strictEqual(S.inv.musk, undefined, '料用掉');
   assert.strictEqual(S.hand[0].spike, 'musk');
@@ -429,16 +430,16 @@ test('deliver：加料被抓 → 無賞銀、友好 caughtFriend；無效 → �
 test('gift：收下 → 友好＋禮物值；拒收 → refused、不動友好', () => {
   // 收下：ZERO < acceptChance 必收；無料 → 友好 += gift
   const S = fresh();
-  S.hand = [{ id: 1, product: 'cream', spike: null }];
+  S.hand = [{ id: 1, product: 'yunv', spike: null }];
   const r = E.gift(D, S, 'meizhuang', 1, ZERO);
   assert.strictEqual(r.kind, 'gift');
   assert.strictEqual(r.refused, undefined);
-  assert.strictEqual(S.friend.meizhuang, 40 + D.PRODUCTS.cream.gift); // +6
+  assert.strictEqual(S.friend.meizhuang, 40 + D.PRODUCTS.yunv.gift); // +8
   assert.strictEqual(S.hand.length, 0);
   assert.strictEqual(S.slot, 1);
   // 拒收：ONE(0.999) >= acceptChance(0.7) → 退回、友好不變、手牌留著
   const S2 = fresh();
-  S2.hand = [{ id: 1, product: 'cream', spike: null }];
+  S2.hand = [{ id: 1, product: 'yunv', spike: null }];
   const r2 = E.gift(D, S2, 'meizhuang', 1, ONE);
   assert.strictEqual(r2.refused, true);
   assert.strictEqual(S2.friend.meizhuang, 40, '拒收不動友好');
@@ -470,11 +471,11 @@ test('startDay：逾期扣友好＋移除、tired→slot=1、重置 bribe、回�
 
 test('startDay：生成新訂單（weightedPick 數量＋隨機抽對象與品項）', () => {
   const S = fresh();
-  // seq：flip(0)→lingrong、orderCount(0.75)→2 張、who1(0)→huafei、prod1(0)→incense、who2(0)→meizhuang、prod2(0)→incense
+  // seq：flip(0)→lingrong、orderCount(0.75)→2 張、who1(0)→huafei、prod1(0)→yunv、who2(0)→meizhuang、prod2(0)→yunv
   const rep = E.startDay(D, S, seq([0, 0.75, 0, 0, 0, 0]));
   assert.strictEqual(rep.newOrders.length, 2);
-  assert.deepStrictEqual(rep.newOrders[0], { who: 'huafei', product: 'incense' });
-  assert.deepStrictEqual(rep.newOrders[1], { who: 'meizhuang', product: 'incense' });
+  assert.deepStrictEqual(rep.newOrders[0], { who: 'huafei', product: 'yunv' });
+  assert.deepStrictEqual(rep.newOrders[1], { who: 'meizhuang', product: 'yunv' });
   assert.strictEqual(S.orders.length, 2);
   assert.strictEqual(S.orders[0].due, S.day + D.RULES.orderDays - 1); // 1+3-1=3
   assert.strictEqual(rep.noOrders, false);
@@ -635,13 +636,13 @@ test('buildGatherDungeon：同 seed 兩次呼叫 → run state 完全相同；�
 // 手工小地圖：'Z' 玩家、'@' 侍衛、小寫 j/o/r 素材、'*' 稀有（癢癢粉），其餘是地形字元。
 function mini(rows, opts = {}) {
   const run = {
-    loc: 'garden', w: rows[0].length, h: rows.length, tiles: null, rooms: [], rare: 'itch',
+    loc: 'garden', w: rows[0].length, h: rows.length, tiles: null, rooms: [], rare: 'catnip',
     player: null, items: [], guards: [], maxSteps: 60, stepsLeft: 60, got: {}, picked: 0,
     seen: new Array(rows[0].length * rows.length).fill(0), over: false, endReason: null,
     cfg: { guardSight: 4.5, playerSight: 5.5, searchTurns: 3, wanderKeep: 0.7, wanderIdle: 0.1 },
     ...opts,
   };
-  const ITEM = { j: 'jasmine', o: 'osmanthus', r: 'rose', '*': 'itch' };
+  const ITEM = { j: 'jasmine', o: 'osmanthus', r: 'lotus', '*': 'catnip' };
   run.tiles = rows.map((row, y) => [...row].map((ch, x) => {
     if (ch === 'Z') { run.player = { x, y, face: 'down' }; return '.'; }
     if (ch === '@') { run.guards.push({ x, y, face: 'down', state: 'wander', dir: null, last: null, searchLeft: 0 }); return '.'; }
@@ -706,15 +707,15 @@ test('gatherStep 等待：步數 -1、侍衛照常行動', () => {
 test('gatherStep 撿取：走到素材上 → got++、素材移除、事件 pick（帶 rare），同一格不會重複計算', () => {
   const run = mini(['######', '#Zj*.#', '######']);
   let ev = E.gatherStep(run, 'e', ZERO);
-  assert.deepStrictEqual(ev.find((e) => e.t === 'pick'), { t: 'pick', id: 'jasmine', rare: false, x: 2, y: 1 });
+  assert.deepStrictEqual(ev.find((e) => e.t === 'pick'), { t: 'pick', id: 'jasmine', rare: false, x: 2, y: 1, tr: {} });
   assert.deepStrictEqual(run.got, { jasmine: 1 });
   assert.strictEqual(run.items.length, 1);
   ev = E.gatherStep(run, 'e', ZERO);
-  assert.deepStrictEqual(ev.find((e) => e.t === 'pick'), { t: 'pick', id: 'itch', rare: true, x: 3, y: 1 });
+  assert.deepStrictEqual(ev.find((e) => e.t === 'pick'), { t: 'pick', id: 'catnip', rare: true, x: 3, y: 1, tr: {} });
   // 走回原格：已經沒有素材
   ev = E.gatherStep(run, 'w', ZERO);
   assert.ok(!ev.some((e) => e.t === 'pick'));
-  assert.deepStrictEqual(run.got, { jasmine: 1, itch: 1 });
+  assert.deepStrictEqual(run.got, { jasmine: 1, catnip: 1 });
   assert.strictEqual(run.picked, 2);
 });
 
@@ -910,12 +911,12 @@ test('採集地下城 fuzz：500 局隨機操作都在 ≤60 步內結束、不�
 test('applyGatherHaul：inv 各 +count、slot++、dayLog 新增一列、回 {loc,got,ready}', () => {
   const S = fresh();
   S.orders = [{ id: 1, who: 'meizhuang', product: 'incense', due: 3 }]; // 檀香(開局有)+茉莉
-  const r = E.applyGatherHaul(D, S, 'garden', { jasmine: 2, itch: 1 });
+  const r = E.applyGatherHaul(D, S, 'garden', { jasmine: 2, catnip: 1 });
   assert.strictEqual(S.slot, 1);
   assert.strictEqual(S.inv.jasmine, 1 + 2); // 開局 1
-  assert.strictEqual(S.inv.itch, 1);
+  assert.strictEqual(S.inv.catnip, 1);
   assert.strictEqual(r.loc, 'garden');
-  assert.deepStrictEqual(r.got, { jasmine: 2, itch: 1 });
+  assert.deepStrictEqual(r.got, { jasmine: 2, catnip: 1 });
   assert.ok(S.dayLog.some((l) => l.includes('採集')));
   // 採到 jasmine → 安神香材料湊齊 → ready 回報
   assert.ok(r.ready.some((o) => o.product === 'incense'));
@@ -952,17 +953,17 @@ test('predict：純函式，risk 與 catchChance 一致、不改狀態', () => {
 // ───────── 兩人要同一樣成品：成品綁訂單 ─────────
 test('craft／readyItem／deliver：替乙加料的成品不會出現在甲的訂單上，也不會被送給甲', () => {
   const S = fresh();
-  S.inv = { sandalwood: 3, jasmine: 3, musk: 1 };
+  S.inv = { agarwood: 3, pear: 3, musk: 1 };
   S.orders = [{ id: 901, who: 'huafei', product: 'incense', due: S.day + 2 }, { id: 902, who: 'zhenhuan', product: 'incense', due: S.day + 2 }];
   const [A, B] = S.orders;
-  const r = E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: 'musk', forOrder: 902, forWho: 'zhenhuan' });
+  const r = E.craft(D, S, { mats: ['agarwood', 'pear'], spike: 'musk', forOrder: 902, forWho: 'zhenhuan' });
   assert.strictEqual(r.order.id, 902);
   assert.strictEqual(E.readyItem(S, B).spike, 'musk');
   assert.strictEqual(E.readyItem(S, A), undefined, '甲的訂單不該看到替乙做的成品');
   assert.ok(E.deliver(D, S, 901, null, ONE).noItem, '甲的訂單不能拿走乙的成品');
   assert.ok(E.deliver(D, S, 901, r.itemId, ONE).noItem, '指定 itemId 也不行');
   // 自由調合（預測對象是甲）→ 綁甲
-  const r2 = E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: null, forOrder: null, forWho: 'huafei' });
+  const r2 = E.craft(D, S, { mats: ['agarwood', 'pear'], spike: null, forOrder: null, forWho: 'huafei' });
   assert.strictEqual(r2.order.id, 901);
   assert.strictEqual(E.readyItem(S, A).spike, null);
   const res = E.deliver(D, S, 901, null, ONE);
@@ -976,8 +977,203 @@ test('craft／readyItem／deliver：替乙加料的成品不會出現在甲的�
 
 test('craft：自由調合、沒指定對象 → 綁第一張還沒備好的同品項訂單', () => {
   const S = fresh();
-  S.inv = { sandalwood: 3, jasmine: 3 };
+  S.inv = { agarwood: 3, pear: 3 };
   S.orders = [{ id: 1, who: 'huafei', product: 'incense', due: S.day + 2 }, { id: 2, who: 'zhenhuan', product: 'incense', due: S.day + 2 }];
-  assert.strictEqual(E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: null, forOrder: null, forWho: null }).order.id, 1);
-  assert.strictEqual(E.craft(D, S, { mats: ['sandalwood', 'jasmine'], spike: null, forOrder: null, forWho: null }).order.id, 2);
+  assert.strictEqual(E.craft(D, S, { mats: ['agarwood', 'pear'], spike: null, forOrder: null, forWho: null }).order.id, 1);
+  assert.strictEqual(E.craft(D, S, { mats: ['agarwood', 'pear'], spike: null, forOrder: null, forWho: null }).order.id, 2);
+});
+
+// ───────── 第二輪：兩或三樣素材的配方 ─────────
+test('findRecipe／craft：順序不拘；三素材配方要三樣都對；多放或少放都是黑暗料理', () => {
+  assert.strictEqual(E.findRecipe(D, ['osmanthus', 'lotus']), 'cake');
+  assert.strictEqual(E.findRecipe(D, ['plum', 'pine', 'bamboo']), 'suihan');
+  assert.strictEqual(E.findRecipe(D, ['pine', 'bamboo']), undefined);
+  assert.strictEqual(E.findRecipe(D, ['lotus', 'osmanthus', 'plum']), undefined);
+  assert.strictEqual(E.findRecipe(D, 'petal', 'liquor'), 'safflower', '舊呼叫法仍可用');
+  const S = fresh();
+  const r = E.craft(D, S, { mats: ['bamboo', 'plum', 'pine'], spike: null, forOrder: null, forWho: null });
+  assert.strictEqual(r.product, 'suihan');
+  assert.ok(!S.inv.pine && !S.inv.bamboo && !S.inv.plum, '三樣都用掉');
+  const S2 = fresh();
+  assert.strictEqual(E.craft(D, S2, { mats: ['pine', 'bamboo'], spike: null, forOrder: null, forWho: null }).product, 'junk');
+  const S3 = fresh();
+  S3.inv.petal = 1; S3.inv.liquor = 1;
+  assert.strictEqual(E.craft(D, S3, { mats: ['petal', 'liquor'], spike: null, forOrder: null, forWho: null }).toInv, true);
+});
+
+test('新料：木薯粉／貓薄荷是出糗類，predict 與 applySpike 的標籤讀資料', () => {
+  const S = fresh();
+  S.flip = 'huafei';
+  assert.ok(E.predict(D, S, 'huafei', 'cassava', 'gift').txt.startsWith('上吐下瀉'));
+  const res = E.applySpike(D, S, 'huafei', 'catnip', 'gift', ONE);
+  assert.strictEqual(res.outcome, 'debuff');
+  assert.strictEqual(res.label, '貓咪鬧場');
+  assert.strictEqual(S.conc.huafei.debuff, 'catnip');
+});
+
+// ───────── 第二輪：素材份與特性 ─────────
+test('素材份：addUnit／takeUnit 維持 inv 總數與 lots 一致；沒指定先拿一般份', () => {
+  const S = fresh(); // 開局 pine ×1（一般份）
+  E.addUnit(S, 'pine', { qing: 2 });
+  E.addUnit(S, 'pine', {}); // 沒特性 → 只加總數
+  assert.strictEqual(S.inv.pine, 3);
+  assert.strictEqual(S.lots.length, 1);
+  assert.deepStrictEqual(E.takeUnit(S, 'pine'), {}, '先拿一般份');
+  assert.deepStrictEqual(E.takeUnit(S, 'pine'), {}, '還有一般份');
+  assert.deepStrictEqual(E.takeUnit(S, 'pine'), { qing: 2 }, '一般份沒了才拿帶特性的');
+  assert.strictEqual(S.inv.pine, undefined);
+  assert.strictEqual(S.lots.length, 0);
+  assert.deepStrictEqual(E.takeUnit(S, 'pine'), {}, '沒有就不動');
+  E.addUnit(S, 'plum', { xiang: 1 });
+  const uid = S.lots[0].uid;
+  assert.deepStrictEqual(E.takeUnit(S, 'plum', uid), { xiang: 1 }, '指定 uid 拿那份');
+});
+
+test('mergeTraits：同特性相加、最高 3 級、最多 3 種（平手依特性順序）', () => {
+  assert.deepStrictEqual(E.mergeTraits(D, [{ xiang: 2 }, { xiang: 2, tian: 1 }]), { xiang: 3, tian: 1 });
+  assert.deepStrictEqual(E.mergeTraits(D, [{ nong: 1, qing: 1 }, { hua: 1, tian: 1 }]), { tian: 1, hua: 1, qing: 1 });
+  assert.deepStrictEqual(E.mergeTraits(D, [{}, {}]), {});
+});
+
+test('craft：自動挑特性最多的那份，成品帶合併特性；指定 lots 用指定的；黑暗料理沒特性', () => {
+  const S = fresh(); // lotus ×1、osmanthus ×1（一般）
+  E.addUnit(S, 'lotus', { tian: 1 });
+  E.addUnit(S, 'lotus', { tian: 2, qing: 1 });
+  E.addUnit(S, 'osmanthus', { xiang: 1 });
+  const r = E.craft(D, S, { mats: ['lotus', 'osmanthus'], spike: null, forOrder: null, forWho: null });
+  assert.strictEqual(r.product, 'cake');
+  assert.deepStrictEqual(S.hand[0].tr, { tian: 2, qing: 1, xiang: 1 });
+  assert.deepStrictEqual(r.tr, S.hand[0].tr);
+  assert.strictEqual(S.inv.lotus, 2);
+  assert.deepStrictEqual(S.lots.filter((l) => l.id === 'lotus').map((l) => l.tr), [{ tian: 1 }], '用掉的是最好的那份');
+  const weak = S.lots.find((l) => l.id === 'lotus').uid;
+  const r2 = E.craft(D, S, { mats: ['lotus', 'osmanthus'], lots: [weak, null], spike: null, forOrder: null, forWho: null });
+  assert.deepStrictEqual(r2.tr, { tian: 1 }, '指定的份；桂花只剩一般份');
+  const S2 = fresh();
+  E.addUnit(S2, 'pine', { qing: 3 });
+  const r3 = E.craft(D, S2, { mats: ['pine', 'plum'], spike: null, forOrder: null, forWho: null });
+  assert.strictEqual(r3.product, 'junk');
+  assert.deepStrictEqual(r3.tr, {});
+});
+
+// ───────── 第二輪：採集帶特性 ─────────
+test('rollTraits：照本性擲、0～2 種；近 1 級、遠 2～3 級；料沒有特性', () => {
+  assert.deepStrictEqual(E.rollTraits(D, 'catnip', 1, () => 0.99), {});
+  assert.deepStrictEqual(E.rollTraits(D, 'pine', 0, () => 0.1), {}, 'rand<0.3 → 0 種');
+  assert.deepStrictEqual(E.rollTraits(D, 'pine', 0, () => 0.9), { qing: 1 }, '只有一種本性 → 最多 1 種；近處 1 級');
+  const far = E.rollTraits(D, 'plum', 1, () => 0.9);
+  assert.deepStrictEqual(Object.keys(far).sort(), ['hua', 'xiang']);
+  Object.values(far).forEach((lv) => assert.ok(lv >= 2 && lv <= 3, '遠處 2～3 級'));
+  for (let i = 0; i < 200; i++) {
+    const tr = E.rollTraits(D, 'lotus', i / 199, lcg(i + 1));
+    Object.keys(tr).forEach((t) => assert.ok(D.ITEMS.lotus.nature.includes(t)));
+    assert.ok(Object.keys(tr).length <= 2);
+  }
+});
+
+test('地下城：素材帶特性、撿起來進 haul；applyGatherHaul 給 haul 就照份放、帶特性的進 lots', () => {
+  const S = fresh();
+  const run = E.buildGatherDungeon(D, S, 'garden', lcg(7));
+  run.items.forEach((it) => assert.ok(it.tr && typeof it.tr === 'object'));
+  assert.ok(run.items.some((it) => E.traitSum(it.tr) > 0), '一張圖總有幾份帶特性');
+  const before = S.inv.pine || 0;
+  const haul = [{ id: 'pine', tr: { qing: 2 } }, { id: 'pine', tr: {} }, { id: 'catnip', tr: {} }];
+  const r = E.applyGatherHaul(D, S, 'garden', { pine: 2, catnip: 1 }, haul);
+  assert.strictEqual(S.inv.pine, before + 2);
+  assert.deepStrictEqual(S.lots.map((l) => [l.id, l.tr]), [['pine', { qing: 2 }]]);
+  assert.strictEqual(S.inv.catnip, 1);
+  assert.deepStrictEqual(r.haul, haul);
+});
+
+// ───────── 第二輪：小舖買賣 ─────────
+test('小舖：除了紅花瓣什麼都賣；賣素材＝售價一半＋每級特性 1 兩，不花時辰', () => {
+  const sellable = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].price);
+  assert.ok(!D.SHOP.includes('petal'));
+  Object.keys(D.ITEMS).filter((id) => id !== 'petal' && id !== 'safflower').forEach((id) => assert.ok(D.SHOP.includes(id), `${id} 要買得到`));
+  assert.ok(sellable.includes('pine'));
+  const S = fresh();
+  const silver = S.silver;
+  E.addUnit(S, 'plum', { xiang: 2, hua: 1 });
+  const r = E.sell(D, S, 'plum'); // 先賣一般份
+  assert.deepStrictEqual([r.ok, r.price], [true, 5]);
+  const uid = S.lots[0].uid;
+  const r2 = E.sell(D, S, 'plum', uid);
+  assert.deepStrictEqual([r2.ok, r2.price], [true, 5 + 3]);
+  assert.strictEqual(S.silver, silver + 13);
+  assert.strictEqual(S.inv.plum, undefined);
+  assert.strictEqual(S.slot, 0, '不花時辰');
+  assert.strictEqual(E.sell(D, S, 'plum').ok, false, '沒有就不能賣');
+  S.inv.petal = 1;
+  assert.strictEqual(E.sell(D, S, 'petal').ok, false, '紅花瓣沒有售價');
+  S.inv.musk = 1;
+  assert.strictEqual(E.sell(D, S, 'musk').ok, false, '料不收');
+  assert.strictEqual(E.sellPrice(D, 'pine', {}), 3);
+});
+
+// ───────── 第二輪：四階段調合 ─────────
+test('rollBubbles：3 顆不同特性；鍋裡有的特性比較常冒；大泡泡 +2', () => {
+  const b = E.rollBubbles(D, {}, lcg(3));
+  assert.strictEqual(b.length, 3);
+  assert.strictEqual(new Set(b.map((x) => x.t)).size, 3);
+  b.forEach((x) => assert.ok(D.TRAITS[x.t] && (x.v === 1 || x.v === 2)));
+  assert.deepStrictEqual(E.rollBubbles(D, {}, () => 0).map((x) => x.v), [2, 2, 2], 'rand 0 → 都是大泡泡');
+  assert.deepStrictEqual(E.rollBubbles(D, {}, () => 0.99).map((x) => x.v), [1, 1, 1]);
+  let hit = 0;
+  const r = lcg(11);
+  for (let i = 0; i < 400; i++) if (E.rollBubbles(D, { nong: 3 }, r).some((x) => x.t === 'nong')) hit++;
+  assert.ok(hit > 360, `濃郁 3 級的鍋，幾乎每次都冒濃郁（${hit}/400）`);
+});
+
+test('finishZone：14／29／14／29／14 分區', () => {
+  assert.strictEqual(E.finishZone(D, 0), 'down');
+  assert.strictEqual(E.finishZone(D, 13.9), 'down');
+  assert.strictEqual(E.finishZone(D, 14), 'keep');
+  assert.strictEqual(E.finishZone(D, 43), 'up');
+  assert.strictEqual(E.finishZone(D, 56.9), 'up');
+  assert.strictEqual(E.finishZone(D, 57), 'keep');
+  assert.strictEqual(E.finishZone(D, 86), 'down');
+  assert.strictEqual(E.finishZone(D, 100), 'down');
+});
+
+test('finalTraits：素材＋泡泡（最高 3 級）→ 只留 3 種 → 起鍋只動最強那種', () => {
+  const trs = [{ xiang: 2 }, { tian: 1 }];
+  const stirs = [{ t: 'xiang', v: 2 }, { t: 'hua', v: 1 }, { t: 'qing', v: 1 }];
+  assert.deepStrictEqual(E.finalTraits(D, trs, stirs), { xiang: 3, tian: 1, hua: 1 }, '香氣封頂 3；四種砍成三種（平手依順序）');
+  assert.deepStrictEqual(E.finalTraits(D, trs, stirs, 'up'), { xiang: 3, tian: 1, hua: 1 }, '已經 3 級升不上去');
+  assert.deepStrictEqual(E.finalTraits(D, trs, stirs, 'down'), { xiang: 2, tian: 1, hua: 1 });
+  assert.deepStrictEqual(E.applyFinish(D, { qing: 1 }, 'down'), {}, '降到 0 就消失');
+  assert.deepStrictEqual(E.applyFinish(D, {}, 'up'), {}, '沒有特性不變');
+  assert.deepStrictEqual(E.applyFinish(D, { tian: 2, hua: 2 }, 'up'), { tian: 3, hua: 2 }, '平手依特性順序');
+});
+
+test('craft：帶攪拌與起鍋 → 成品特性照 finalTraits；省略＝快速調合', () => {
+  const S = fresh();
+  E.addUnit(S, 'lotus', { tian: 1 });
+  const r = E.craft(D, S, { mats: ['lotus', 'osmanthus'], stirs: [{ t: 'tian', v: 1 }, { t: 'xiang', v: 2 }, { t: 'qing', v: 1 }], finish: 'up', spike: null, forOrder: null, forWho: null });
+  assert.deepStrictEqual(r.tr, { xiang: 3, tian: 2, qing: 1 }, '甜蜜與香氣平手 2 級，起鍋升香氣（特性順序在前）');
+  const S2 = fresh();
+  E.addUnit(S2, 'lotus', { tian: 1 });
+  assert.deepStrictEqual(E.craft(D, S2, { mats: ['lotus', 'osmanthus'], spike: null }).tr, { tian: 1 });
+});
+
+test('craft：lots 填 0（PLAIN）＝指定用一般份；沒有一般份時退回特性最少的那份', () => {
+  const S = fresh(); // lotus 一般 ×1
+  E.addUnit(S, 'lotus', { tian: 2 });
+  const r = E.craft(D, S, { mats: ['lotus', 'osmanthus'], lots: [0, null], spike: null });
+  assert.deepStrictEqual(r.tr, {}, '用一般份，所以沒特性');
+  assert.strictEqual(S.lots.length, 1, '帶特性的那份還在');
+  const S2 = fresh();
+  S2.inv.lotus = 0; delete S2.inv.lotus;
+  E.addUnit(S2, 'lotus', { tian: 2 });
+  E.addUnit(S2, 'lotus', { tian: 1 });
+  const r2 = E.craft(D, S2, { mats: ['lotus', 'osmanthus'], lots: [0, null], spike: null });
+  assert.deepStrictEqual(r2.tr, { tian: 1 });
+  assert.strictEqual(S2.inv.lotus, 1);
+  assert.strictEqual(S2.lots.length, 1);
+});
+
+test('stirTraits：焦泡讓最強的特性 −1，降到 0 就消失', () => {
+  assert.deepStrictEqual(E.stirTraits({ tian: 2, xiang: 1 }, { t: 'burnt' }), { tian: 1, xiang: 1 });
+  assert.deepStrictEqual(E.stirTraits({ qing: 1 }, { t: 'burnt' }), {});
+  assert.deepStrictEqual(E.stirTraits({}, { t: 'burnt' }), {}, '鍋裡沒特性 → 不變');
 });

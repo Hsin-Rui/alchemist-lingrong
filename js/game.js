@@ -11,7 +11,14 @@
   let dlg = null; // { lines, i, done, bg }；播放中另記 lockUntil（防連按）、veilLine／veilAt（暗幕從哪一句、何時開始）
   let modal = null; // { title, body }
   let busy = false; // 動畫進行中，暫停輸入
-  let craftSel = { mats: [], spike: null, forOrder: null, forWho: null };
+  // 調合（四階段，§13.3）：流程本體在 js/craftflow.js；這裡只記從哪張訂單進來、目前第幾階段（鎖返回鍵用）
+  const newCraftSel = (forOrder = null, forWho = null) => ({ stage: 1, forOrder, forWho });
+  let craftSel = newCraftSel();
+  let craftFlow = null; // CraftFlow.mount 的回傳
+  let craftHost = null; // 模組畫在這個 div 裡；每次 render() 換頁面時把它搬回 .cf-mount
+  // 快速調合（§13.3）：跳過撈泡泡與起鍋。記在這台裝置的瀏覽器裡，跟靜音一樣
+  let quickCraft = false;
+  try { quickCraft = localStorage.getItem('lingrong-quickcraft') === '1'; } catch { /* 無痕模式等 */ }
   let craftResult = null;
   let gatherResult = null;
   let gatherScene = null; // 採集地下城的外殼狀態（進場時建立、離場時清空）
@@ -88,6 +95,18 @@
   // ───────── 圖示 ─────────
   // 預設不顯示文字圓章／色塊，只有圖片真的讀不到時才退回去（避免每次換畫面都閃一下）
   const IMG_FAIL = "this.parentNode.classList.add('noimg');this.remove()";
+  // 特性小標籤：香氣●●○。tr 空 → 空字串
+  function trChips(tr, cls = '') {
+    const e = Object.entries(tr || {});
+    return e.length ? `<span class="trs ${cls}">${e.map(([t, lv], i) => `<span class="trc" style="--c:${D.TRAITS[t].color};--i:${i}">${D.TRAITS[t].name}<i>${'●'.repeat(lv)}${'○'.repeat(3 - lv)}</i></span>`).join('')}</span>` : '';
+  }
+  // 鍋裡湯色：依特性顏色（等級高的在前）做漸層
+  function liquid(tr) {
+    const cs = Object.entries(tr).sort((a, b) => b[1] - a[1]).map(([t]) => D.TRAITS[t].color);
+    return cs.length === 1 ? `linear-gradient(160deg, ${cs[0]}, #6E5A3A)` : `linear-gradient(160deg, ${cs.join(', ')})`;
+  }
+  // 某素材有幾份帶特性
+  const lotCount = (id) => S.lots.filter((l) => l.id === id).length;
   function tok(id, cls = '') {
     const it = def(id);
     const type = D.ITEMS[id] ? it.type : id === 'junk' ? 'junk' : 'product';
@@ -258,7 +277,7 @@
     if (report.grounded) lines.push(['baojuan', '_', `小主還在禁足中（到第 ${S.groundUntil} 天）……今天只能待在炎洗宮了。`]);
     if (report.boosted) lines.push(...D.EMPRESS);
     if (report.flip === 'lingrong') {
-      lines.push(['baojuan', '_', '小主！小主！敬事房傳話——今晚黃上翻的是您的牌子！', { lock: true }], ['lingrong', 'evil', '終於……輪到本嬪了。']);
+      lines.push(['baojuan', '_', '小主！小主！敬事房傳話——今晚黃上翻的是您的牌子！', { lock: true }], ['lingrong', 'evil', '終於……輪到我了。']);
     } else if (report.flip) {
       lines.push(['baojuan', '_', `小主，敬事房傳話，今晚黃上翻了${charName(report.flip)}的牌子。`]);
       lines.push(report.flipFriend >= 50
@@ -267,7 +286,7 @@
     } else {
       lines.push(['baojuan', '_', '今晚黃上誰的牌子都沒翻，說是要批奏摺。']);
     }
-    report.newOrders.forEach((o) => lines.push(['baojuan', '_', `${D.CHARS[o.who].palace}的${charName(o.who)}派人來下訂單了。`], D.request(o.who, o.product)));
+    report.newOrders.forEach((o) => lines.push(D.request(o.who, o.product)));
     if (report.noOrders) lines.push(['baojuan', '_', '今天各宮都沒有新訂單。']);
     return lines;
   }
@@ -328,7 +347,7 @@
         const d = report.serve.favDelta;
         lines.push(['narr', '', `${name}今晚侍寢，恩寵 +${d}`]);
         if (report.pillow) {
-          lines.push([who, 'happy', '皇上，安嬪妹妹做的東西可好了，您也去看看她吧。'], ['narr', '', `枕邊風！零溶恩寵 +${report.pillow.favDelta}`]);
+          lines.push([who, 'happy', '皇上，安妹妹做的東西可好了，您也去看看她吧。'], ['narr', '', `枕邊風！零溶恩寵 +${report.pillow.favDelta}`]);
         }
         if (report.conceived) {
           lines.push(['narr', '', `隔天一早，太醫診出${name}有喜了！`], ['lingrong', 'evil', '（……有喜了啊。）']);
@@ -364,6 +383,16 @@
     if (!E.buy(D, S, id).ok) { A.sfx('fail'); toast('銀兩不夠啦！'); return; }
     A.sfx('coin');
     toast(`買了 ${itemName(id)}`);
+    render();
+  }
+
+  // v：'id' 賣一般份；'id:uid' 賣指定那份
+  function sell(v) {
+    const [id, uid] = String(v).split(':');
+    const r = E.sell(D, S, id, uid ? Number(uid) : null);
+    if (!r.ok) { A.sfx('fail'); return; }
+    A.sfx('coin');
+    toast(`賣了 ${itemName(id)}，+${r.price} 兩`);
     render();
   }
 
@@ -406,7 +435,7 @@
     gatherScene = {
       loc, run: E.buildGatherDungeon(D, S, loc, rand),
       phase: 'intro', t0: 0, anim: null, steps: 0, buffer: null, held: null, heldKey: null, nextAt: 0,
-      bubbles: {}, fx: [], flashUntil: 0, hopFrom: 0, caughtBy: -1, endAt: 0, mosaic: 8, fade: 0,
+      bubbles: {}, fx: [], flashUntil: 0, hopFrom: 0, caughtBy: -1, sayFrom: 0, endAt: 0, mosaic: 8, fade: 0,
       vis: new Set(), sight: [], confirm: false,
       view: { tileset: D.GATHER[loc].tileset, guardSprite: (gi) => guardOf(loc, gi).sprite }, // 給 DV.drawDungeon
     };
@@ -477,8 +506,8 @@
       gs.held = action;
       gs.heldKey = key;
       gs.nextAt = performance.now() + HOLD_MS;
-      // 被抓的那句話：看過一下之後，按任何方向就跳過
-      if (gs.phase === 'ending' && gs.caughtBy >= 0 && performance.now() >= gs.sayFrom + 500) { gs.endAt = 0; return; }
+      // 收尾那句話（被抓／走累了）：看過一下之後，按任何方向就跳過
+      if (gs.phase === 'ending' && gs.sayFrom && performance.now() >= gs.sayFrom + 500) { gs.endAt = 0; return; }
       dungeonAct(action);
     };
     gs.onKeyDown = (e) => {
@@ -597,7 +626,13 @@
           A.sfx('caught');
           break;
         }
-        case 'timeout': gs.phase = 'ending'; gs.endAt = now + 750; A.sfx('timeout'); break;
+        case 'timeout':
+          // 步數走完：零溶乏了，對話框講完（或玩家按鍵）才轉場
+          gs.phase = 'ending'; gs.held = null; gs.buffer = null;
+          gs.sayFrom = now + STEP_MS + 200; gs.endAt = gs.sayFrom + SAY_MS;
+          gs.el.say.innerHTML = `<span>${esc(D.GATHER[gs.loc].tired)}</span>`;
+          A.sfx('timeout');
+          break;
         default: break;
       }
     }
@@ -632,8 +667,8 @@
         else if (gs.held && now >= gs.nextAt) { gs.nextAt = now + REPEAT_MS; dungeonAct(gs.held); }
       }
     } else if (gs.phase === 'ending') {
-      // 被抓：閃白之後侍衛開口，話說完（或玩家按鍵）才轉場
-      if (gs.caughtBy >= 0 && gs.el.say.hidden && now >= gs.sayFrom) gs.el.say.hidden = false;
+      // 被抓：閃白之後侍衛開口；走累了：零溶收工。話說完（或玩家按鍵）才轉場
+      if (gs.sayFrom && gs.el.say.hidden && now >= gs.sayFrom) gs.el.say.hidden = false;
       if (now >= gs.endAt) { gs.phase = 'out'; gs.t0 = now; gs.el.say.hidden = true; A.sfx('exitDungeon'); }
     } else if (gs.phase === 'out') {
       gs.mosaic = 1 + 7 * Math.min(1, t / 300);
@@ -661,7 +696,7 @@
     const gs = gatherScene;
     if (!gs) return;
     stopGatherRuntime(gs);
-    const haul = E.applyGatherHaul(D, S, gs.loc, gs.run.got);
+    const haul = E.applyGatherHaul(D, S, gs.loc, gs.run.got, gs.run.haul);
     gatherResult = { ...haul, ended: gs.run.endReason, by: gs.run.caughtBy };
     gatherScene = null;
     if (A.dungeonBgm) A.dungeonBgm(false);
@@ -674,27 +709,61 @@
     A.sfx(haul.got[gs.run.rare] ? 'evil' : 'gather');
   }
 
-  function openCraft(orderId) {
-    const o = S.orders.find((x) => x.id === orderId);
-    craftSel = { mats: [], spike: null, forOrder: o ? o.id : null, forWho: o ? o.who : isTarget(S.flip) ? S.flip : null };
-    if (o) D.PRODUCTS[o.product].recipe.forEach((id) => { if (have(id) >= 1) craftSel.mats.push(id); });
-    go('craft');
+  function closeCraft() {
+    if (!craftFlow) return;
+    craftFlow.destroy();
+    craftFlow = null;
+    craftHost = null;
+    A.playBgm('main');
   }
 
-  function doCraft() {
-    const [a, b] = craftSel.mats;
-    if (!a || !b || busy) return;
-    busy = true;
-    A.sfx('bubble');
-    app.querySelector('.cauldron')?.classList.add('brewing');
-    setTimeout(() => {
-      busy = false;
-      craftResult = E.craft(D, S, craftSel);
-      const { product, spike, toInv } = craftResult;
-      craftSel = { mats: [], spike: null, forOrder: null, forWho: null };
-      A.sfx(product === 'junk' ? 'boom' : spike || toInv ? 'evil' : 'ding');
-      render();
-    }, 1400);
+  function openCraft(orderId) {
+    closeCraft();
+    const o = S.orders.find((x) => x.id === orderId);
+    const who = o ? o.who : isTarget(S.flip) ? S.flip : null;
+    craftSel = newCraftSel(o ? o.id : null, who);
+    craftResult = null;
+    craftHost = document.createElement('div');
+    craftHost.className = 'cf-host';
+    craftFlow = window.CraftFlow.mount(craftHost, {
+      D, E, stock: S, rand,
+      spikes: Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === 'spike').map((id) => {
+        const n = have(id);
+        const p = who ? E.predict(D, S, who, id, o ? 'deliver' : 'gift') : null;
+        return { id, n, note: p ? `${p.txt}・${p.riskTxt.replace('被抓風險：', '風險')}` : null, cls: p && p.cls, sub: n ? D.ITEMS[id].desc : `缺貨・${sourcesOf(id).map((x) => x.label).join('、')}` };
+      }),
+      forProduct: o ? o.product : null,
+      forWho: o ? D.CHARS[o.who].name : null,
+      quick: quickCraft,
+      onQuick: (on) => { quickCraft = on; try { localStorage.setItem('lingrong-quickcraft', on ? '1' : '0'); } catch { /* 忽略 */ } },
+      firstSpike: !S.seenSpike,
+      onSeen: (k) => { if (k === 'spike') S.seenSpike = true; },
+      cook: (sel) => {
+        craftResult = E.craft(D, S, { ...sel, forOrder: craftSel.forOrder, forWho: craftSel.forWho });
+        const r = craftResult;
+        return { product: r.product, traits: r.tr, spike: r.spike, toInv: r.toInv, lostSpike: r.lostSpike };
+      },
+      actions: () => {
+        const r = craftResult;
+        const done = S.slot >= R.slotsPerDay;
+        const canDeliver = !done && !grounded() && r.order && r.product !== 'junk' && !r.toInv;
+        const out = [{ a: 'craftdone', v: 'home', label: done ? '天色晚了，回宮' : '回炎洗宮', def: !canDeliver, primary: !canDeliver }];
+        if (canDeliver) out.push({ a: 'craftdone', v: 'deliver', label: `直接送去${D.CHARS[r.order.who].palace}`, primary: true, def: true });
+        return out;
+      },
+      onStep: (n) => { if (n !== craftSel.stage) cursor.key = null; craftSel.stage = n; },
+      onRender: () => { if (screen === 'craft') { syncHeader(); syncCursor(true); } },
+      img: (w) => `assets/characters/${D.CHARS[w].imgs._ || Object.values(D.CHARS[w].imgs)[0]}.webp`,
+      itemImg: (id) => `assets/items/${id}.webp`,
+      sfx: (n, a) => A.sfx(n, a),
+    });
+    A.playBgm('workshop');
+    go('craft');
+  }
+  // 下鍋後藏起返回鍵：只換頁首，不整頁重畫（模組自己的畫面還在動）
+  function syncHeader() {
+    const back = app.querySelector('.subhead .icon-btn[data-a="go"]');
+    if (back && craftSel.stage > 1) back.replaceWith(Object.assign(document.createElement('span'), { className: 'icon-btn' }));
   }
 
   // itemId：指定要送哪一個成品（剛調合好的那個）；沒指定就送最新做好的
@@ -792,9 +861,9 @@
     </header>`;
   }
 
-  function subHeader(title, sub, dark = false, backDef = false) {
+  function subHeader(title, sub, dark = false, backDef = false, back = true) {
     return `<div class="subhead ${dark ? 'dark' : ''}">
-      <button class="icon-btn" data-a="go" data-v="home" aria-label="返回"${backDef ? ' data-def' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      ${back ? `<button class="icon-btn" data-a="go" data-v="home" aria-label="返回"${backDef ? ' data-def' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>` : '<span class="icon-btn" aria-hidden="true"></span>'}
       <div><div class="subhead-title">${title}</div>${sub ? `<div class="subhead-sub">${sub}</div>` : ''}</div>
       <div class="subhead-stats">${coin(S.silver)}・剩 ${R.slotsPerDay - S.slot} 時辰</div>
     </div>`;
@@ -825,7 +894,7 @@
     } else {
       const c = S.conc[f];
       body = `${avatar(f)}<div class="tn-main"><b>今晚${charName(f)}侍寢</b>
-        <small>${c.debuff ? `已經${({ itch: '狂癢', stinky: '口臭', croton: '腹瀉' })[c.debuff]}，今晚必定出包！` : `友好 ${S.friend[f]}・枕邊風 ${pct(E.pillowChance(D, S, f))}`}</small></div>
+        <small>${c.debuff ? `已經${D.ITEMS[c.debuff].debuff}，今晚必定出包！` : `友好 ${S.friend[f]}・枕邊風 ${pct(E.pillowChance(D, S, f))}`}</small></div>
         <button class="btn small ${c.debuff ? '' : 'primary'}" data-a="giftto" data-v="${f}" ${grounded() || c.debuff ? 'disabled' : ''}>送禮</button>`;
     }
     return `<section class="tonight">
@@ -875,7 +944,7 @@
     const c = S.conc[who];
     let s = { normal: '正常', pregnant: `有喜（${c.preg + 1}/${R.pregnancyNights}）`, infertile: '不孕' }[c.status];
     if (c.musk && c.status !== 'infertile') s += `・麝香 ${c.musk}/${R.muskDoses}`;
-    if (c.debuff) s += `・${({ itch: '狂癢', stinky: '口臭', croton: '腹瀉' })[c.debuff]}`;
+    if (c.debuff) s += `・${D.ITEMS[c.debuff].debuff}`;
     return s;
   }
 
@@ -929,19 +998,37 @@
     },
 
     shop() {
+      const buyRow = (id) => {
+        const it = D.ITEMS[id];
+        const isDef = id === D.SHOP.find((x) => S.silver >= D.ITEMS[x].price);
+        const desc = it.type === 'spike' ? it.desc : id === 'liquor' ? '加紅花瓣可以煉出紅花' : '';
+        return `<div class="row">${tok(id)}<div class="row-main"><b>${it.name}</b>${it.type === 'spike' ? '<span class="tag">料</span>' : ''}<small>${desc ? `${desc}・` : ''}持有 ${have(id)}</small></div>
+          <button class="btn small ${S.silver >= it.price ? 'primary' : ''}" data-a="buy" data-v="${id}"${DEF(isDef)} ${S.silver < it.price ? 'disabled' : ''}>${coin(it.price)}</button></div>`;
+      };
+      // 賣：一般份一列（一次賣一份），帶特性的每份各一列
+      const sellable = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat' && D.ITEMS[id].price);
+      const sellRows = sellable.flatMap((id) => {
+        const plain = have(id) - lotCount(id);
+        const rows = S.lots.filter((l) => l.id === id).map((l) => `<div class="row">${tok(id)}<div class="row-main"><b>${itemName(id)}</b>${trChips(l.tr, 'sm')}</div>
+          <button class="btn small" data-a="sell" data-v="${id}:${l.uid}">賣 ${coin(E.sellPrice(D, id, l.tr))}</button></div>`);
+        if (plain > 0) rows.unshift(`<div class="row">${tok(id)}<div class="row-main"><b>${itemName(id)}</b><small>一般・持有 ${plain}</small></div>
+          <button class="btn small" data-a="sell" data-v="${id}">賣 ${coin(E.sellPrice(D, id, {}))}</button></div>`);
+        return rows;
+      });
+      const mats = D.SHOP.filter((id) => D.ITEMS[id].type === 'mat');
+      const spikes = D.SHOP.filter((id) => D.ITEMS[id].type === 'spike');
       return `<div class="screen theme-light">
-        ${subHeader('包捐的跑腿小舖', '買東西不花時辰，禁足中也能買')}
+        ${subHeader('包捐的跑腿小舖', '買賣都不花時辰，禁足中也能買賣')}
         <div class="scroll">
-          <div class="stage bg-shop">${portrait('baojuan', '_', 'stage-portrait')}<div class="bubble">小主要買什麼？奴婢這就去辦！</div></div>
+          <div class="stage bg-shop">${portrait('baojuan', '_', 'stage-portrait')}<div class="bubble">小主要買什麼？多的東西，奴婢也能拿去換銀子。</div></div>
           <div class="pad">
-          ${D.SHOP.map((id) => {
-            const it = D.ITEMS[id];
-            const isDef = id === D.SHOP.find((x) => S.silver >= D.ITEMS[x].price);
-            const desc = it.type === 'spike' ? it.desc : id === 'liquor' ? '加紅花瓣可以煉出紅花' : '';
-            return `<div class="row">${tok(id)}<div class="row-main"><b>${it.name}</b>${it.type === 'spike' ? '<span class="tag">料</span>' : ''}<small>${desc ? `${desc}・` : ''}持有 ${have(id)}</small></div>
-              <button class="btn small ${S.silver >= it.price ? 'primary' : ''}" data-a="buy" data-v="${id}"${DEF(isDef)} ${S.silver < it.price ? 'disabled' : ''}>${coin(it.price)}</button></div>`;
-          }).join('')}
-          <p class="muted">花草藥材、癢癢粉、巴豆、紅花瓣都得自己去採集喔。</p>
+          <h3>素材 <small>小舖買的沒有特性，採集來的才有</small></h3>
+          ${mats.map(buyRow).join('')}
+          <h3>料</h3>
+          ${spikes.map(buyRow).join('')}
+          <p class="muted">紅花瓣只有太醫院採得到喔。</p>
+          <h3>賣東西 <small>售價一半，每級特性多 1 兩</small></h3>
+          ${sellRows.length ? sellRows.join('') : '<p class="muted">沒有能賣的素材。</p>'}
         </div></div>
       </div>`;
     },
@@ -975,7 +1062,7 @@
           <h3 class="sheet-title">${caught ? '被抓了！' : '採到了！'}</h3>
           ${endMsg ? `<p class="center ${caught ? 'ok' : 'muted'}">${endMsg}</p>` : ''}
           ${entries.length
-            ? `<div class="got">${entries.map(([id, n], i) => `<div class="got-card ${D.ITEMS[id].type}" style="animation-delay:${i * 0.15}s">${tok(id, 'lg')}<span>${itemName(id)}</span><b>+${n}${D.ITEMS[id].type === 'spike' ? ' 料！' : ''}</b></div>`).join('')}</div>`
+            ? `<div class="got">${entries.map(([id, n], i) => `<div class="got-card ${D.ITEMS[id].type}" style="animation-delay:${i * 0.15}s">${tok(id, 'lg')}<span>${itemName(id)}</span><b>+${n}${D.ITEMS[id].type === 'spike' ? ' 料！' : ''}</b>${(gatherResult.haul || []).filter((h) => h.id === id && E.traitSum(h.tr)).map((h) => trChips(h.tr)).join('')}</div>`).join('')}</div>`
             : '<p class="center muted">這趟空手而回……</p>'}
           ${gatherResult.got.petal ? '<p class="center ok">紅花瓣！加上烈酒就能煉出紅花……</p>' : ''}
           ${gatherResult.ready.map((o) => `<p class="ok center">${charName(o.who)}的${itemName(o.product)}：材料湊齊了</p>`).join('')}
@@ -995,80 +1082,10 @@
     craft() {
       const order = S.orders.find((o) => o.id === craftSel.forOrder);
       const who = craftSel.forWho;
-      const [a, b] = craftSel.mats;
-      const avail = (id) => have(id) - craftSel.mats.filter((m) => m === id).length;
-      const slot = (id, i) => `<button class="cslot ${id ? 'filled' : ''}" data-a="unmat" data-v="${i}" aria-label="${id ? `移除${itemName(id)}` : '空格'}">${id ? `${tok(id, 'lg')}<span>${itemName(id)}</span>` : '<span>素材</span>'}</button>`;
-      const result = a && b ? E.findRecipe(D, a, b) : null;
-      const toInv = result && D.PRODUCTS[result].out === 'inv';
-      const preview = a && b ? (result ? `→ ${itemName(result)}` : '→ ？？？（好像不太對）') : '放入兩樣素材';
-      const owned = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat');
-      // 配方只差一樣時，把缺的那樣也列出來（停用、標出哪裡有）：例如有紅花瓣沒烈酒，玩家才知道要去小舖買烈酒
-      const missing = [];
-      Object.values(D.PRODUCTS).forEach((p) => {
-        if (!p.recipe) return;
-        const lack = p.recipe.filter((id) => !have(id));
-        if (lack.length === 1 && !missing.includes(lack[0])) missing.push(lack[0]);
-      });
-      const mats = [...owned, ...missing];
-      const spikes = Object.keys(D.ITEMS).filter((id) => D.ITEMS[id].type === 'spike');
-      const matDef = craftSel.mats.length < 2 ? mats.find((id) => avail(id) > 0) : null;
-      const spikeRow = (id) => {
-        const it = D.ITEMS[id];
-        const n = have(id);
-        const p = who ? E.predict(D, S, who, id, order ? 'deliver' : 'gift') : null;
-        const on = craftSel.spike === id;
-        return `<button class="srow ${on ? 'on' : ''}" data-a="spike" data-v="${id}"${DEF(on && !matDef)} ${n && !toInv ? '' : 'disabled'}>
-          ${tok(id)}<span class="srow-main"><b>${it.name}</b> <small>×${n}</small><small class="src">${n ? it.desc : `缺貨・${sourcesOf(id).map((s) => s.label).join('、')}`}</small></span>
-          ${p ? `<span class="pred ${p.cls}">${p.txt}<small>${p.riskTxt}</small></span>` : ''}</button>`;
-      };
-      let popup = '';
-      if (craftResult) {
-        const r = craftResult;
-        const done = S.slot >= R.slotsPerDay;
-        const canDeliver = !done && !grounded() && r.order && r.product !== 'junk' && !r.toInv;
-        const msg = r.product === 'junk'
-          ? `配方不對，變成「一坨黑黑的東西」${r.lostSpike ? `，${itemName(r.lostSpike)}也一起燒掉了` : ''}。`
-          : r.toInv ? '紅色的汁液在瓶中閃閃發光……這可是猛藥。' : r.spike ? `偷偷加了一點${itemName(r.spike)}……呵呵呵。` : '正正經經，童叟無欺。';
-        popup = `<div class="sheet-layer"><div class="sheet dark-sheet">
-          <div class="craft-pop">${tok(r.product, 'xl')}</div>
-          <h3 class="sheet-title">${r.product === 'junk' ? '碰！失敗了……' : `完成！${itemName(r.product)}`}</h3>
-          <p class="center">${msg}</p>
-          <div class="row-btns">
-            <button class="btn ghost" data-a="craftdone" data-v="home"${DEF(!canDeliver)}>${done ? '天色晚了，回宮' : '回炎洗宮'}</button>
-            ${canDeliver ? `<button class="btn primary" data-a="craftdone" data-v="deliver" data-def>直接送去${D.CHARS[r.order.who].palace}</button>` : ''}
-          </div></div></div>`;
-      }
       const sub = order ? `給${charName(order.who)}（${statusShort(order.who)}）` : who ? `料的預測以今晚侍寢的${charName(who)}為準` : '試試看會做出什麼';
-      return `<div class="screen theme-dark">
-        ${subHeader(order ? `調合・${itemName(order.product)}` : '自由調合', sub, true)}
-        <div class="scroll">
-          <div class="workshop">
-            ${portrait('lingrong', craftSel.spike ? 'evil' : 'smile', 'ws-portrait')}
-            <div class="cauldron">
-              <div class="cslots">${slot(a, 0)}${slot(b, 1)}
-                <button class="cslot spike ${craftSel.spike ? 'filled' : ''}" data-a="spike" data-v="" aria-label="料">${craftSel.spike ? `${tok(craftSel.spike, 'lg')}<span>${itemName(craftSel.spike)}</span>` : '<span>料</span>'}</button></div>
-              <div class="pot"><div class="pot-rim"></div><div class="pot-body">${preview}</div><div class="pot-legs"><i></i><i></i></div>
-                <div class="bubbles"><i></i><i></i><i></i><i></i><i></i></div></div>
-            </div>
-          </div>
-          <div class="drawer">
-            <h3>素材 <small>點一下放進鍋裡</small></h3>
-            <div class="matgrid">${mats.length ? mats.map((id) => (have(id)
-              ? `<button class="mat" data-a="mat" data-v="${id}"${DEF(id === matDef)} ${avail(id) <= 0 || craftSel.mats.length >= 2 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}</small></button>`
-              : `<button class="mat lack" data-a="mat" data-v="${id}" disabled>${tok(id)}<span>${itemName(id)}</span><small>缺・${locName(sourcesOf(id)[0].loc)}</small></button>`)).join('') : '<p class="muted">沒有素材，先去採集或小舖吧。</p>'}</div>
-            <h3>要加什麼料？ ${who ? `<small>依${charName(who)}目前狀態預測</small>` : ''}</h3>
-            ${toInv ? '<p class="muted">正在煉製紅花，不能再加料。</p>' : ''}
-            <div class="slist">
-              ${spikes.map(spikeRow).join('')}
-              <button class="srow ${craftSel.spike ? '' : 'on'}" data-a="spike" data-v=""${DEF(!craftSel.spike && !matDef)}><span class="tok tok-none"><span class="tok-ch">無</span></span><span class="srow-main"><b>不加料</b><small class="src">正正經經，賞銀全拿</small></span>${who ? '<span class="pred neutral">正經</span>' : ''}</button>
-            </div>
-            <details class="recipes"><summary>配方書</summary>
-              ${Object.entries(D.PRODUCTS).filter(([, p]) => p.recipe).map(([pid, p]) => `<div class="recipe">${tok(pid, 'sm')}<b>${p.name}</b> = ${p.recipe.map(itemName).join(' + ')}</div>`).join('')}
-            </details>
-          </div>
-        </div>
-        <div class="footer-cta dark"><button class="btn amber wide big" data-a="craft" ${a && b ? '' : 'disabled'}>開始調合（花 1 個時辰）</button></div>
-        ${popup}
+      return `<div class="screen theme-dark craft-screen">
+        ${subHeader(order ? `調合・${itemName(order.product)}` : '調合', sub, true, false, craftSel.stage === 1)}
+        <div class="scroll"><div class="cf-mount"></div></div>
       </div>`;
     },
 
@@ -1089,7 +1106,7 @@
           const blocked = h.spike && who !== S.flip;
           const p = h.spike ? E.predict(D, S, who, h.spike, 'gift') : null;
           return `<div class="row gift-row ${blocked ? 'blocked' : ''}">${tok(h.product)}${h.spike ? tok(h.spike, 'sm') : ''}
-            <div class="row-main"><b>${itemName(h.product)}${h.spike ? `<em class="spiked">＋${itemName(h.spike)}</em>` : ''}</b>
+            <div class="row-main"><b>${itemName(h.product)}${h.spike ? `<em class="spiked">＋${itemName(h.spike)}</em>` : ''}</b>${trChips(h.tr, 'sm')}
             <small>${blocked ? '加料的禮只能送給今晚侍寢的人' : p ? `${p.txt}・${p.riskTxt}` : `收下後友好 +${D.PRODUCTS[h.product].gift}`}</small></div>
             <button class="btn small ${blocked ? '' : 'primary'}" data-a="gift" data-v="${h.id}"${DEF(h.id === sendDef)} ${blocked || grounded() ? 'disabled' : ''}>送出</button></div>`;
         }).join('') : '<p class="muted">手上沒有成品。先去調合一份吧！</p><button class="btn primary wide" data-a="craftfor" data-v="">去調合</button>';
@@ -1168,9 +1185,9 @@
         <div class="scroll pad">
           <div class="card">${D.ALL.map(row).join('')}</div>
           <h3>持有的素材與料</h3>
-          <div class="chips">${inv.length ? inv.map((id) => `<span class="chip">${tok(id, 'sm')}${itemName(id)}×${S.inv[id]}</span>`).join('') : '<p class="muted">空空如也</p>'}</div>
+          <div class="chips">${inv.length ? inv.map((id) => `<span class="chip">${tok(id, 'sm')}${itemName(id)}×${S.inv[id]}${lotCount(id) ? `<em>（${lotCount(id)} 份有特性）</em>` : ''}</span>`).join('') : '<p class="muted">空空如也</p>'}</div>
           <h3>手上的成品</h3>
-          <div class="chips">${S.hand.length ? S.hand.map((h) => `<span class="chip">${tok(h.product, 'sm')}${itemName(h.product)}${h.spike ? `<em>+${itemName(h.spike)}</em>` : ''}</span>`).join('') : '<p class="muted">還沒有成品</p>'}</div>
+          <div class="chips">${S.hand.length ? S.hand.map((h) => `<span class="chip">${tok(h.product, 'sm')}${itemName(h.product)}${h.spike ? `<em>+${itemName(h.spike)}</em>` : ''}${trChips(h.tr, 'sm')}</span>`).join('') : '<p class="muted">還沒有成品</p>'}</div>
         </div>
       </div>`;
     },
@@ -1202,7 +1219,7 @@
         <div class="edict">
           <div class="edict-hd">奉天承運　黃上詔曰</div>
           <p class="edict-open">${e.opening.join('')}</p>
-          <p>茲賜${e.top === 'lingrong' ? '鈕祜祿氏零溶' : '炎洗宮安嬪零溶'}封號——</p>
+          <p>茲賜${e.top === 'lingrong' ? '鈕祜祿氏零溶' : '炎洗宮安小主零溶'}封號——</p>
           <h1 class="edict-title">${e.main.name}</h1>
           <p>${e.main.comment}欽此。</p>
           ${e.extra.length ? `<div class="edict-extra">另外加封：${e.extra.map((t) => `<b>${t.name}</b>`).join('、')}</div>` : ''}
@@ -1369,6 +1386,8 @@
       S.result.fxDone = true;
       playResultFx();
     }
+    if (screen === 'craft' && craftHost) app.querySelector('.cf-mount')?.replaceWith(craftHost);
+    else if (screen !== 'craft' && craftFlow) closeCraft();
     syncCursor(true);
   }
 
@@ -1512,7 +1531,8 @@
   function escBack() {
     if (modal) { if (!modal.lock) act('closemodal'); return; }
     if (screen === 'gather' && gatherResult) { act('gatherdone', 'home'); return; }
-    if (screen === 'craft' && craftResult) { act('craftdone', 'home'); return; }
+    if (screen === 'craft' && craftResult && craftSel.stage === 5) { act('craftdone', 'home'); return; }
+    if (screen === 'craft' && craftSel.stage > 1) return; // 下鍋後不能中途退出
     if (screen === 'result') { act('resultdone'); return; }
     if (SUB_SCREENS.has(screen)) act('go', 'home');
   }
@@ -1537,6 +1557,8 @@
       }
       return;
     }
+    // 四階段調合：撈泡泡的 1／2／3、起鍋的空白鍵由 js/craftflow.js 自己接；下鍋後不能用快捷鍵離開
+    if (screen === 'craft' && craftSel.stage > 1 && HOTKEYS[k]) { e.preventDefault(); return; }
     if (NAV_DIRS[k]) {
       e.preventDefault();
       moveCursor(NAV_DIRS[k]);
@@ -1578,7 +1600,7 @@
   window.addEventListener('resize', () => { if (cursor.on) syncCursor(); });
 
   // ───────── 事件 ─────────
-  const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'dgquit', 'dgstay', 'craft', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
+  const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'dgquit', 'dgstay', 'cf', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
   app.addEventListener('click', (e) => {
     const el = e.target.closest('[data-a]');
     if (!el || el.disabled || busy) return;
@@ -1600,6 +1622,7 @@
       case 'go': go(v); break;
       case 'goto': if (v === 'shop') go('shop'); else if (v === 'craft') openCraft(null); else go('gather'); break;
       case 'buy': buy(v); break;
+      case 'sell': sell(v); break;
       case 'bribe': bribe(); break;
       case 'reject': rejectOrder(Number(v)); break;
       case 'gather': gather(v); break;
@@ -1616,14 +1639,12 @@
         break;
       }
       case 'craftfor': openCraft(v ? Number(v) : null); break;
-      case 'mat': if (craftSel.mats.length < 2) craftSel.mats.push(v); render(); break;
-      case 'unmat': craftSel.mats.splice(Number(v), 1); render(); break;
-      case 'spike': craftSel.spike = v && craftSel.spike !== v ? v : null; render(); break;
-      case 'craft': doCraft(); break;
+      case 'cf': break; // 調合模組的按鈕：js/craftflow.js 自己處理
       case 'craftdone': {
         const r = craftResult;
         if (!r) { go('home'); break; }
         craftResult = null;
+        closeCraft();
         finishAction(() => (v === 'deliver' && r.order ? doDeliver(r.order.id, r.itemId) : go('home')));
         break;
       }
@@ -1675,9 +1696,8 @@
     const NO_CATCH = 0.999; // 抓包骰 ≥ 機率 → 沒被抓；送禮骰 ≥ 收禮機率 → 拒收
     // 事件 → [說明, 對象, 加料, 對象狀態, 骰子序列, 送禮?]
     const FX_DEMO = {
-      itch: ['狂癢（輕）', 'huafei', 'itch', null, [NO_CATCH]],
-      stinky: ['口臭（輕）', 'huafei', 'stinky', null, [NO_CATCH]],
-      croton: ['腹瀉（輕）', 'huafei', 'croton', null, [NO_CATCH]],
+      cassava: ['上吐下瀉（輕）', 'huafei', 'cassava', null, [NO_CATCH]],
+      catnip: ['貓咪鬧場（輕）', 'huafei', 'catnip', null, [NO_CATCH]],
       musk_dose: ['麝香 2/3（中）', 'zhenhuan', 'musk', { status: 'normal', musk: 1 }, [NO_CATCH]],
       musk_miss: ['麝香落空（中）', 'zhenhuan', 'musk', { status: 'pregnant', preg: 1, musk: 0 }, [NO_CATCH, NO_CATCH]],
       musk_infertile: ['麝香不孕（重）', 'meizhuang', 'musk', { status: 'normal', musk: 2 }, [NO_CATCH]],
@@ -1688,7 +1708,7 @@
       safflower_useless: ['紅花白下（一般）', 'meizhuang', 'safflower', { status: 'infertile' }, [NO_CATCH]],
       plain: ['收下（一般）', 'huafei', null, null, []],
       refused: ['拒收（一般）', 'huafei', null, null, [NO_CATCH], true],
-      caught: ['被抓（重＋暗幕）', 'huafei', 'croton', null, [0]],
+      caught: ['被抓（重＋暗幕）', 'huafei', 'cassava', null, [0]],
     };
     window.addEventListener('hashchange', () => location.reload()); // 選單連結換 hash → 重新播
     const key = fxHash.slice('#演出='.length);
@@ -1724,8 +1744,12 @@
   }
   // 測試用：網址後面加 #e2e 時開放狀態給 tools/keyboard-e2e.js 造情境（不影響正常遊戲）
   if (location.hash === '#e2e') {
-    window.__e2e = { state: () => S, screen: () => screen, render, go, openCraft, playDialog };
+    window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, render, go, openCraft, playDialog };
   }
+  // 標題曲：瀏覽器要等玩家第一次點擊／按鍵才准出聲。assets/audio/bgm_title.lite.mp3 沒有就播主題曲
+  const titleBgm = () => { if (screen === 'title' && !dlg) { A.unlock(); A.playBgm('title', 'main'); } };
+  document.addEventListener('pointerdown', titleBgm, { once: true });
+  document.addEventListener('keydown', titleBgm, { once: true });
   render();
   preloadImages();
 })();

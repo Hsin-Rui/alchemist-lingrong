@@ -50,7 +50,7 @@ const PIXEL = {
     ]},
     ling_right_0: { mirror: 'ling_left_0' }, // 允許水平鏡像
   },
-  anims: { water: ['pond_0', 'pond_1'], rare: ['itch_0', 'itch_1'] },
+  anims: { water: ['pond_0', 'pond_1'], rare: ['catnip_0', 'catnip_1'] },
 };
 ```
 
@@ -98,8 +98,8 @@ const PIXEL = {
 |---|---|
 | `jasmine` | 茉莉：白色星形小花加綠葉 |
 | `osmanthus` | 桂花：一簇金黃小碎花 |
-| `rose` | 玫瑰：一朵紅玫瑰 |
-| `itch_0`,`itch_1` | 癢癢粉（稀有）：紫色小粉包，2 幀閃光循環。外殼另外加 1px 上下浮動 |
+| `pine`、`bamboo`、`lotus`、`pear`、`plum` | 第二輪新素材：松針、竹葉、藕粉、梨花、梅花 |
+| `catnip_0`,`catnip_1` | 貓薄荷（稀有，取代癢癢粉）：薄荷葉香囊，2 幀閃光循環。外殼另外加 1px 上下浮動 |
 | `bubble_alert` | 紅底白色「！」氣泡（侍衛發現玩家） |
 | `bubble_lost` | 黃底「？」氣泡（侍衛跟丟） |
 | `sparkle_0..2` | 撿取特效 3 幀 |
@@ -194,9 +194,9 @@ const PIXEL = {
 | id | 說明 |
 |---|---|
 | `angelica` | 當歸：一束淺褐色的根鬚，綁紅繩 |
-| `croton` | 巴豆：三顆深褐色的豆子，旁邊一片綠葉 |
+| `jujube`、`motherwort`、`pearl`、`agarwood`、`cassava`、`liquor` | 第二輪新素材：紅棗、益母草、珍珠粉、沉香、木薯粉（取代巴豆）、烈酒 |
 | `petal` | 紅花瓣：幾片橘紅色花瓣 |
-| `musk_0`,`musk_1` | 麝香（稀有）：紫色小錦囊，2 幀閃光，跟癢癢粉一樣要一眼看得出是稀有 |
+| `musk_0`,`musk_1` | 麝香（稀有）：紫色小錦囊，2 幀閃光，跟貓薄荷一樣要一眼看得出是稀有 |
 
 ### 7.4 調色盤
 

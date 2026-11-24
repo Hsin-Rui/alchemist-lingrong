@@ -31,7 +31,7 @@ test('pixelart：規範 §3 的必備 id 一個不缺，尺寸符合規格', () 
   const need = [
     'grass_0', 'grass_1', 'grass_2', 'hedge_top', 'hedge_face', 'gate',
     'pond_0', 'pond_1', 'flowerbed', 'rock', 'lantern', 'shadow',
-    'jasmine', 'osmanthus', 'rose', 'itch_0', 'itch_1',
+    'jasmine', 'osmanthus', 'catnip_0', 'catnip_1', 'pine', 'bamboo', 'lotus', 'pear', 'plum',
     'bubble_alert', 'bubble_lost', 'sparkle_0', 'sparkle_1', 'sparkle_2',
   ];
   for (const who of ['ling', 'guard']) for (const dir of ['down', 'up', 'left', 'right']) for (const f of [0, 1, 2]) need.push(`${who}_${dir}_${f}`);
@@ -49,7 +49,7 @@ test('pixelart：地面圖塊不透明（可無縫鋪滿）、角色與素材有
   for (const id of ['grass_0', 'grass_1', 'grass_2', 'hedge_top', 'hedge_face', 'gate']) {
     assert.ok(!P.sprites[id].rows.join('').includes('.'), `${id} 不該有透明像素`);
   }
-  for (const id of ['ling_down_0', 'guard_down_0', 'jasmine', 'osmanthus', 'rose', 'itch_0']) {
+  for (const id of ['ling_down_0', 'guard_down_0', 'jasmine', 'osmanthus', 'pine', 'catnip_0', 'cassava']) {
     const all = P.sprites[id].rows.join('');
     assert.ok(all.includes('.') && all.includes('k'), `${id} 要有透明底和外框`);
   }

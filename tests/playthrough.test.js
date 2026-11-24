@@ -57,6 +57,8 @@ function bootGame({ hash = '' } = {}) {
   sandbox.window = sandbox;
   sandbox.globalThis = sandbox;
   sandbox.window.GameAudio = { sfx() {}, playBgm() {}, toggleMute() {}, isMuted() { return false; }, unlock() {} };
+  // 調合流程模組（js/craftflow.js）要真的 DOM，這裡換成替身：記下遊戲傳進去的選項，測試直接呼叫 cook／onStep
+  sandbox.window.CraftFlow = { mount(el, o) { sandbox.__cf = o; return { destroy() { sandbox.__cfDestroyed = (sandbox.__cfDestroyed || 0) + 1; }, step: () => 1 }; } };
 
   const ctx = vm.createContext(sandbox);
   vm.runInContext(read('js/data.js'), ctx, { filename: 'data.js' });
@@ -77,7 +79,7 @@ function bootGame({ hash = '' } = {}) {
   function click(a, v) {
     clickHandler({ target: { closest: () => ({ dataset: { a, v }, disabled: false }) }, stopPropagation() {}, preventDefault() {} });
   }
-  return { app, parseButtons, click };
+  return { app, parseButtons, click, win: sandbox };
 }
 
 // 自動玩一輪，回傳 { endedScreen, clicks, screens }
@@ -136,7 +138,7 @@ test('#結局 debug 路徑能算出並渲染結局（6 種隨機狀態）', () =
 test('#演出 測試入口：各事件播對話＋結果頁，等級對應狠章／搖晃；沒加 hash 時不存在', async () => {
   // 事件 → [狠章?, 搖晃?]
   const cases = {
-    croton: [true, false], itch: [true, false], musk_dose: [true, false], musk_miss: [true, false],
+    cassava: [true, false], catnip: [true, false], musk_dose: [true, false], musk_miss: [true, false],
     musk_infertile: [true, true], safflower_infertile: [true, true], miscarry_musk: [true, true], miscarry_safflower: [true, true],
     musk_useless: [false, false], safflower_useless: [false, false], plain: [false, false], refused: [false, false], caught: [true, true],
   };
@@ -190,4 +192,47 @@ test('引擎雙匯出、原始碼不碰 DOM/localStorage，且 computeEnding 為
   const r2 = E.computeEnding(D, S, []);
   assert.deepStrictEqual(r1, r2, 'computeEnding 對同一輸入不穩定');
   assert.ok(r1.main && typeof r1.rank === 'number' && Array.isArray(r1.opening), '結局結構不完整');
+});
+
+test('調合：遊戲把素材、料的預測交給調合模組；cook 扣素材做成品；下鍋後鎖返回鍵；快速調合記在瀏覽器', () => {
+  const g = bootGame({ hash: '#e2e' });
+  g.click('start');
+  for (let i = 0; i < 30 && /data-a="skip"/.test(g.app._html); i++) g.click('skip');
+  const S = g.win.__e2e.state();
+  const E = g.win.GameEngine;
+  E.addUnit(S, 'lotus', { tian: 2 });
+  const uid = S.lots[S.lots.length - 1].uid;
+  const hand0 = S.hand.length;
+  const lotus0 = S.inv.lotus;
+  g.click('craftfor', '');
+  const o = g.win.__cf;
+  assert.ok(o && o.stock === S, '模組拿到遊戲的素材');
+  assert.ok(o.spikes.some((x) => x.id === 'cassava'), '料的清單');
+  assert.strictEqual(o.firstSpike, true, '第一次加料要播 G1–G3');
+  assert.ok(/data-a="go" data-v="home"/.test(g.app._html), '還沒下鍋：有返回鍵');
+  o.onStep(2);
+  g.win.__e2e.render();
+  assert.ok(!/data-a="go" data-v="home"/.test(g.app._html), '下鍋後沒有返回鍵');
+  const res = o.cook({ mats: ['lotus', 'osmanthus'], lots: [uid, null], stirs: [{ t: 'tian', v: 1 }], spike: null, finish: 'up' });
+  assert.strictEqual(res.product, 'cake');
+  assert.strictEqual(JSON.stringify(res.traits), '{"tian":3}', '甜蜜 2 ＋泡泡 1 ＋起鍋升（封頂 3）');
+  assert.strictEqual(S.hand.length, hand0 + 1);
+  assert.strictEqual(S.inv.lotus, lotus0 - 1, '藕粉少一份');
+  assert.ok(!S.lots.some((l) => l.uid === uid), '用掉的是指定的那份（帶特性）');
+  o.onStep(5);
+  const acts = o.actions(res);
+  assert.ok(acts.every((x) => x.a === 'craftdone') && acts.some((x) => x.def), '結果按鈕交回遊戲');
+  g.click('craftdone', 'home');
+  assert.strictEqual(g.win.__e2e.screen(), 'home');
+  assert.ok(g.win.__cfDestroyed >= 1, '離開調合就收掉模組');
+  o.onSeen('spike');
+  assert.strictEqual(S.seenSpike, true);
+  g.click('craftfor', '');
+  assert.strictEqual(g.win.__cf.firstSpike, false, '加過料就不再播 G1–G3');
+  g.win.__cf.onQuick(true);
+  assert.strictEqual(g.win.localStorage.getItem('lingrong-quickcraft'), '1', '快速調合記在瀏覽器');
+  // 配錯：黑暗料理
+  S.inv.pine = 2;
+  const bad = g.win.__cf.cook({ mats: ['pine', 'pine'], lots: [null, null], stirs: [], spike: null, finish: null });
+  assert.strictEqual(bad.product, 'junk');
 });

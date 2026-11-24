@@ -31,6 +31,106 @@
     if (S.inv[id] <= 0) delete S.inv[id];
   }
   const pick = (arr, rand) => arr[Math.floor(rand() * arr.length)];
+
+  // ───────── 素材份與特性（game-design §13.1–13.2）─────────
+  // S.inv[id] 仍是「總共有幾份」；帶特性的那幾份另外記在 S.lots（{ uid, id, tr }），沒特性的就是一般份。
+  // 不變式：同一種素材的 lots 數 ≤ inv 數。要減素材一律走 takeUnit，才不會兩邊對不上。
+  const traitSum = (tr) => Object.values(tr || {}).reduce((a, b) => a + b, 0);
+  const lotsOf = (S, id) => S.lots.filter((l) => l.id === id);
+  // 預設挑哪一份：特性總級數最高的那份；都沒有特性 → null（用一般份）
+  function bestLot(S, id, skip) {
+    const ls = lotsOf(S, id).filter((l) => !(skip && skip.includes(l.uid)));
+    return ls.reduce((a, b) => (!a || traitSum(b.tr) > traitSum(a.tr) ? b : a), null);
+  }
+  // 放進一份：tr 有東西才記成帶特性的份
+  function addUnit(S, id, tr) {
+    invAdd(S, id);
+    if (tr && traitSum(tr) > 0) S.lots.push({ uid: ++S.lotSeq, id, tr: { ...tr } });
+  }
+  // 拿走一份：指定 uid 就拿那份；沒指定先拿一般份，一般份沒了再拿特性最少的那份。回傳拿走那份的特性（一般份 → {}）。
+  // craftSel.lots 裡的 0（PLAIN）表示「指定用一般份」，不會自動改挑帶特性的。
+  function takeUnit(S, id, uid) {
+    if (!(S.inv[id] > 0)) return {};
+    let lot = uid != null ? S.lots.find((l) => l.uid === uid && l.id === id) : null;
+    const ls = lotsOf(S, id);
+    // 沒指定、或指定的那份不存在（例如 PLAIN＝0：指定用一般份）→ 先拿一般份，一般份沒了才拿特性最少的那份
+    if (!lot && ls.length >= S.inv[id]) lot = ls.reduce((a, b) => (traitSum(b.tr) < traitSum(a.tr) ? b : a));
+    invAdd(S, id, -1);
+    if (!lot) return {};
+    S.lots = S.lots.filter((l) => l !== lot);
+    return { ...lot.tr };
+  }
+  // ───────── 四階段調合（§13.3）─────────
+  // 素材的特性先倒進鍋（同特性相加、最高 3 級，這時還不砍種類）
+  const potTraits = (D, trs) => mergeTraits(D, trs, 3, Infinity);
+  // 開火攪拌：冒 bubbles 顆不同特性的泡泡。每種特性基本權重 1，鍋裡已有的特性每級 +natureWeight；
+  // 每顆有 bigChance 是大泡泡（+bigValue），其餘 +1。回 [{ t, v }]
+  function rollBubbles(D, pot, rand) {
+    const C = D.RULES.craft;
+    const pool = Object.keys(D.TRAITS).map((t) => [t, 1 + C.natureWeight * ((pot && pot[t]) || 0)]);
+    const out = [];
+    for (let i = 0; i < C.bubbles && pool.length; i++) {
+      const t = weightedPick(pool, rand);
+      pool.splice(pool.findIndex(([k]) => k === t), 1);
+      out.push({ t, v: rand() < C.bigChance ? C.bigValue : 1 });
+    }
+    return out;
+  }
+  // 套一顆泡泡：該特性 +v，最高 3 級（回新物件，不改傳入的）。
+  // 焦泡（b.t === 'burnt'）：最強的那種特性 −1（平手取先出現的），降到 0 就消失
+  const stirTraits = (tr, b) => {
+    if (b.t !== 'burnt') return { ...tr, [b.t]: Math.min(3, ((tr || {})[b.t] || 0) + b.v) };
+    const out = { ...tr };
+    const top = Object.keys(out).sort((x, y) => out[y] - out[x])[0];
+    if (top) { out[top]--; if (out[top] <= 0) delete out[top]; }
+    return out;
+  };
+  // 珠珠停在 pos（0～100，橫條的百分比位置）屬於哪一區：'down'|'keep'|'up'
+  function finishZone(D, pos) {
+    let x = 0;
+    for (const [w, z] of D.RULES.craft.zones) { x += w; if (pos < x) return z; }
+    return D.RULES.craft.zones[D.RULES.craft.zones.length - 1][1];
+  }
+  // 起鍋：只作用在最強的那種特性（平手依 D.TRAITS 順序）；升到最高 3 級、降到 0 就消失。沒有特性 → 不變
+  function applyFinish(D, tr, zone) {
+    const order = Object.keys(D.TRAITS);
+    const top = Object.keys(tr || {}).sort((a, b) => tr[b] - tr[a] || order.indexOf(a) - order.indexOf(b))[0];
+    if (!top || zone === 'keep') return { ...tr };
+    const out = { ...tr, [top]: Math.min(3, tr[top] + (zone === 'up' ? 1 : -1)) };
+    if (out[top] <= 0) delete out[top];
+    return out;
+  }
+  // 成品特性：素材的特性 → 依序套攪拌挑的泡泡 → 只留最強 3 種 → 套起鍋結果
+  function finalTraits(D, trs, stirs, zone) {
+    let tr = potTraits(D, trs);
+    (stirs || []).forEach((b) => { tr = stirTraits(tr, b); });
+    tr = mergeTraits(D, [tr]);
+    return zone ? applyFinish(D, tr, zone) : tr;
+  }
+
+  // 採集到的素材擲特性（§13.2）：偏向素材的本性（ITEMS.nature），0～2 種；
+  // frac＝離出生點的遠近（0 最近、1 最遠）：近 1 級，中 1～2 級，遠 2～3 級。料與沒有本性的素材 → {}。
+  function rollTraits(D, id, frac, rand) {
+    const nat = D.ITEMS[id] && D.ITEMS[id].nature;
+    if (!nat || !nat.length) return {};
+    const r = rand();
+    const n = Math.min(nat.length, r < 0.3 ? 0 : r < 0.8 ? 1 : 2);
+    const order = nat.length > 1 && rand() < 0.5 ? [...nat].reverse() : nat;
+    const tr = {};
+    for (let i = 0; i < n; i++) {
+      const base = frac < 1 / 3 ? 1 : frac < 2 / 3 ? 1 : 2;
+      tr[order[i]] = Math.min(3, base + (frac >= 1 / 3 && rand() < 0.5 ? 1 : 0));
+    }
+    return tr;
+  }
+
+  // 合併特性：同特性相加、最高 maxLv 級；只留最強的 maxN 種（平手依 D.TRAITS 的順序）
+  function mergeTraits(D, trs, maxLv = 3, maxN = 3) {
+    const sum = {};
+    trs.forEach((tr) => Object.entries(tr || {}).forEach(([t, lv]) => { sum[t] = Math.min(maxLv, (sum[t] || 0) + lv); }));
+    const order = Object.keys(D.TRAITS);
+    return Object.fromEntries(Object.entries(sum).sort((a, b) => b[1] - a[1] || order.indexOf(a[0]) - order.indexOf(b[0])).slice(0, maxN));
+  }
   const itemName = (D, id) => (D.ITEMS[id] || D.PRODUCTS[id]).name;
   const have = (S, id) => S.inv[id] || 0;
   // 成品記著是替哪張訂單做的（forOrder）。那張訂單還在，成品就只屬於它，不會被別張同品項訂單拿走
@@ -43,10 +143,14 @@
     return ok.filter((h) => ownerOf(S, h) === o.id).pop() || ok.pop();
   };
   const recipeOk = (D, S, pid) => D.PRODUCTS[pid].recipe.every((id) => have(S, id) >= 1);
-  function findRecipe(D, a, b) {
+  // 配方比對：放進鍋裡的素材（2 或 3 樣，順序不拘、可重複）和配方完全一樣才算數。
+  // 舊呼叫法 findRecipe(D, a, b) 也接受。
+  function findRecipe(D, mats, b) {
+    const list = Array.isArray(mats) ? mats : [mats, b];
+    const key = list.filter(Boolean).slice().sort().join('+');
     return Object.keys(D.PRODUCTS).find((pid) => {
       const r = D.PRODUCTS[pid].recipe;
-      return r && ((r[0] === a && r[1] === b) || (r[0] === b && r[1] === a));
+      return r && r.slice().sort().join('+') === key;
     });
   }
   const acceptChance = (D, S, who) => Math.min(100, S.friend[who] + D.RULES.giftAcceptBonus) / 100;
@@ -58,7 +162,7 @@
       favor: { ...R.favor },
       friend: { ...R.friend },
       conc: Object.fromEntries(D.TARGETS.map((t) => [t, { status: R.status[t], preg: 0, musk: 0, debuff: null }])),
-      inv: { ...R.startInv },
+      inv: { ...R.startInv }, lots: [], lotSeq: 0,
       orders: [], hand: [], seq: 0,
       flip: null, bribe: 0, bribedToday: false, groundUntil: 0,
       noFlipNights: 0, empressBoost: false, tired: false,
@@ -157,8 +261,7 @@
       if (c.status === 'pregnant') return { ...out, txt: `小產＋不孕 ${R.fx.saffMiscarry}`, cls: 'good' };
       return { ...out, txt: `不孕 ${R.fx.infertile}`, cls: 'good' };
     }
-    const label = { itch: '狂癢', stinky: '口臭', croton: '腹瀉' }[spike];
-    return { ...out, txt: `${label} ${R.fx[spike]}${S.flip === who ? '・今晚出包' : ''}`, cls: 'good', it };
+    return { ...out, txt: `${it.debuff} ${R.fx[spike]}${S.flip === who ? '・今晚出包' : ''}`, cls: 'good', it };
   }
 
   // 真正下料（擲骰、改狀態、推 S.log/S.stats）。rand 注入。
@@ -198,7 +301,7 @@
       outcome = 'debuff';
       c.debuff = spike;
       fav = R.fx[spike];
-      label = { itch: '狂癢', stinky: '口臭', croton: '腹瀉' }[spike];
+      label = it.debuff;
     }
     const useless = outcome.endsWith('_useless');
     const favDelta = fav ? addFavor(S, who, fav) : 0;
@@ -298,6 +401,19 @@
     S.silver -= p;
     invAdd(S, id);
     return { ok: true };
+  }
+
+  // 賣素材（§8）：不花時辰。售價一半（無條件捨去）＋每 1 級特性 1 兩；沒有售價的（紅花瓣）和料不收。
+  // uid 指定賣哪一份；沒指定先賣一般份。回 { ok, price }，不能賣 → { ok:false }
+  const sellPrice = (D, id, tr) => Math.floor((D.ITEMS[id].price || 0) / 2) + traitSum(tr);
+  function sell(D, S, id, uid) {
+    const it = D.ITEMS[id];
+    if (!it || it.type !== 'mat' || !it.price || !(S.inv[id] > 0)) return { ok: false };
+    if (uid != null && !S.lots.some((l) => l.uid === uid && l.id === id)) return { ok: false };
+    const tr = takeUnit(S, id, uid);
+    const price = sellPrice(D, id, tr);
+    S.silver += price;
+    return { ok: true, price, tr };
   }
 
   // 賄賂敬事房：足銀且未打點 → 扣錢、加權、記錄；否則 { ok:false, reason }
@@ -502,7 +618,7 @@
       rare: g.rare || g.table.reduce((a, b) => (b[1] < a[1] ? b : a))[0],
       player: { x: gx, y: gy, face: 'up' },
       items: [], guards: [],
-      maxSteps: c.steps, stepsLeft: c.steps, got: {}, picked: 0,
+      maxSteps: c.steps, stepsLeft: c.steps, got: {}, haul: [], picked: 0,
       seen: new Array(W * H).fill(0), over: false, endReason: null, caughtBy: -1,
       cfg: { guardSight: c.guardSight, playerSight: c.playerSight, searchTurns: c.searchTurns, wanderKeep: c.wanderKeep, wanderIdle: c.wanderIdle, guardSpawns: Array.from(c.guardSpawns, (sp) => ({ ...sp })) },
     };
@@ -551,6 +667,10 @@
     for (const [id] of commons) put(id, take());
     const extra = ri(c.extraItems[0], c.extraItems[1]);
     for (let i = 0; i < extra; i++) put(weightedPick(commons, rand), take());
+
+    // 特性：越深處（離出生點步數越多）等級越高。放完素材才擲，不影響上面的擺放
+    const farthest = Math.max(1, ...run.items.map((it) => dist[it.y * W + it.x]));
+    run.items.forEach((it) => { it.tr = rollTraits(D, it.id, dist[it.y * W + it.x] / farthest, rand); });
 
     // 侍衛不在這裡生成：走滿指定步數後才由 gatherStep 放進場（見 gSpawnCell）
     gMarkSeen(run);
@@ -652,8 +772,9 @@
       if (i >= 0) {
         const [it] = run.items.splice(i, 1);
         run.got[it.id] = (run.got[it.id] || 0) + 1;
+        (run.haul = run.haul || []).push({ id: it.id, tr: it.tr || {} });
         run.picked++;
-        ev.push({ t: 'pick', id: it.id, rare: it.rare, x: tx, y: ty });
+        ev.push({ t: 'pick', id: it.id, rare: it.rare, x: tx, y: ty, tr: it.tr || {} });
       }
     }
     run.stepsLeft--;
@@ -740,31 +861,44 @@
   }
 
   // 採集小遊戲・收穫套用（純函式，無 rand）：把這趟撿到的 got 加進包包、slot++、推 dayLog、回 ready。
+  // haul（run.haul，每份的 {id,tr}）有給就照份放進去，帶特性的進 S.lots；沒給就照 got 的數量放一般份（模擬器用）。
   // got 空（被抓／逾時卻兩手空空）→ inv 不變、仍 slot++、dayLog 記「空手而回」。
-  function applyGatherHaul(D, S, loc, got) {
+  function applyGatherHaul(D, S, loc, got, haul) {
     const g = D.GATHER[loc];
     S.slot++;
     const entries = Object.entries(got || {}).filter(([, c]) => c > 0);
-    for (const [id, c] of entries) invAdd(S, id, c);
+    if (haul) haul.forEach((h) => addUnit(S, h.id, h.tr));
+    else for (const [id, c] of entries) invAdd(S, id, c);
     const ready = S.orders.filter((o) => !readyItem(S, o) && recipeOk(D, S, o.product));
     S.dayLog.push(entries.length
       ? `在${g.name}採集：${entries.map(([id, c]) => `${itemName(D, id)}×${c}`).join('、')}`
       : `在${g.name}空手而回`);
-    return { loc, got: got || {}, ready };
+    return { loc, got: got || {}, haul: haul || [], ready };
   }
 
-  // 調合（確定性，無 rand）：slot++、材料 -1、findRecipe→成品或 junk；成品入 hand/inv。
+  // 調合（確定性，無 rand）：slot++、放進去的 2～3 樣素材各 -1、findRecipe→成品或 junk；成品入 hand/inv。
+  // craftSel.lots：與 mats 同位置的素材份 uid（null／省略 → 自動挑特性最多的那份，沒有就用一般份）。
+  // craftSel.stirs：攪拌挑的泡泡 [{t,v}]；craftSel.finish：起鍋結果 'up'|'keep'|'down'（兩者省略＝快速調合）。
+  // 成品特性見 finalTraits；黑暗料理和紅花沒有特性。
   function craft(D, S, craftSel) {
-    const [a, b] = craftSel.mats;
+    const mats = craftSel.mats.filter(Boolean);
     S.slot++;
-    invAdd(S, a, -1); invAdd(S, b, -1);
-    const product = findRecipe(D, a, b) || 'junk';
+    const chosen = [];
+    const used = mats.map((id, i) => {
+      let uid = craftSel.lots && craftSel.lots[i] != null ? craftSel.lots[i] : null;
+      if (uid == null) { const b = bestLot(S, id, chosen); uid = b ? b.uid : null; }
+      if (uid != null) chosen.push(uid);
+      return [id, uid];
+    });
+    const trs = used.map(([id, uid]) => takeUnit(S, id, uid));
+    const product = findRecipe(D, mats) || 'junk';
     if (product === 'junk') S.stats.junk++;
     const toInv = D.PRODUCTS[product].out === 'inv';
     const spike = toInv ? null : craftSel.spike;
     if (spike) invAdd(S, spike, -1);
     if (toInv) invAdd(S, product);
-    const item = toInv ? null : { id: ++S.seq, product, spike: product === 'junk' ? null : spike, forOrder: null };
+    const tr = product === 'junk' ? {} : finalTraits(D, trs, craftSel.stirs, craftSel.finish);
+    const item = toInv ? null : { id: ++S.seq, product, spike: product === 'junk' ? null : spike, forOrder: null, tr };
     // 從訂單進來的就送那張訂單；否則先找調合時預測的對象（forWho）要這個成品、還沒備好的訂單，
     // 再找任何還沒備好的同品項訂單。找到就把成品綁在那張訂單上。
     const open = (o) => o.product === product && !readyItem(S, o);
@@ -774,7 +908,7 @@
       || null;
     if (item) { if (order) item.forOrder = order.id; S.hand.push(item); }
     S.dayLog.push(product === 'junk' ? '調合失敗，做出一坨黑黑的東西' : `調合了${itemName(D, product)}${spike ? `（加了${itemName(D, spike)}）` : ''}`);
-    return { product, spike, toInv, lostSpike: product === 'junk' && spike, order, itemId: item && item.id };
+    return { product, spike, toInv, lostSpike: product === 'junk' && spike, order, itemId: item && item.id, tr: item ? item.tr : {} };
   }
 
   // 交貨：移訂單＋手牌，applySpike，未被抓給 reward（無效×uselessRewardRate）＋deliverFriend，設 S.result。
@@ -873,8 +1007,9 @@
     newState, TITLE_CHECK, computeEnding,
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
-    findRecipe, acceptChance,
-    buy, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
+    findRecipe, acceptChance, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
+    potTraits, rollBubbles, stirTraits, finishZone, applyFinish, finalTraits,
+    buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof window !== 'undefined') window.GameEngine = API;

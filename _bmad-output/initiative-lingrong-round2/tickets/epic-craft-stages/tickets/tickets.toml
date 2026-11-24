@@ -1,0 +1,66 @@
+# epic-craft-stages 的 story，表格順序＝建造順序。
+[[entry]]
+id = 1
+type = "story"
+title = "四階段調合骨架"
+description = "引擎加抽泡泡、套泡泡、起鍋分區與結果，craft 依攪拌與起鍋算成品特性；調合畫面變成選素材→攪拌→加料→起鍋四步，能從頭走到成品。"
+verify = "單元測試涵蓋抽泡泡權重、等級上限、只留 3 種、起鍋升降；在遊戲裡走完四步做出帶特性的成品。"
+covers = ["R1", "R2"]
+after = ["1.2"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "配方冊與選用哪一份素材"
+description = "第一步改成配方冊：每道標示可以做或缺什麼，點了自動放素材；每種素材可挑用哪一份（顯示特性）；保留自由調合。"
+verify = "配方冊列出 7 道＋紅花並標對狀態；能換用另一份素材且成品特性跟著變；自由調合仍可做出黑暗料理。"
+covers = ["R1"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "快速調合與特殊分支"
+description = "快速調合開關（記在瀏覽器）跳過攪拌與起鍋；配錯直接黑暗料理、煉紅花直接完成；下鍋後不能中途退出。"
+verify = "開關打開只經過選素材與加料；配錯與煉紅花不進攪拌；攪拌中按 Esc 不會退出。"
+covers = ["R1"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "調合演出"
+description = "素材掉進鍋、點火、湯色隨特性變、攪拌與泡泡、加料時零溶壞笑、起鍋冒蒸氣與特性徽章跳出；減少動態時收斂。"
+verify = "四步都有對應演出且不擋操作；prefers-reduced-motion 下動畫關掉、流程照常。"
+covers = ["R1"]
+after = [2, 3]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "鍵盤與手機操作"
+description = "每步的預設焦點、↑↓ 與 Enter、泡泡 1/2/3（不觸發導覽快捷鍵）、起鍋 Space；手機點按；鍵盤 e2e 涵蓋四步。"
+verify = "node tools/keyboard-e2e.js 新增的四階段檢查全過；手機寬度截圖沒有跑版。"
+covers = ["R1"]
+after = [4]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Refactor sweep"
+description = "整理本 epic 留下的重複與暫時程式碼，模擬器改用快速調合路徑，文件同步。"
+verify = "node --test tests/、tools/simulate.js --quick、tools/gather-bot.js、tools/keyboard-e2e.js 全部通過。"
+covers = ["R1", "R2"]
+after = [1, 2, 3, 4, 5]
+hitl = false
+risk = "low"
