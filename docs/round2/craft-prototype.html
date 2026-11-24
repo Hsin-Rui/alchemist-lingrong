@@ -1,0 +1,506 @@
+<title>零溶的煉金鍋</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Noto+Serif+TC:wght@700;900&display=swap">
+<style>
+/* 版面：手機直式一欄（最寬 480px），上半是固定的「鍋」，下半是隨階段替換的操作面板。沿用遊戲「煉金工房」深色調。 */
+:root {
+  --night: #241B30;
+  --night-2: #3A2D4B;
+  --night-line: #4E3F63;
+  --text: #F1EAF8;
+  --muted: #A897C0;
+  --amber: #F4C66A;
+  --amber-shadow: #A47B2A;
+  --lavender: #B784F0;
+  --crimson: #C24848;
+  --ok: #6FCF97;
+  --paper: #FBF3DE;
+  --ink: #2E2228;
+  --serif: 'Noto Serif TC', 'Songti TC', 'PMingLiU', serif;
+  --sans: 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: #17111E; color: var(--text); font-family: var(--sans); }
+button { font-family: inherit; color: inherit; }
+.app { max-width: 480px; margin: 0 auto; min-height: 100%; background: var(--night); display: flex; flex-direction: column; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+
+/* 頂欄＋階段 */
+header { padding-block: 12px 10px; border-bottom: 1px solid var(--night-line); }
+.toprow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+h1 { font-family: var(--serif); font-size: 20px; margin: 0; color: var(--amber); letter-spacing: .08em; }
+.quick { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+.quick input { accent-color: var(--amber); width: 18px; height: 18px; }
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 10px; list-style: none; padding: 0; margin-bottom: 0; }
+.steps li { font-size: 12px; text-align: center; padding: 5px 0; border-radius: 6px; background: var(--night-2); color: var(--muted); }
+.steps li b { font-family: var(--serif); margin-right: 3px; }
+.steps li.on { background: var(--amber); color: var(--night); font-weight: 700; }
+.steps li.done { color: var(--text); }
+.steps li.skip { opacity: .4; text-decoration: line-through; }
+
+/* 鍋 */
+.stage { position: relative; height: 210px; display: grid; place-items: center; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 100%, #3d2a1c 0%, transparent 60%), linear-gradient(180deg, #2b2038, var(--night)); }
+.pot { position: relative; width: 190px; height: 120px; margin-top: 40px; }
+.pot-body { position: absolute; inset: 22px 0 0; border-radius: 0 0 95px 95px / 0 0 80px 80px; background: linear-gradient(180deg, #4a4a52, #26262c); box-shadow: inset 0 -10px 20px rgba(0,0,0,.5); }
+.pot-rim { position: absolute; left: -8px; right: -8px; top: 12px; height: 26px; border-radius: 50%; background: #5c5c66; box-shadow: inset 0 3px 0 #77777f; }
+.liquid { position: absolute; left: 2px; right: 2px; top: 15px; height: 20px; border-radius: 50%; background: var(--liq, #5a4a6a); transition: background .6s; box-shadow: inset 0 0 12px rgba(255,255,255,.25); }
+.flames { position: absolute; left: 50%; bottom: -26px; transform: translateX(-50%); display: flex; gap: 6px; opacity: 0; transition: opacity .4s; }
+.lit .flames { opacity: 1; }
+.flame { width: 16px; height: 26px; border-radius: 50% 50% 40% 40%; background: radial-gradient(circle at 50% 70%, #ffe08a, #ff7b2e 60%, transparent 70%); animation: flick .35s infinite alternate; transform-origin: bottom; }
+.flame:nth-child(2) { animation-delay: .1s; height: 32px; }
+.flame:nth-child(3) { animation-delay: .2s; }
+@keyframes flick { to { transform: scaleY(.75) scaleX(1.1); } }
+.ladle { position: absolute; left: 50%; top: -30px; width: 8px; height: 70px; background: #a77b4f; border-radius: 4px; transform-origin: 50% 100%; transform: translateX(-50%) rotate(20deg); opacity: 0; transition: opacity .3s; }
+.ladle::after { content: ''; position: absolute; bottom: -6px; left: -8px; width: 24px; height: 12px; border-radius: 0 0 12px 12px; background: #8a6440; }
+.lit .ladle { opacity: 1; }
+.ladle.stir { animation: stir .7s ease-in-out; }
+@keyframes stir { 0% { transform: translateX(-50%) rotate(20deg); } 25% { transform: translateX(-90%) rotate(-25deg); } 50% { transform: translateX(-10%) rotate(30deg); } 75% { transform: translateX(-80%) rotate(-15deg); } 100% { transform: translateX(-50%) rotate(20deg); } }
+.fx { position: absolute; inset: 0; pointer-events: none; }
+.drop { position: absolute; left: 50%; top: -40px; width: 38px; height: 38px; margin-left: -19px; border-radius: 50%; display: grid; place-items: center; background: var(--paper); color: var(--ink); font-family: var(--serif); font-weight: 900; animation: drop .7s cubic-bezier(.5,0,.8,.6) forwards; }
+@keyframes drop { 70% { transform: translateY(150px) scale(1); opacity: 1; } 100% { transform: translateY(160px) scale(.3); opacity: 0; } }
+.rise { position: absolute; bottom: 100px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--c, #fff); opacity: .8; animation: rise 1.6s ease-out forwards; }
+@keyframes rise { to { transform: translateY(-90px) scale(1.4); opacity: 0; } }
+.steam { position: absolute; bottom: 95px; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.45), transparent 70%); animation: steam 1.4s ease-out forwards; }
+@keyframes steam { to { transform: translateY(-110px) scale(2.4); opacity: 0; } }
+.smoke { background: radial-gradient(circle, rgba(20,20,20,.9), transparent 70%); }
+.sneak { position: absolute; right: 12px; bottom: 0; width: 120px; transition: transform .4s; }
+.sneak img { width: 100%; display: block; }
+.portrait-fallback { width: 90px; height: 90px; border-radius: 50%; background: var(--night-2); display: grid; place-items: center; font-family: var(--serif); font-size: 32px; }
+.hehe { position: absolute; right: 120px; bottom: 90px; font-family: var(--serif); font-weight: 900; font-size: 18px; color: var(--lavender); animation: pop .4s both; }
+
+/* 特性條 */
+.traits { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; padding-block: 10px; align-items: center; }
+.traits .lbl { font-size: 12px; color: var(--muted); }
+.tr { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 7px; border-radius: 999px; font-size: 12px; font-weight: 700; color: var(--night); background: var(--c); }
+.tr i { font-style: normal; letter-spacing: 1px; font-size: 10px; }
+.tr.pop { animation: pop .45s cubic-bezier(.3,1.6,.5,1) both; }
+.tr.down { outline: 2px solid var(--crimson); }
+@keyframes pop { from { transform: scale(.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* 面板 */
+main { flex: 1; padding-block: 4px 16px; display: flex; flex-direction: column; gap: 12px; }
+h2 { font-family: var(--serif); font-size: 17px; margin: 4px 0 0; color: var(--amber); }
+.sub { font-size: 13px; color: var(--muted); margin: -6px 0 0; }
+.tip { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; background: var(--night-2); border-radius: 10px; padding: 8px 10px; }
+.tip img, .tip .av { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; object-position: top; background: #5b4870; flex: none; display: grid; place-items: center; font-family: var(--serif); }
+.tip b { color: var(--amber); }
+.list { display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 12px; border-radius: 10px; background: var(--night-2); border: 2px solid transparent; text-align: left; cursor: pointer; width: 100%; }
+.row:disabled { opacity: .5; cursor: not-allowed; }
+.row.on { border-color: var(--amber); background: #4a3a5e; }
+.row .main { flex: 1; min-width: 0; }
+.row .main small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.tok { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--paper); color: var(--ink); font-family: var(--serif); font-weight: 900; font-size: 17px; }
+.tok.spike { background: #E3D2F7; color: #4b2a7a; }
+.tok.none { background: transparent; border: 2px dashed var(--muted); color: var(--muted); font-size: 14px; }
+.pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: rgba(111,207,151,.18); color: var(--ok); }
+.pill.miss { background: rgba(194,72,72,.2); color: #F09090; }
+.pill.lo { background: rgba(111,207,151,.18); color: var(--ok); }
+.pill.mid { background: rgba(244,198,106,.2); color: var(--amber); }
+.pill.hi { background: rgba(194,72,72,.25); color: #F09090; }
+.matgroup h3 { font-size: 13px; margin: 0 0 6px; color: var(--text); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 130px; flex: 1 1 130px; padding: 8px 10px; border-radius: 10px; background: var(--night-2); border: 2px solid transparent; cursor: pointer; text-align: left; }
+.chip.on { border-color: var(--amber); background: #4a3a5e; }
+.chip small { color: var(--muted); font-size: 11px; }
+.chip .trs { display: flex; gap: 4px; flex-wrap: wrap; }
+.chip .trs .tr { font-size: 11px; padding: 1px 7px; }
+.free-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+.linkbtn { background: none; border: none; color: var(--muted); text-decoration: underline; font-size: 13px; cursor: pointer; align-self: center; padding: 6px; }
+
+/* 泡泡 */
+.bubbles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.bubble { aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.7), var(--c) 45%, color-mix(in srgb, var(--c) 60%, #000) 100%); color: var(--night); font-weight: 700; animation: bob 1.6s ease-in-out infinite alternate; }
+.bubble:nth-child(2) { animation-delay: .3s; } .bubble:nth-child(3) { animation-delay: .6s; }
+.bubble .key { font-size: 11px; opacity: .7; }
+.bubble .nm { font-family: var(--serif); font-size: 18px; }
+.bubble .pl { font-size: 13px; }
+.bubble.big { box-shadow: 0 0 0 3px var(--amber), 0 0 18px var(--c); }
+.bubble.gone { animation: suck .45s ease-in forwards; }
+@keyframes bob { to { transform: translateY(-6px); } }
+@keyframes suck { to { transform: translateY(-140px) scale(.2); opacity: 0; } }
+.count { display: flex; gap: 6px; justify-content: center; }
+.count span { width: 12px; height: 12px; border-radius: 50%; background: var(--night-line); }
+.count span.used { background: var(--amber); }
+
+/* 起鍋 */
+.bar { position: relative; height: 54px; border-radius: 12px; overflow: hidden; cursor: pointer; border: 2px solid var(--night-line);
+  background: linear-gradient(90deg, var(--crimson) 0 14%, var(--night-2) 14% 43%, var(--amber) 43% 57%, var(--night-2) 57% 86%, var(--crimson) 86% 100%); }
+.bar .zl { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: 12px; font-weight: 700; pointer-events: none; }
+.bead { position: absolute; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #d7e6ff 50%, #7c8fb8); box-shadow: 0 0 10px rgba(255,255,255,.7); }
+.bead.hit { animation: hit .5s; }
+@keyframes hit { 50% { transform: scale(1.6); } }
+.verdict { text-align: center; font-family: var(--serif); font-size: 22px; font-weight: 900; min-height: 30px; }
+.verdict.up { color: var(--amber); } .verdict.down { color: #F09090; } .verdict.keep { color: var(--text); }
+
+/* 成品 */
+.result { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding-block: 6px; }
+.result .tok { width: 84px; height: 84px; font-size: 40px; animation: pop .6s cubic-bezier(.3,1.6,.5,1) both; box-shadow: 0 0 0 4px var(--amber), 0 0 30px rgba(244,198,106,.5); }
+.result .tok.junk { background: #222; color: #777; box-shadow: 0 0 0 4px #444; }
+.result .name { font-family: var(--serif); font-size: 24px; font-weight: 900; }
+.result .traits { justify-content: center; }
+.notes { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+
+.cta { position: sticky; bottom: 0; padding-block: 10px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--night); border-top: 1px solid var(--night-line); }
+.btn { width: 100%; min-height: 50px; border-radius: 12px; border: none; font-size: 16px; font-weight: 700; cursor: pointer; background: var(--amber); color: var(--night); box-shadow: 0 4px 0 var(--amber-shadow); }
+.btn:disabled { background: var(--night-2); color: var(--muted); box-shadow: none; cursor: not-allowed; }
+.btn:active:not(:disabled) { transform: translateY(2px); }
+.keys { text-align: center; font-size: 11px; color: var(--muted); margin-top: 6px; }
+kbd { font-family: var(--sans); font-size: 11px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--night-line); background: var(--night-2); }
+:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.proto-note { font-size: 11px; color: var(--muted); text-align: center; padding-block: 8px; border-top: 1px dashed var(--night-line); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+</style>
+
+<div class="app">
+  <header class="wrap">
+    <div class="toprow">
+      <h1>炎洗宮・煉金房</h1>
+      <label class="quick" for="quick"><input type="checkbox" id="quick"> 快速調合</label>
+    </div>
+    <ol class="steps" id="steps">
+      <li data-s="1"><b>一</b>選素材</li>
+      <li data-s="2"><b>二</b>開火攪拌</li>
+      <li data-s="3"><b>三</b>加料</li>
+      <li data-s="4"><b>四</b>起鍋</li>
+    </ol>
+  </header>
+
+  <section class="stage" id="stage" aria-hidden="true">
+    <div class="pot">
+      <div class="ladle" id="ladle"></div>
+      <div class="pot-rim"></div>
+      <div class="liquid" id="liquid"></div>
+      <div class="pot-body"></div>
+      <div class="flames"><div class="flame"></div><div class="flame"></div><div class="flame"></div></div>
+    </div>
+    <div class="fx" id="fx"></div>
+  </section>
+
+  <div class="wrap traits" id="traits"></div>
+  <main class="wrap" id="panel"></main>
+  <div class="wrap cta" id="cta"></div>
+  <div class="wrap proto-note">原型：素材、數值、喜好都是暫定，只用來試手感</div>
+</div>
+
+<script>
+(() => {
+  const TRAITS = {
+    xiang: { n: '香氣', c: '#B784F0' },
+    tian:  { n: '甜蜜', c: '#F08DB0' },
+    hua:   { n: '華麗', c: '#F4C66A' },
+    qing:  { n: '清雅', c: '#7FC8A9' },
+    nong:  { n: '濃郁', c: '#D9925A' },
+  };
+  const MATS = { sandalwood: ['檀香', '檀'], jasmine: ['茉莉花', '茉'], ricefl: ['糯米粉', '糯'], osmanthus: ['桂花', '桂'], pearl: ['珍珠粉', '珠'], rose: ['玫瑰', '玫'], honey: ['蜂蜜', '蜜'], angelica: ['當歸', '歸'], jujube: ['紅棗', '棗'] };
+  const RECIPES = [
+    { id: 'incense', n: '安神香', ch: '香', mats: ['sandalwood', 'jasmine'] },
+    { id: 'cake', n: '桂花糕', ch: '糕', mats: ['ricefl', 'osmanthus'] },
+    { id: 'cream', n: '養顏膏', ch: '膏', mats: ['pearl', 'rose'] },
+    { id: 'tea', n: '玫瑰蜜茶', ch: '茶', mats: ['honey', 'rose'] },
+    { id: 'taitai', n: '安胎藥', ch: '藥', mats: ['angelica', 'jujube'] },
+  ];
+  const INV0 = [
+    { id: 1, mat: 'sandalwood', src: '小舖', tr: {} },
+    { id: 2, mat: 'sandalwood', src: '太醫院・藥櫃深處', tr: { nong: 1 } },
+    { id: 3, mat: 'jasmine', src: '御花園', tr: { qing: 1 } },
+    { id: 4, mat: 'jasmine', src: '御花園・假山後', tr: { qing: 2, xiang: 1 } },
+    { id: 5, mat: 'ricefl', src: '小舖', tr: {} },
+    { id: 6, mat: 'osmanthus', src: '御花園', tr: { tian: 1, xiang: 1 } },
+    { id: 7, mat: 'pearl', src: '小舖', tr: { hua: 1 } },
+    { id: 8, mat: 'rose', src: '御花園', tr: { xiang: 1 } },
+    { id: 9, mat: 'rose', src: '御花園・稀有', tr: { hua: 2 } },
+    { id: 10, mat: 'honey', src: '小舖', tr: { tian: 1, nong: 1 } },
+    { id: 11, mat: 'angelica', src: '太醫院', tr: { nong: 2 } },
+  ];
+  const SPIKES = [
+    { id: 'musk', n: '麝香', ch: '麝', base: 10, have: 1, eff: '累積 1 劑，滿 3 劑不孕' },
+    { id: 'badou', n: '巴豆', ch: '巴', base: 15, have: 2, eff: '今晚腹瀉，侍寢出包' },
+    { id: 'itch', n: '癢癢粉', ch: '癢', base: 15, have: 1, eff: '今晚狂癢，侍寢出包' },
+  ];
+  const TARGET = { n: '滑妃', friend: 10 };
+  const NONG_MULT = [1, 0.8, 0.6, 0.4];
+  const STIRS = 3;
+
+  const $ = (id) => document.getElementById(id);
+  const panel = $('panel'), cta = $('cta'), fx = $('fx'), stageEl = $('stage');
+  let S;
+
+  function reset() {
+    S = { step: 1, recipe: null, pick: {}, free: false, freePick: [], traits: {}, stir: 0, bubbles: null, spike: null, result: null, junk: false, busy: false, upTrait: null };
+    stageEl.classList.remove('lit');
+    setLiquid();
+    render();
+  }
+
+  const quick = () => $('quick').checked;
+  const inv = () => INV0;
+  const matName = (m) => MATS[m][0];
+  const trChip = (t, lv, cls = '') => `<span class="tr ${cls}" style="--c:${TRAITS[t].c}">${TRAITS[t].n}<i>${'●'.repeat(lv)}${'○'.repeat(3 - lv)}</i></span>`;
+  const trList = (tr) => Object.entries(tr).sort((a, b) => b[1] - a[1]).map(([t, lv]) => trChip(t, lv)).join('');
+  const missing = (r) => r.mats.filter((m) => !inv().some((i) => i.mat === m));
+  const score = (i) => Object.values(i.tr).reduce((a, b) => a + b, 0);
+  const tip = (line, who = 'baojuan') => `<div class="tip"><img src="img/${who}.webp" alt="" onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'av',textContent:'捐'}))"><span><b>包捐：</b>${line}</span></div>`;
+
+  function setLiquid() {
+    const e = Object.entries(S ? S.traits : {});
+    const liq = $('liquid');
+    if (!e.length) { liq.style.setProperty('--liq', '#5a4a6a'); return; }
+    const stops = []; const total = e.reduce((a, [, v]) => a + v, 0); let acc = 0;
+    e.forEach(([t, v]) => { const from = acc / total * 100; acc += v; stops.push(`${TRAITS[t].c} ${from}% ${acc / total * 100}%`); });
+    liq.style.setProperty('--liq', `conic-gradient(from 90deg, ${stops.join(',')})`);
+  }
+
+  function renderSteps() {
+    document.querySelectorAll('#steps li').forEach((li) => {
+      const s = +li.dataset.s;
+      li.className = (quick() && (s === 2 || s === 4)) ? 'skip' : s === S.step ? 'on' : s < S.step ? 'done' : '';
+    });
+  }
+
+  function renderTraits() {
+    const e = Object.keys(S.traits);
+    $('traits').innerHTML = S.step === 1 || S.junk ? '' : `<span class="lbl">鍋裡的特性</span>${e.length ? trList(S.traits) : '<span class="lbl">（還沒有）</span>'}`;
+  }
+
+  function render() {
+    renderSteps(); renderTraits();
+    ({ 1: step1, 2: step2, 3: step3, 4: step4, 5: step5 })[S.step]();
+  }
+
+  // ── 一：選素材 ──
+  function step1() {
+    if (S.free) return step1Free();
+    const r = S.recipe;
+    panel.innerHTML = `
+      <h2>配方冊</h2>
+      <div class="list">${RECIPES.map((x) => {
+        const miss = missing(x);
+        return `<button class="row ${r === x ? 'on' : ''}" data-recipe="${x.id}" data-nav ${miss.length ? 'disabled' : ''}>
+          <span class="tok">${x.ch}</span>
+          <span class="main"><b>${x.n}</b><small>${x.mats.map(matName).join(' ＋ ')}</small></span>
+          ${miss.length ? `<span class="pill miss">缺 ${miss.map(matName).join('、')}</span>` : '<span class="pill ok">可以做</span>'}
+        </button>`;
+      }).join('')}</div>
+      ${r ? `<h2>用哪一份？</h2><p class="sub">同一種素材，採集來的特性比較好</p>
+        ${r.mats.map((m) => `<div class="matgroup"><h3>${matName(m)}</h3><div class="chips">${inv().filter((i) => i.mat === m).map((i) => `
+          <button class="chip ${S.pick[m] === i.id ? 'on' : ''}" data-pick="${m}:${i.id}" data-nav>
+            <small>${i.src}</small>
+            <span class="trs">${Object.keys(i.tr).length ? trList(i.tr) : '<small>沒有特性</small>'}</span>
+          </button>`).join('')}</div></div>`).join('')}` : tip('小主，先從配方冊挑一道。缺什麼素材，這裡都會寫出來。')}
+      <button class="linkbtn" data-free="1">不看配方，自由調合</button>`;
+    const ok = r && r.mats.every((m) => S.pick[m]);
+    cta.innerHTML = `<button class="btn" id="go" ${ok ? '' : 'disabled'}>下鍋（花 1 個時辰）</button><div class="keys"><kbd>↑</kbd><kbd>↓</kbd> 移動　<kbd>Enter</kbd> 選擇</div>`;
+    panel.querySelectorAll('[data-recipe]').forEach((b) => b.onclick = () => {
+      S.recipe = RECIPES.find((x) => x.id === b.dataset.recipe); S.pick = {};
+      S.recipe.mats.forEach((m) => { const best = inv().filter((i) => i.mat === m).sort((a, c) => score(c) - score(a))[0]; S.pick[m] = best.id; });
+      render(); focusFirst('[data-pick]');
+    });
+    panel.querySelectorAll('[data-pick]').forEach((b) => b.onclick = () => { const [m, id] = b.dataset.pick.split(':'); S.pick[m] = +id; render(); focusSel(`[data-pick="${m}:${id}"]`); });
+    panel.querySelector('[data-free]').onclick = () => { S.free = true; S.freePick = []; render(); };
+    $('go').onclick = () => startCook(r.mats.map((m) => inv().find((i) => i.id === S.pick[m])), r);
+  }
+
+  function step1Free() {
+    panel.innerHTML = `<h2>自由調合</h2><p class="sub">隨便挑兩樣丟進鍋裡，配錯了會怎樣……誰知道呢</p>
+      <div class="free-grid">${inv().map((i) => `<button class="chip ${S.freePick.includes(i.id) ? 'on' : ''}" data-fp="${i.id}" data-nav>
+        <b>${matName(i.mat)}</b><small>${i.src}</small><span class="trs">${trList(i.tr)}</span></button>`).join('')}</div>
+      <button class="linkbtn" data-free="0">回到配方冊</button>`;
+    cta.innerHTML = `<button class="btn" id="go" ${S.freePick.length === 2 ? '' : 'disabled'}>下鍋（花 1 個時辰）</button>`;
+    panel.querySelectorAll('[data-fp]').forEach((b) => b.onclick = () => {
+      const id = +b.dataset.fp; const k = S.freePick.indexOf(id);
+      if (k >= 0) S.freePick.splice(k, 1); else if (S.freePick.length < 2) S.freePick.push(id);
+      render(); focusSel(`[data-fp="${id}"]`);
+    });
+    panel.querySelector('[data-free]').onclick = () => { S.free = false; render(); };
+    $('go').onclick = () => {
+      const items = S.freePick.map((id) => inv().find((i) => i.id === id));
+      const ms = items.map((i) => i.mat).sort().join();
+      startCook(items, RECIPES.find((r) => r.mats.slice().sort().join() === ms) || null);
+    };
+  }
+
+  function startCook(items, recipe) {
+    S.busy = true; S.recipe = recipe; S.items = items;
+    items.forEach((it, k) => setTimeout(() => {
+      const d = document.createElement('div'); d.className = 'drop'; d.textContent = MATS[it.mat][1]; fx.appendChild(d); setTimeout(() => d.remove(), 800);
+    }, k * 350));
+    setTimeout(() => {
+      stageEl.classList.add('lit');
+      S.traits = {};
+      items.forEach((it) => Object.entries(it.tr).forEach(([t, lv]) => { S.traits[t] = Math.min(3, (S.traits[t] || 0) + lv); }));
+      setLiquid(); S.busy = false;
+      if (!recipe) { S.junk = true; burnt(); return; }
+      if (quick()) { trimTraits(); S.step = 3; } else { S.step = 2; S.bubbles = roll(); }
+      render();
+    }, items.length * 350 + 500);
+  }
+
+  // ── 二：開火攪拌（三選一冒泡）──
+  function roll() {
+    const w = {}; Object.keys(TRAITS).forEach((t) => { w[t] = 1; });
+    S.items.forEach((it) => Object.entries(it.tr).forEach(([t, lv]) => { w[t] += 3 * lv; }));
+    const out = []; const pool = { ...w };
+    for (let k = 0; k < 3; k++) {
+      const tot = Object.values(pool).reduce((a, b) => a + b, 0); let x = Math.random() * tot;
+      const t = Object.keys(pool).find((key) => (x -= pool[key]) < 0) || Object.keys(pool)[0];
+      delete pool[t]; out.push({ t, v: Math.random() < 0.2 ? 2 : 1 });
+    }
+    return out;
+  }
+  function step2() {
+    panel.innerHTML = `<h2>開火攪拌</h2><p class="sub">每攪一次，挑一顆泡泡留在鍋裡（共 ${STIRS} 次）</p>
+      <div class="count">${Array.from({ length: STIRS }, (_, k) => `<span class="${k < S.stir ? 'used' : ''}"></span>`).join('')}</div>
+      <div class="bubbles">${S.bubbles.map((b, k) => `<button class="bubble ${b.v > 1 ? 'big' : ''}" style="--c:${TRAITS[b.t].c}" data-bub="${k}" aria-label="${TRAITS[b.t].n} 加 ${b.v}">
+        <span class="key">${k + 1}</span><span class="nm">${TRAITS[b.t].n}</span><span class="pl">+${b.v}${b.v > 1 ? ' 大泡泡' : ''}</span></button>`).join('')}</div>
+      ${tip(S.stir === 0 ? '放進去的素材有什麼特性，那種泡泡就冒得比較多。' : '同一種特性最多到 3 級，成品最多留 3 種特性。')}`;
+    cta.innerHTML = `<div class="keys"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> 或點泡泡</div>`;
+    panel.querySelectorAll('[data-bub]').forEach((b) => b.onclick = () => pickBubble(+b.dataset.bub, b));
+  }
+  function pickBubble(k, el) {
+    if (S.busy) return; S.busy = true;
+    const b = S.bubbles[k];
+    el.classList.add('gone');
+    const l = $('ladle'); l.classList.remove('stir'); void l.offsetWidth; l.classList.add('stir');
+    for (let n = 0; n < 4; n++) setTimeout(() => { const r = document.createElement('div'); r.className = 'rise'; r.style.left = `${40 + Math.random() * 20}%`; r.style.setProperty('--c', TRAITS[b.t].c); fx.appendChild(r); setTimeout(() => r.remove(), 1700); }, n * 120);
+    setTimeout(() => {
+      S.traits[b.t] = Math.min(3, (S.traits[b.t] || 0) + b.v); S.stir++; setLiquid(); S.busy = false;
+      if (S.stir >= STIRS) { trimTraits(); S.step = 3; } else S.bubbles = roll();
+      render();
+      const chip = [...document.querySelectorAll('#traits .tr')].find((c) => c.textContent.startsWith(TRAITS[b.t].n)); if (chip) chip.classList.add('pop');
+    }, 550);
+  }
+  function trimTraits() {
+    S.traits = Object.fromEntries(Object.entries(S.traits).sort((a, b) => b[1] - a[1]).slice(0, 3));
+    setLiquid();
+  }
+
+  // ── 三：加料 ──
+  const risk = (sp) => sp.base * Math.max(0.2, 1 - TARGET.friend / 100) * NONG_MULT[S.traits.nong || 0];
+  const lvl = (p) => p < 12 ? ['lo', '低'] : p < 25 ? ['mid', '中'] : ['hi', '高'];
+  function step3() {
+    const nong = S.traits.nong || 0;
+    panel.innerHTML = `<h2>要加料嗎？</h2><p class="sub">這份要送給${TARGET.n}（今晚侍寢・友好 ${TARGET.friend}）</p>
+      <div class="list">
+        <button class="row ${!S.spike ? 'on' : ''}" data-spike="" data-nav><span class="tok none">無</span><span class="main"><b>不加料</b><small>正正經經做給她</small></span></button>
+        ${SPIKES.map((sp) => { const p = risk(sp); const [c, t] = lvl(p); return `
+          <button class="row ${S.spike === sp.id ? 'on' : ''}" data-spike="${sp.id}" data-nav>
+            <span class="tok spike">${sp.ch}</span>
+            <span class="main"><b>${sp.n} ×${sp.have}</b><small>${sp.eff}</small></span>
+            <span class="pill ${c}">被抓 ${Math.round(p)}%・${t}</span></button>`; }).join('')}
+      </div>
+      ${nong ? tip(`鍋裡有<b>濃郁 ${nong} 級</b>，味道蓋得過去，被抓的機率 ×${NONG_MULT[nong]}。`) : tip('成品要是有「濃郁」，料的味道就比較不會被聞出來。')}`;
+    cta.innerHTML = `<button class="btn" id="go">${S.spike ? '偷偷撒進去' : '就這樣'}</button><div class="keys"><kbd>↑</kbd><kbd>↓</kbd> 移動　<kbd>Enter</kbd> 選擇</div>`;
+    panel.querySelectorAll('[data-spike]').forEach((b) => b.onclick = () => { S.spike = b.dataset.spike || null; render(); focusSel(`[data-spike="${S.spike || ''}"]`); showSneak(); });
+    $('go').onclick = () => {
+      if (S.spike) { const sp = SPIKES.find((x) => x.id === S.spike); const d = document.createElement('div'); d.className = 'drop'; d.style.background = '#E3D2F7'; d.textContent = sp.ch; fx.appendChild(d); setTimeout(() => d.remove(), 800); }
+      clearSneak();
+      setTimeout(() => { if (quick()) finish('keep', null); else { S.step = 4; render(); } }, S.spike ? 800 : 0);
+    };
+    showSneak();
+  }
+  function showSneak() {
+    clearSneak();
+    const w = document.createElement('div'); w.className = 'sneak'; w.id = 'sneak';
+    w.innerHTML = `<img src="img/${S.spike ? 'lingrong_evil' : 'lingrong_smile'}.webp" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'portrait-fallback',textContent:'溶'}))">`;
+    fx.appendChild(w);
+    if (S.spike) { const h = document.createElement('div'); h.className = 'hehe'; h.id = 'hehe'; h.textContent = '嘿嘿……'; fx.appendChild(h); }
+  }
+  function clearSneak() { ['sneak', 'hehe'].forEach((id) => { const e = $(id); if (e) e.remove(); }); }
+
+  // ── 四：起鍋（珠珠）──
+  let raf = null, beadPos = 50;
+  function step4() {
+    const top = Object.entries(S.traits).sort((a, b) => b[1] - a[1])[0];
+    S.upTrait = top ? top[0] : null;
+    panel.innerHTML = `<h2>起鍋！</h2><p class="sub">珠珠停在哪，決定${S.upTrait ? `「${TRAITS[S.upTrait].n}」` : '特性'}升級還是降級</p>
+      <div class="bar" id="bar" role="button" tabindex="0" aria-label="停下珠珠">
+        <span class="zl" style="left:7%">降</span><span class="zl" style="left:50%;color:var(--night)">升</span><span class="zl" style="left:93%">降</span>
+        <div class="bead" id="bead"></div></div>
+      <div class="verdict" id="verdict"></div>
+      ${tip('中間金色升一級，兩頭紅色會糊掉降一級，其他地方不變。')}`;
+    cta.innerHTML = `<button class="btn" id="go">起鍋！</button><div class="keys"><kbd>Space</kbd> 或點一下</div>`;
+    const bead = $('bead'); const t0 = performance.now(); const period = 1600;
+    const loop = (t) => { const ph = ((t - t0) % period) / period; beadPos = ph < .5 ? ph * 2 * 100 : (1 - (ph - .5) * 2) * 100; bead.style.left = `${beadPos}%`; raf = requestAnimationFrame(loop); };
+    raf = requestAnimationFrame(loop);
+    const stop = () => {
+      if (!raf) return; cancelAnimationFrame(raf); raf = null; bead.classList.add('hit');
+      const zone = beadPos < 14 || beadPos > 86 ? 'down' : beadPos >= 43 && beadPos <= 57 ? 'up' : 'keep';
+      const v = $('verdict'); v.className = `verdict ${zone}`; v.textContent = { up: '完美火候！', keep: '還可以', down: '哎呀，糊了一點……' }[zone];
+      $('go').disabled = true;
+      setTimeout(() => finish(zone, S.upTrait), 900);
+    };
+    $('bar').onclick = stop; $('go').onclick = stop;
+  }
+
+  // ── 成品 ──
+  function finish(zone, t) {
+    if (t && zone === 'up') S.traits[t] = Math.min(3, S.traits[t] + 1);
+    if (t && zone === 'down') { S.traits[t] -= 1; if (S.traits[t] <= 0) delete S.traits[t]; }
+    S.zone = zone; S.step = 5;
+    stageEl.classList.remove('lit');
+    for (let n = 0; n < 5; n++) setTimeout(() => { const s = document.createElement('div'); s.className = 'steam'; s.style.left = `${35 + Math.random() * 25}%`; fx.appendChild(s); setTimeout(() => s.remove(), 1500); }, n * 140);
+    render();
+  }
+  function burnt() {
+    S.step = 5; stageEl.classList.remove('lit');
+    for (let n = 0; n < 6; n++) setTimeout(() => { const s = document.createElement('div'); s.className = 'steam smoke'; s.style.left = `${35 + Math.random() * 25}%`; fx.appendChild(s); setTimeout(() => s.remove(), 1500); }, n * 140);
+    $('liquid').style.setProperty('--liq', '#1b1b1b');
+    render();
+  }
+  function step5() {
+    document.querySelectorAll('#steps li').forEach((li) => { li.className = (quick() && (li.dataset.s === '2' || li.dataset.s === '4')) ? 'skip' : 'done'; });
+    if (S.junk) {
+      panel.innerHTML = `<div class="result"><span class="tok junk">？</span><div class="name">一坨黑黑的東西</div>
+        <div class="notes"><span>配方不對，鍋子冒出了不可名狀的黑煙。</span></div></div>${tip('小主……這個，要不要先藏起來？', 'baojuan')}`;
+    } else {
+      const sp = SPIKES.find((x) => x.id === S.spike);
+      const ups = S.zone === 'up' && S.upTrait ? S.upTrait : null;
+      panel.innerHTML = `<div class="result">
+        <span class="tok">${S.recipe.ch}</span>
+        <div class="name">${S.recipe.n}${sp ? `<small style="font-size:14px;color:var(--lavender)">（加了${sp.n}）</small>` : ''}</div>
+        <div class="traits" id="rtraits"></div>
+        <div class="notes">
+          ${ups ? `<span>火候完美，${TRAITS[ups].n}升了一級！</span>` : S.zone === 'down' ? '<span>起鍋慢了一點，有個特性降了一級。</span>' : ''}
+          ${S.traits.nong ? '<span>濃郁：料的味道比較不會被聞出來。</span>' : ''}
+          <span>哪位娘娘會喜歡這些特性？去拜訪就知道了。</span>
+        </div></div>`;
+      const box = $('rtraits');
+      Object.entries(S.traits).sort((a, b) => b[1] - a[1]).forEach(([t, lv], k) => setTimeout(() => { box.insertAdjacentHTML('beforeend', trChip(t, lv, 'pop')); }, 300 + k * 250));
+    }
+    $('traits').innerHTML = '';
+    cta.innerHTML = `<button class="btn" id="go">再調一份</button><div class="keys"><kbd>Enter</kbd></div>`;
+    $('go').onclick = () => { clearSneak(); reset(); };
+    $('go').focus();
+  }
+
+  // ── 鍵盤 ──
+  function focusFirst(sel) { const e = panel.querySelector(`${sel}.on`) || panel.querySelector(sel); if (e) e.focus(); }
+  function focusSel(sel) { const e = panel.querySelector(sel); if (e) e.focus(); }
+  document.addEventListener('keydown', (e) => {
+    if (S.busy) return;
+    if (S.step === 2 && ['1', '2', '3'].includes(e.key)) { const b = panel.querySelector(`[data-bub="${+e.key - 1}"]`); if (b) b.click(); return; }
+    if (S.step === 4 && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); $('go').click(); return; }
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      const items = [...panel.querySelectorAll('[data-nav]:not(:disabled)'), ...cta.querySelectorAll('button:not(:disabled)')];
+      if (!items.length) return;
+      e.preventDefault();
+      const i = items.indexOf(document.activeElement);
+      const d = e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? -1 : 1;
+      items[i < 0 ? 0 : (i + d + items.length) % items.length].focus();
+    }
+  });
+  $('quick').onchange = () => { if (S.step === 1) renderSteps(); };
+
+  reset();
+})();
+</script>
