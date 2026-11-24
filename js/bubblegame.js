@@ -10,18 +10,18 @@
 //   onDone({ stirs, caught, escaped })：結束時呼叫；stirs 給 GameEngine.finalTraits 用（{t,v} 或 {t:'burnt'}）
 //   回傳 { destroy() }
 window.BubbleGame = (() => {
-  const DEFAULTS = {
-    duration: 9000, // 火候（毫秒）
+  const DEFAULTS = { // 2026-11-24 使用者在試玩台調定的手感
+    duration: 6000, // 火候（毫秒）
     slots: 3, // 勺子能裝幾顆
     lanes: 3,
-    spawnMs: 520, // 平均多久冒一顆
-    riseMs: [2600, 3600], // 從鍋面飄到頂要多久（越小越快）
+    spawnMs: 500, // 平均多久冒一顆
+    riseMs: [2100, 3200], // 從鍋面飄到頂要多久（越小越快）
     natureWeight: 3, // 鍋裡已有的特性每級多幾倍機會
     bigChance: 0.15,
     bigValue: 2,
-    burntChance: 0.14,
+    burntChance: 0.2,
     fan: true, // 包捐搧火：一次冒一波泡泡
-    fanEvery: [2600, 3600],
+    fanEvery: [2500, 3500],
     fanCount: 4,
     introMs: 1500,
   };

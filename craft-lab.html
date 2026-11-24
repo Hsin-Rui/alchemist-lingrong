@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>零溶的煉金房</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=Noto+Serif+TC:wght@700;900&display=swap">
+<link rel="stylesheet" href="css/bubblegame.css">
+<link rel="stylesheet" href="css/craftflow.css">
+<style>
+/* 四階段調合試玩台：手機一欄（最寬 480px），上面一條工具列，下面整個是調合流程本體。單一深色調。 */
+:root { --night: #241B30; --night-2: #3A2D4B; --line: #4E3F63; --text: #F1EAF8; --muted: #A897C0; --amber: #F4C66A;
+  --serif: 'Noto Serif TC', 'Songti TC', serif; --sans: 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #17111E; color: var(--text); font-family: var(--sans); }
+.app { max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--night); display: flex; flex-direction: column; gap: 12px;
+  padding-block: 12px 28px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+header h1 { font-family: var(--serif); font-size: 20px; margin: 0; color: var(--amber); letter-spacing: .06em; flex: 1; }
+.tool { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.tool input { accent-color: var(--amber); width: 18px; height: 18px; }
+.ghost { background: transparent; color: var(--text); border: 1.5px solid var(--line); border-radius: 10px; padding: 6px 12px; font: 13px var(--sans); cursor: pointer; }
+.ghost:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+.note { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.log { background: var(--night-2); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.7; }
+.log b { color: var(--amber); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>零溶的煉金房</h1>
+    <label class="tool" for="quick"><input type="checkbox" id="quick"> 快速調合</label>
+    <button class="ghost" id="mute" type="button">音效：開</button>
+    <button class="ghost" id="again" type="button">重來</button>
+  </header>
+  <p class="note">四階段調合的試玩版。包捐手上的素材是範例：每種都有一般份，幾樣有採集來的好貨。調好之後整個模組直接裝進遊戲。</p>
+  <div id="flow"></div>
+  <div class="log" id="log" hidden></div>
+</div>
+<script src="js/data.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/bubblegame.js"></script>
+<script src="js/craftflow.js"></script>
+<script>
+(() => {
+  const D = window.GAME_DATA, E = window.GameEngine, A = window.GameAudio;
+  const $ = (id) => document.getElementById(id);
+  // 範例素材：每種 2 份一般份，再加幾份採集來的
+  const sample = () => {
+    const inv = {}, lots = [];
+    let uid = 0;
+    Object.entries(D.ITEMS).filter(([, it]) => it.type === 'mat' && it.price).forEach(([id]) => { inv[id] = 2; });
+    const add = (id, tr) => { inv[id] = (inv[id] || 0) + 1; lots.push({ uid: ++uid, id, tr, src: 'gather' }); };
+    add('lotus', { tian: 2, qing: 1 }); add('lotus', { qing: 1 });
+    add('osmanthus', { xiang: 3 }); add('osmanthus', { tian: 1, xiang: 1 });
+    add('pearl', { hua: 2 }); add('motherwort', { nong: 1, qing: 1 });
+    add('pine', { qing: 2 }); add('plum', { xiang: 2, hua: 1 });
+    add('agarwood', { nong: 3 }); add('pear', { qing: 1, xiang: 1 });
+    add('angelica', { nong: 2 }); add('jujube', { tian: 2 });
+    return { inv, lots };
+  };
+  try { $('quick').checked = localStorage.getItem('lingrong-quickcraft') === '1'; } catch { /* 無痕模式 */ }
+  let flow = null;
+  const start = () => {
+    if (flow) flow.destroy();
+    $('log').hidden = true;
+    flow = window.CraftFlow.mount($('flow'), {
+      D, E, stock: sample(), spikes: ['musk', 'safflower', 'cassava', 'catnip'],
+      spikeNote: (id) => `被抓 ${Math.round(D.ITEMS[id].catch * 100)}%`,
+      quick: $('quick').checked,
+      img: (who) => (who === 'baojuan' ? 'assets/characters/baojuan.webp' : 'assets/characters/lingrong_smile.webp'),
+      itemImg: (id) => `assets/items/${id}.webp`,
+      sfx: (n, a) => A.sfx(n, a),
+      onDone: (r) => {
+        $('log').hidden = false;
+        $('log').innerHTML = `<b>${D.PRODUCTS[r.product].name}</b> 收進道具欄了。<br>撈到：${r.stirs.map((b) => (b.t === 'burnt' ? '焦' : `${D.TRAITS[b.t].name}+${b.v}`)).join('、') || '（沒有）'}・起鍋：${r.zone ? { up: '升', keep: '維持', down: '降' }[r.zone] : '跳過'}${r.spike ? `・加了${D.ITEMS[r.spike].name}` : ''}<br>按「重來」再做一鍋。`;
+        $('flow').innerHTML = '';
+      },
+    });
+  };
+  document.addEventListener('pointerdown', () => A.unlock(), { once: true });
+  $('again').addEventListener('click', start);
+  $('quick').addEventListener('change', () => { try { localStorage.setItem('lingrong-quickcraft', $('quick').checked ? '1' : '0'); } catch { /* 略 */ } start(); });
+  $('mute').addEventListener('click', () => { $('mute').textContent = `音效：${A.toggleMute() ? '關' : '開'}`; });
+  $('mute').textContent = `音效：${A.isMuted() ? '關' : '開'}`;
+  start();
+})();
+</script>
+</body>
+</html>
