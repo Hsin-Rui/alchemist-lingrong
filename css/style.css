@@ -506,3 +506,12 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .focus-box i:nth-child(2) { right: 0; top: 0; border-right-width: 3px; border-top-width: 3px; }
 .focus-box i:nth-child(3) { left: 0; bottom: 0; border-left-width: 3px; border-bottom-width: 3px; }
 .focus-box i:nth-child(4) { right: 0; bottom: 0; border-right-width: 3px; border-bottom-width: 3px; }
+
+/* ───── 特性小標籤（第二輪 §13.1） ───── */
+.trs { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
+.trs.center { display: flex; justify-content: center; margin: 4px 0 8px; }
+.trs.sm { margin-left: 4px; }
+.trc { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.5; color: #241B30; background: var(--c); white-space: nowrap; }
+.trc i { font-style: normal; font-size: 9px; letter-spacing: 1px; }
+.pot-body .trs { display: flex; justify-content: center; margin-top: 4px; }
+.has-tr { color: #8E2B2B; font-weight: 700; }

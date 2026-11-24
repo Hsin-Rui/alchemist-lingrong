@@ -88,6 +88,13 @@
   // ───────── 圖示 ─────────
   // 預設不顯示文字圓章／色塊，只有圖片真的讀不到時才退回去（避免每次換畫面都閃一下）
   const IMG_FAIL = "this.parentNode.classList.add('noimg');this.remove()";
+  // 特性小標籤：香氣●●○。tr 空 → 空字串
+  function trChips(tr, cls = '') {
+    const e = Object.entries(tr || {});
+    return e.length ? `<span class="trs ${cls}">${e.map(([t, lv]) => `<span class="trc" style="--c:${D.TRAITS[t].color}">${D.TRAITS[t].name}<i>${'●'.repeat(lv)}${'○'.repeat(3 - lv)}</i></span>`).join('')}</span>` : '';
+  }
+  // 某素材有幾份帶特性
+  const lotCount = (id) => S.lots.filter((l) => l.id === id).length;
   function tok(id, cls = '') {
     const it = def(id);
     const type = D.ITEMS[id] ? it.type : id === 'junk' ? 'junk' : 'product';
@@ -1001,6 +1008,10 @@
       const result = enough ? E.findRecipe(D, craftSel.mats) : null;
       const toInv = result && D.PRODUCTS[result].out === 'inv';
       const preview = enough ? (result ? `→ ${itemName(result)}` : '→ ？？？（好像不太對）') : '放入兩、三樣素材';
+      // 預覽成品特性：跟引擎一樣，每格自動挑特性最多的那份
+      const picked = [];
+      const slotTr = craftSel.mats.map((id) => { const l = E.bestLot(S, id, picked); if (l) picked.push(l.uid); return l ? l.tr : {}; });
+      const previewTr = result && !toInv ? E.mergeTraits(D, slotTr) : {};
       const owned = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat');
       // 配方只差一樣時，把缺的那樣也列出來（停用、標出哪裡有）：例如有紅花瓣沒烈酒，玩家才知道要去小舖買烈酒
       const missing = [];
@@ -1032,6 +1043,7 @@
         popup = `<div class="sheet-layer"><div class="sheet dark-sheet">
           <div class="craft-pop">${tok(r.product, 'xl')}</div>
           <h3 class="sheet-title">${r.product === 'junk' ? '碰！失敗了……' : `完成！${itemName(r.product)}`}</h3>
+          ${trChips(r.tr, 'center')}
           <p class="center">${msg}</p>
           <div class="row-btns">
             <button class="btn ghost" data-a="craftdone" data-v="home"${DEF(!canDeliver)}>${done ? '天色晚了，回宮' : '回炎洗宮'}</button>
@@ -1047,14 +1059,14 @@
             <div class="cauldron">
               <div class="cslots">${slot(a, 0)}${slot(b, 1)}${slot(c3, 2)}
                 <button class="cslot spike ${craftSel.spike ? 'filled' : ''}" data-a="spike" data-v="" aria-label="料">${craftSel.spike ? `${tok(craftSel.spike, 'lg')}<span>${itemName(craftSel.spike)}</span>` : '<span>料</span>'}</button></div>
-              <div class="pot"><div class="pot-rim"></div><div class="pot-body">${preview}</div><div class="pot-legs"><i></i><i></i></div>
+              <div class="pot"><div class="pot-rim"></div><div class="pot-body">${preview}${trChips(previewTr, 'sm')}</div><div class="pot-legs"><i></i><i></i></div>
                 <div class="bubbles"><i></i><i></i><i></i><i></i><i></i></div></div>
             </div>
           </div>
           <div class="drawer">
             <h3>素材 <small>點一下放進鍋裡</small></h3>
             <div class="matgrid">${mats.length ? mats.map((id) => (have(id)
-              ? `<button class="mat" data-a="mat" data-v="${id}"${DEF(id === matDef)} ${avail(id) <= 0 || craftSel.mats.length >= 3 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}</small></button>`
+              ? `<button class="mat" data-a="mat" data-v="${id}"${DEF(id === matDef)} ${avail(id) <= 0 || craftSel.mats.length >= 3 ? 'disabled' : ''}>${tok(id)}<span>${itemName(id)}</span><small>×${avail(id)}${lotCount(id) ? `・<b class="has-tr">${lotCount(id)} 份有特性</b>` : ''}</small></button>`
               : `<button class="mat lack" data-a="mat" data-v="${id}" disabled>${tok(id)}<span>${itemName(id)}</span><small>缺・${locName(sourcesOf(id)[0].loc)}</small></button>`)).join('') : '<p class="muted">沒有素材，先去採集或小舖吧。</p>'}</div>
             <h3>要加什麼料？ ${who ? `<small>依${charName(who)}目前狀態預測</small>` : ''}</h3>
             ${toInv ? '<p class="muted">正在煉製紅花，不能再加料。</p>' : ''}
@@ -1089,7 +1101,7 @@
           const blocked = h.spike && who !== S.flip;
           const p = h.spike ? E.predict(D, S, who, h.spike, 'gift') : null;
           return `<div class="row gift-row ${blocked ? 'blocked' : ''}">${tok(h.product)}${h.spike ? tok(h.spike, 'sm') : ''}
-            <div class="row-main"><b>${itemName(h.product)}${h.spike ? `<em class="spiked">＋${itemName(h.spike)}</em>` : ''}</b>
+            <div class="row-main"><b>${itemName(h.product)}${h.spike ? `<em class="spiked">＋${itemName(h.spike)}</em>` : ''}</b>${trChips(h.tr, 'sm')}
             <small>${blocked ? '加料的禮只能送給今晚侍寢的人' : p ? `${p.txt}・${p.riskTxt}` : `收下後友好 +${D.PRODUCTS[h.product].gift}`}</small></div>
             <button class="btn small ${blocked ? '' : 'primary'}" data-a="gift" data-v="${h.id}"${DEF(h.id === sendDef)} ${blocked || grounded() ? 'disabled' : ''}>送出</button></div>`;
         }).join('') : '<p class="muted">手上沒有成品。先去調合一份吧！</p><button class="btn primary wide" data-a="craftfor" data-v="">去調合</button>';
@@ -1168,9 +1180,9 @@
         <div class="scroll pad">
           <div class="card">${D.ALL.map(row).join('')}</div>
           <h3>持有的素材與料</h3>
-          <div class="chips">${inv.length ? inv.map((id) => `<span class="chip">${tok(id, 'sm')}${itemName(id)}×${S.inv[id]}</span>`).join('') : '<p class="muted">空空如也</p>'}</div>
+          <div class="chips">${inv.length ? inv.map((id) => `<span class="chip">${tok(id, 'sm')}${itemName(id)}×${S.inv[id]}${lotCount(id) ? `<em>（${lotCount(id)} 份有特性）</em>` : ''}</span>`).join('') : '<p class="muted">空空如也</p>'}</div>
           <h3>手上的成品</h3>
-          <div class="chips">${S.hand.length ? S.hand.map((h) => `<span class="chip">${tok(h.product, 'sm')}${itemName(h.product)}${h.spike ? `<em>+${itemName(h.spike)}</em>` : ''}</span>`).join('') : '<p class="muted">還沒有成品</p>'}</div>
+          <div class="chips">${S.hand.length ? S.hand.map((h) => `<span class="chip">${tok(h.product, 'sm')}${itemName(h.product)}${h.spike ? `<em>+${itemName(h.spike)}</em>` : ''}${trChips(h.tr, 'sm')}</span>`).join('') : '<p class="muted">還沒有成品</p>'}</div>
         </div>
       </div>`;
     },

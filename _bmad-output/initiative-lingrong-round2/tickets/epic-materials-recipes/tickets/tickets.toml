@@ -24,8 +24,8 @@ risk = "medium"
 [[entry]]
 id = 3
 type = "story"
-title = "採集來的素材帶特性，新的採集素材表與像素圖"
-description = "地下城擺放新素材並依距離擲特性，撿回來的進 S.lots；兩張地圖換新素材表；補新素材的像素圖。"
+title = "採集來的素材帶特性"
+description = "地下城擺放素材時依本性與離出生點的距離擲特性，撿回來的進 S.lots；採集結算畫面看得到特性。（新素材表與像素圖已在 story 1 完成）"
 verify = "單元測試涵蓋擲特性與距離；gather-bot 跑完；採集結算畫面看得到特性。"
 covers = ["R1", "R2"]
 after = [2]

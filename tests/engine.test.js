@@ -1010,3 +1010,48 @@ test('新料：木薯粉／貓薄荷是出糗類，predict 與 applySpike 的標
   assert.strictEqual(res.label, '貓咪鬧場');
   assert.strictEqual(S.conc.huafei.debuff, 'catnip');
 });
+
+// ───────── 第二輪：素材份與特性 ─────────
+test('素材份：addUnit／takeUnit 維持 inv 總數與 lots 一致；沒指定先拿一般份', () => {
+  const S = fresh(); // 開局 pine ×1（一般份）
+  E.addUnit(S, 'pine', { qing: 2 });
+  E.addUnit(S, 'pine', {}); // 沒特性 → 只加總數
+  assert.strictEqual(S.inv.pine, 3);
+  assert.strictEqual(S.lots.length, 1);
+  assert.deepStrictEqual(E.takeUnit(S, 'pine'), {}, '先拿一般份');
+  assert.deepStrictEqual(E.takeUnit(S, 'pine'), {}, '還有一般份');
+  assert.deepStrictEqual(E.takeUnit(S, 'pine'), { qing: 2 }, '一般份沒了才拿帶特性的');
+  assert.strictEqual(S.inv.pine, undefined);
+  assert.strictEqual(S.lots.length, 0);
+  assert.deepStrictEqual(E.takeUnit(S, 'pine'), {}, '沒有就不動');
+  E.addUnit(S, 'plum', { xiang: 1 });
+  const uid = S.lots[0].uid;
+  assert.deepStrictEqual(E.takeUnit(S, 'plum', uid), { xiang: 1 }, '指定 uid 拿那份');
+});
+
+test('mergeTraits：同特性相加、最高 3 級、最多 3 種（平手依特性順序）', () => {
+  assert.deepStrictEqual(E.mergeTraits(D, [{ xiang: 2 }, { xiang: 2, tian: 1 }]), { xiang: 3, tian: 1 });
+  assert.deepStrictEqual(E.mergeTraits(D, [{ nong: 1, qing: 1 }, { hua: 1, tian: 1 }]), { tian: 1, hua: 1, qing: 1 });
+  assert.deepStrictEqual(E.mergeTraits(D, [{}, {}]), {});
+});
+
+test('craft：自動挑特性最多的那份，成品帶合併特性；指定 lots 用指定的；黑暗料理沒特性', () => {
+  const S = fresh(); // lotus ×1、osmanthus ×1（一般）
+  E.addUnit(S, 'lotus', { tian: 1 });
+  E.addUnit(S, 'lotus', { tian: 2, qing: 1 });
+  E.addUnit(S, 'osmanthus', { xiang: 1 });
+  const r = E.craft(D, S, { mats: ['lotus', 'osmanthus'], spike: null, forOrder: null, forWho: null });
+  assert.strictEqual(r.product, 'cake');
+  assert.deepStrictEqual(S.hand[0].tr, { tian: 2, qing: 1, xiang: 1 });
+  assert.deepStrictEqual(r.tr, S.hand[0].tr);
+  assert.strictEqual(S.inv.lotus, 2);
+  assert.deepStrictEqual(S.lots.filter((l) => l.id === 'lotus').map((l) => l.tr), [{ tian: 1 }], '用掉的是最好的那份');
+  const weak = S.lots.find((l) => l.id === 'lotus').uid;
+  const r2 = E.craft(D, S, { mats: ['lotus', 'osmanthus'], lots: [weak, null], spike: null, forOrder: null, forWho: null });
+  assert.deepStrictEqual(r2.tr, { tian: 1 }, '指定的份；桂花只剩一般份');
+  const S2 = fresh();
+  E.addUnit(S2, 'pine', { qing: 3 });
+  const r3 = E.craft(D, S2, { mats: ['pine', 'plum'], spike: null, forOrder: null, forWho: null });
+  assert.strictEqual(r3.product, 'junk');
+  assert.deepStrictEqual(r3.tr, {});
+});

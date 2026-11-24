@@ -57,3 +57,4 @@ risk: medium
 - Decision: 2026-11-24 訂單需求句換新配方時一併改成宮女開口（B12–B14），因為新的需求句是宮女的口吻；宮女立繪、包捐代交仍屬 epic-visit-palaces。
 - Decision: 2026-11-24 新料的被抓基礎機率先沿用舊值 15%，新數值與遮掩屬於 epic-visit-palaces。
 - Decision: 2026-11-24 tracer：story 1（新資料＋三素材調合）。
+- Decision: 2026-11-24 新採集素材表與像素圖併入 story 1（換掉 ITEMS 後舊表會失效），story 3 只剩擲特性。

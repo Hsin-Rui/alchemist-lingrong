@@ -31,6 +31,40 @@
     if (S.inv[id] <= 0) delete S.inv[id];
   }
   const pick = (arr, rand) => arr[Math.floor(rand() * arr.length)];
+
+  // ───────── 素材份與特性（game-design §13.1–13.2）─────────
+  // S.inv[id] 仍是「總共有幾份」；帶特性的那幾份另外記在 S.lots（{ uid, id, tr }），沒特性的就是一般份。
+  // 不變式：同一種素材的 lots 數 ≤ inv 數。要減素材一律走 takeUnit，才不會兩邊對不上。
+  const traitSum = (tr) => Object.values(tr || {}).reduce((a, b) => a + b, 0);
+  const lotsOf = (S, id) => S.lots.filter((l) => l.id === id);
+  // 預設挑哪一份：特性總級數最高的那份；都沒有特性 → null（用一般份）
+  function bestLot(S, id, skip) {
+    const ls = lotsOf(S, id).filter((l) => !(skip && skip.includes(l.uid)));
+    return ls.reduce((a, b) => (!a || traitSum(b.tr) > traitSum(a.tr) ? b : a), null);
+  }
+  // 放進一份：tr 有東西才記成帶特性的份
+  function addUnit(S, id, tr) {
+    invAdd(S, id);
+    if (tr && traitSum(tr) > 0) S.lots.push({ uid: ++S.lotSeq, id, tr: { ...tr } });
+  }
+  // 拿走一份：指定 uid 就拿那份；沒指定先拿一般份，一般份沒了再拿特性最少的那份。回傳拿走那份的特性（一般份 → {}）。
+  function takeUnit(S, id, uid) {
+    if (!(S.inv[id] > 0)) return {};
+    let lot = uid != null ? S.lots.find((l) => l.uid === uid && l.id === id) : null;
+    const ls = lotsOf(S, id);
+    if (!lot && uid == null && ls.length >= S.inv[id]) lot = ls.reduce((a, b) => (traitSum(b.tr) < traitSum(a.tr) ? b : a));
+    invAdd(S, id, -1);
+    if (!lot) return {};
+    S.lots = S.lots.filter((l) => l !== lot);
+    return { ...lot.tr };
+  }
+  // 合併特性：同特性相加、最高 maxLv 級；只留最強的 maxN 種（平手依 D.TRAITS 的順序）
+  function mergeTraits(D, trs, maxLv = 3, maxN = 3) {
+    const sum = {};
+    trs.forEach((tr) => Object.entries(tr || {}).forEach(([t, lv]) => { sum[t] = Math.min(maxLv, (sum[t] || 0) + lv); }));
+    const order = Object.keys(D.TRAITS);
+    return Object.fromEntries(Object.entries(sum).sort((a, b) => b[1] - a[1] || order.indexOf(a[0]) - order.indexOf(b[0])).slice(0, maxN));
+  }
   const itemName = (D, id) => (D.ITEMS[id] || D.PRODUCTS[id]).name;
   const have = (S, id) => S.inv[id] || 0;
   // 成品記著是替哪張訂單做的（forOrder）。那張訂單還在，成品就只屬於它，不會被別張同品項訂單拿走
@@ -62,7 +96,7 @@
       favor: { ...R.favor },
       friend: { ...R.friend },
       conc: Object.fromEntries(D.TARGETS.map((t) => [t, { status: R.status[t], preg: 0, musk: 0, debuff: null }])),
-      inv: { ...R.startInv },
+      inv: { ...R.startInv }, lots: [], lotSeq: 0,
       orders: [], hand: [], seq: 0,
       flip: null, bribe: 0, bribedToday: false, groundUntil: 0,
       noFlipNights: 0, empressBoost: false, tired: false,
@@ -757,17 +791,27 @@
   }
 
   // 調合（確定性，無 rand）：slot++、放進去的 2～3 樣素材各 -1、findRecipe→成品或 junk；成品入 hand/inv。
+  // craftSel.lots：與 mats 同位置的素材份 uid（null／省略 → 自動挑特性最多的那份，沒有就用一般份）。
+  // 成品帶上所用素材合併後的特性（§13.3 快速調合的結果）；黑暗料理和紅花沒有特性。
   function craft(D, S, craftSel) {
     const mats = craftSel.mats.filter(Boolean);
     S.slot++;
-    mats.forEach((id) => invAdd(S, id, -1));
+    const chosen = [];
+    const used = mats.map((id, i) => {
+      let uid = craftSel.lots && craftSel.lots[i] != null ? craftSel.lots[i] : null;
+      if (uid == null) { const b = bestLot(S, id, chosen); uid = b ? b.uid : null; }
+      if (uid != null) chosen.push(uid);
+      return [id, uid];
+    });
+    const trs = used.map(([id, uid]) => takeUnit(S, id, uid));
     const product = findRecipe(D, mats) || 'junk';
     if (product === 'junk') S.stats.junk++;
     const toInv = D.PRODUCTS[product].out === 'inv';
     const spike = toInv ? null : craftSel.spike;
     if (spike) invAdd(S, spike, -1);
     if (toInv) invAdd(S, product);
-    const item = toInv ? null : { id: ++S.seq, product, spike: product === 'junk' ? null : spike, forOrder: null };
+    const tr = product === 'junk' ? {} : mergeTraits(D, trs);
+    const item = toInv ? null : { id: ++S.seq, product, spike: product === 'junk' ? null : spike, forOrder: null, tr };
     // 從訂單進來的就送那張訂單；否則先找調合時預測的對象（forWho）要這個成品、還沒備好的訂單，
     // 再找任何還沒備好的同品項訂單。找到就把成品綁在那張訂單上。
     const open = (o) => o.product === product && !readyItem(S, o);
@@ -777,7 +821,7 @@
       || null;
     if (item) { if (order) item.forOrder = order.id; S.hand.push(item); }
     S.dayLog.push(product === 'junk' ? '調合失敗，做出一坨黑黑的東西' : `調合了${itemName(D, product)}${spike ? `（加了${itemName(D, spike)}）` : ''}`);
-    return { product, spike, toInv, lostSpike: product === 'junk' && spike, order, itemId: item && item.id };
+    return { product, spike, toInv, lostSpike: product === 'junk' && spike, order, itemId: item && item.id, tr: item ? item.tr : {} };
   }
 
   // 交貨：移訂單＋手牌，applySpike，未被抓給 reward（無效×uselessRewardRate）＋deliverFriend，設 S.result。
@@ -876,7 +920,7 @@
     newState, TITLE_CHECK, computeEnding,
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
-    findRecipe, acceptChance,
+    findRecipe, acceptChance, traitSum, bestLot, addUnit, takeUnit, mergeTraits,
     buy, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
