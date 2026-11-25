@@ -255,13 +255,14 @@
   // ───────── 流程 ─────────
   function startGame() {
     A.unlock();
-    A.playBgm('main');
+    A.playBgm('title', 'main'); // 開場對話繼續播標題曲，第一天開始才換主題曲
     S = E.newState(D);
     screen = 'title'; // 再玩一次時，教學對話要疊在標題頁上（結局頁需要上一局的結果）
     playDialog(D.TUTORIAL, startDay);
   }
 
   function startDay() {
+    A.playBgm('main');
     A.sfx('gong');
     playDialog(renderStartLines(E.startDay(D, S, rand)), () => go('home'));
   }
@@ -307,7 +308,9 @@
   function pickTile(k) {
     if (!sutra || sutra.used.has(k)) return;
     const t = sutra.tiles[k];
-    if (t.i !== sutra.next) {
+    // 同一個字出現兩次（例如「個個」）時，點哪一塊都算對：比的是字，不是字塊的編號
+    const want = sutra.tiles.find((x) => x.i === sutra.next).ch;
+    if (t.ch !== want) {
       // 點錯：字塊抖一下、經書多一滴墨（不卡關）
       sutra.blots++;
       sutra.shake = k;
@@ -1864,10 +1867,20 @@
   if (location.hash === '#e2e') {
     window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, sutra: () => sutra, render, go, openCraft, playDialog };
   }
-  // 標題曲：瀏覽器要等玩家第一次點擊／按鍵才准出聲。assets/audio/bgm_title.lite.mp3 沒有就播主題曲
-  const titleBgm = () => { if (screen === 'title' && !dlg) { A.unlock(); A.playBgm('title', 'main'); } };
-  document.addEventListener('pointerdown', titleBgm, { once: true });
-  document.addEventListener('keydown', titleBgm, { once: true });
+  // 標題曲：一打開就試著播；瀏覽器擋下（還沒點過畫面）時，標題頁顯示「點一下畫面播放音樂」，
+  // 第一次點擊或按鍵就開始播。assets/audio/bgm_title.lite.mp3 沒有就播主題曲
+  const titleBgm = () => {
+    if (screen !== 'title' || dlg) return;
+    A.unlock();
+    A.playBgm('title', 'main');
+    app.querySelector('.music-hint')?.remove();
+  };
+  if (screen === 'title' && !A.isMuted()) {
+    A.playBgm('title', 'main');
+    setTimeout(() => { if (screen === 'title' && !A.isPlaying() && !A.isMuted()) { const t = app.querySelector('.title-screen'); if (t && !t.querySelector('.music-hint')) t.insertAdjacentHTML('beforeend', '<div class="music-hint">♪ 點一下畫面播放音樂</div>'); } }, 600);
+  }
+  document.addEventListener('pointerdown', titleBgm, { once: true, capture: true });
+  document.addEventListener('keydown', titleBgm, { once: true, capture: true });
   render();
   preloadImages();
 })();

@@ -423,6 +423,14 @@ function connect(url) {
     check('抄完 → 播 J2–J4', await waitFor("!!document.querySelector('.dialog-layer')", 3000));
     await press('Escape');
     check('抄完回主畫面、手上多一本心經、時辰 +1', await waitFor("document.getElementById('app').dataset.screen === 'home'", 3000) && await G('return S.hand.some((h) => h.product === "sutra") && S.slot === 1 && S.stats.sutras === window.__sg.stats + 1;'));
+    // 重複的字：「個個」兩塊，先點後面那塊也算對
+    await G('S.slot = 0; S.groundUntil = S.day + 1; __e2e.go("home");');
+    await ev("document.querySelector('[data-a=sutra]').click()");
+    await ev("(() => { const s = __e2e.sutra(); s.line = '他們個個都要害本宮。'; s.tiles = window.GameEngine.sutraTiles(s.line, Math.random); __e2e.render(); })()");
+    await ev("(() => { const s = __e2e.sutra(); const order = [0, 1, 3, 2, 4, 5, 6, 7, 8]; for (const n of order) { const k = s.tiles.findIndex((t) => t.i === n); document.querySelector(`[data-a=tile][data-v=\"${k}\"]`).click(); } })()");
+    check('重複的字：「個個」順序對調也算對、沒有墨漬', await ev("(() => { const s = __e2e.sutra(); return !s || s.blots === 0; })()") && await waitFor("!!document.querySelector('.dialog-layer')", 3000));
+    await press('Escape');
+    await waitFor("document.getElementById('app').dataset.screen === 'home'", 3000);
     await G('S.groundUntil = 0; S.slot = window.__sg.slot; S.hand = window.__sg.hand; __e2e.go("home");');
 
     // ── 採集地下城：方向鍵只有地下城走路；收工後結果單預設 ──

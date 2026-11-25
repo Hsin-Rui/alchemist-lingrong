@@ -229,7 +229,11 @@ window.GameAudio = (() => {
 
   // alt：這首沒有檔案時改播哪一首（例如標題曲還沒放 → 播主題曲）
   function playBgm(name, alt) {
-    if (bgmName === name) return;
+    if (bgmName === name) {
+      // 同一首但被瀏覽器擋下（還沒互動時自動播放失敗）→ 再試一次
+      if (bgmEl && bgmEl.paused && !muted) { const p = bgmEl.play(); if (p && p.catch) p.catch(() => {}); }
+      return;
+    }
     bgmName = name;
     stopSynth();
     if (bgmEl) { bgmEl.pause(); bgmEl = null; }
@@ -273,6 +277,7 @@ window.GameAudio = (() => {
     dungeonBgm,
     unlock() { ensureCtx(); if (ctx && ctx.state === 'suspended') ctx.resume(); },
     isMuted: () => muted,
+    isPlaying: () => !!(bgmEl && !bgmEl.paused) || !!synthTimer,
     toggleMute() { setMuted(!muted); return muted; },
   };
 })();

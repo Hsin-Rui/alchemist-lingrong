@@ -1359,3 +1359,8 @@ test('jitterZones：五段加總 100、兩端降級 8～18、升級 9～17、維
   assert.strictEqual(E.finishZone(D, 5, Z), 'down');
   assert.strictEqual(E.finishZone(D, 70, Z), 'keep');
 });
+
+test('sutraTiles：重複的字（他們個個都要害本宮）各有一塊，字相同', () => {
+  const tiles = E.sutraTiles('他們個個都要害本宮。', () => 0.5);
+  assert.strictEqual(tiles.filter((t) => t.ch === '個').length, 2);
+});

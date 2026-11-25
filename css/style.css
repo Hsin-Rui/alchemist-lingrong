@@ -548,3 +548,5 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .scell-foot em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); }
 .scell.poor { opacity: .45; }
 .scell:active:not(:disabled) { transform: translateY(1px); }
+.music-hint { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: rgba(20,14,30,.6); color: #F4C66A; font-size: 13px; pointer-events: none; animation: hintpulse 1.6s ease-in-out infinite alternate; z-index: 5; }
+@keyframes hintpulse { from { opacity: .55; } to { opacity: 1; } }
