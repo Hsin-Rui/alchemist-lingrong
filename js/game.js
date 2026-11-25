@@ -1875,6 +1875,8 @@
       spikesUsed: pick([0, 3, 6]), success: pick([0, 2, 4]), caught: pick([0, 1, 2]),
       victims: pick([[], ['huafei'], [...D.TARGETS]]), ruined: pick([[], ['meizhuang'], ['meizhuang', 'zhenhuan']]),
       sings: pick([0, 2]), bribes: pick([0, 1, 2]), junk: pick([0, 1]), births: pick([0, 1]), muskRuin: pick([0, 1]),
+      sutras: pick([0, 3]), loves: pick([0, 2, 5]), perfect: pick([0, 1]), yuanzhu: pick([0, 0, 1]),
+      ...pick([{ selfDeliver: 6, proxyDeliver: 2 }, { selfDeliver: 0, proxyDeliver: 4 }]),
     });
     S.result = computeEnding(false);
     screen = 'ending';

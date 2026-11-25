@@ -202,7 +202,7 @@
       orders: [], hand: [], seq: 0,
       flip: null, bribe: 0, bribedToday: false, groundUntil: 0,
       noFlipNights: 0, empressBoost: false, tired: false,
-      stats: { spikesUsed: 0, success: 0, caught: 0, groundedDays: 0, victims: [], ruined: [], sings: 0, bribes: 0, junk: 0, births: 0, muskRuin: 0, sutras: 0 },
+      stats: { spikesUsed: 0, success: 0, caught: 0, groundedDays: 0, victims: [], ruined: [], sings: 0, bribes: 0, junk: 0, births: 0, muskRuin: 0, sutras: 0, loves: 0, selfDeliver: 0, proxyDeliver: 0, perfect: 0, yuanzhu: 0 },
       log: [], dayLog: [], result: null,
     };
   }
@@ -219,6 +219,10 @@
     jingshi: (S) => S.stats.bribes >= 2,
     miaoyin: (S) => S.stats.sings >= 2,
     bailian: (S) => S.stats.spikesUsed === 0,
+    yuanzhu: (S) => (S.stats.yuanzhu || 0) >= 1,
+    michelin: (S) => (S.stats.perfect || 0) >= 1,
+    ganlu: (S) => (S.stats.sutras || 0) >= 3,
+    baojuan: (S) => (S.stats.selfDeliver || 0) === 0 && (S.stats.proxyDeliver || 0) >= 3,
     heian: (S) => S.stats.junk >= 1,
     zhongsi: (S) => S.stats.births >= 1,
     touming: () => false,
@@ -303,6 +307,14 @@
       return { ...out, txt: `不孕 ${R.fx.infertile}`, cls: 'good' };
     }
     return { ...out, txt: S.flip === who ? `${it.debuff} ${R.fx[spike]}・今晚出包` : it.debuff, cls: 'good', it }; // 不是今晚侍寢的人：不提醒會白費
+  }
+
+  const bump = (S, k, n = 1) => { S.stats[k] = (S.stats[k] || 0) + n; };
+  // 完美成品：3 種特性都 3 級（炎洗宮米其林）
+  const isPerfect = (tr) => Object.values(tr || {}).filter((lv) => lv >= 3).length >= 3;
+  // 原著重現：舒痕膠加麝香送到真環手上，而且麝香有發揮（沒被抓、不是無效）
+  function markYuanzhu(S, who, item, res) {
+    if (who === 'zhenhuan' && item.product === 'shuhen' && item.spike === 'musk' && !res.caught && !res.useless) bump(S, 'yuanzhu');
   }
 
   // 真正下料（擲骰、改狀態、推 S.log/S.stats）。rand 注入。
@@ -941,6 +953,7 @@
     if (spike) invAdd(S, spike, -1);
     if (toInv) invAdd(S, product);
     const tr = product === 'junk' ? {} : finalTraits(D, trs, craftSel.stirs, craftSel.finish);
+    if (isPerfect(tr)) bump(S, 'perfect');
     const item = toInv ? null : { id: ++S.seq, product, spike: product === 'junk' ? null : spike, forOrder: null, tr };
     // 從訂單進來的就送那張訂單；否則先找調合時預測的對象（forWho）要這個成品、還沒備好的訂單，
     // 再找任何還沒備好的同品項訂單。找到就把成品綁在那張訂單上。
@@ -968,6 +981,8 @@
     S.hand = S.hand.filter((h) => h !== item);
     const who = order.who;
     const res = applySpike(D, S, who, item.spike, 'deliver', rand, item.tr);
+    bump(S, proxy ? 'proxyDeliver' : 'selfDeliver');
+    markYuanzhu(S, who, item, res);
     let reward = 0;
     let friendDelta = res.friendDelta || 0;
     if (!res.caught) {
@@ -1040,8 +1055,10 @@
     }
     S.hand = S.hand.filter((h) => h !== item);
     const res = applySpike(D, S, who, item.spike, 'gift', rand, item.tr);
+    markYuanzhu(S, who, item, res);
     let friendDelta = res.friendDelta || 0;
     if (!res.caught && !res.useless) friendDelta = addFriend(S, who, giftFriend(D, who, item.product, item.tr));
+    if (!res.caught && reaction === 'love') bump(S, 'loves');
     S.result = { kind: 'gift', who, product: item.product, spike: item.spike, reaction, friendDelta, reward: 0, ...res };
     S.dayLog.push(`拜訪${charName(D, who)}，送了${itemName(D, item.product)}${res.caught ? '，被抓！' : res.label ? `，${res.label}` : ''}`);
     return S.result;

@@ -1377,3 +1377,76 @@ test('setupTutorial：沒有桂花（含帶特性的份）、訂單只有真環�
   assert.strictEqual(o.due, S.day + D.RULES.orderDays - 1);
   assert.deepStrictEqual(S.tutorial, { step: 'gather' });
 });
+
+// ───────── 第二輪新封號（§9 第二輪）─────────
+test('炎洗宮米其林：做出 3 種特性都 3 級的成品 → stats.perfect++；差一級不算', () => {
+  const mk = () => { const S = fresh(); S.inv.lotus = 2; S.inv.osmanthus = 2; return S; };
+  let S = mk();
+  E.craft(D, S, { mats: ['lotus', 'osmanthus'], stirs: [{ t: 'tian', v: 3 }, { t: 'xiang', v: 3 }, { t: 'qing', v: 3 }] });
+  assert.strictEqual(S.stats.perfect, 1);
+  assert.strictEqual(E.TITLE_CHECK.michelin(S), true);
+  S = mk();
+  E.craft(D, S, { mats: ['lotus', 'osmanthus'], stirs: [{ t: 'tian', v: 3 }, { t: 'xiang', v: 3 }, { t: 'qing', v: 2 }] });
+  assert.strictEqual(S.stats.perfect, 0);
+  assert.strictEqual(E.TITLE_CHECK.michelin(S), false);
+});
+
+test('原著重現：舒痕膠加麝香送給真環且麝香有發揮；被抓、送別人、別的成品都不算', () => {
+  const give = (who, product, rand, via = 'deliver') => {
+    const S = fresh();
+    S.hand = [{ id: 1, product, spike: 'musk', forOrder: 1, tr: {} }];
+    S.orders = [{ id: 1, who, product, due: 3 }];
+    if (via === 'deliver') E.deliver(D, S, 1, 1, rand);
+    else E.visit(D, S, who, 1, rand);
+    return S;
+  };
+  assert.strictEqual(E.TITLE_CHECK.yuanzhu(give('zhenhuan', 'shuhen', ONE)), true, '親自交貨得手');
+  assert.strictEqual(E.TITLE_CHECK.yuanzhu(give('zhenhuan', 'shuhen', ONE, 'gift')), false, '拜訪：收禮骰 ONE 會拒收');
+  assert.strictEqual(E.TITLE_CHECK.yuanzhu(give('zhenhuan', 'shuhen', seq([0, 0.999]), 'gift')), true, '拜訪收下、沒被抓');
+  assert.strictEqual(E.TITLE_CHECK.yuanzhu(give('zhenhuan', 'shuhen', ZERO)), false, '被抓不算');
+  assert.strictEqual(E.TITLE_CHECK.yuanzhu(give('meizhuang', 'shuhen', ONE)), false, '送審沒裝不算');
+  assert.strictEqual(E.TITLE_CHECK.yuanzhu(give('zhenhuan', 'cake', ONE)), false, '別的成品不算');
+});
+
+test('甘露寺預備役：抄經 3 次以上', () => {
+  const S = fresh();
+  S.groundUntil = 3;
+  E.copySutra(D, S); E.copySutra(D, S);
+  assert.strictEqual(E.TITLE_CHECK.ganlu(S), false);
+  E.copySutra(D, S);
+  assert.strictEqual(S.stats.sutras, 3);
+  assert.strictEqual(E.TITLE_CHECK.ganlu(S), true);
+});
+
+test('包捐才是本體：訂單全由包捐代交且至少 3 張；親自交過一次就不算', () => {
+  const run = (hows) => {
+    const S = fresh();
+    hows.forEach((how, i) => {
+      S.orders.push({ id: i + 1, who: 'meizhuang', product: 'cake', due: 3 });
+      S.hand.push({ id: i + 1, product: 'cake', spike: null, forOrder: i + 1, tr: {} });
+      E.deliver(D, S, i + 1, i + 1, ONE, how);
+    });
+    return S;
+  };
+  assert.strictEqual(E.TITLE_CHECK.baojuan(run(['proxy', 'proxy', 'proxy'])), true);
+  assert.strictEqual(E.TITLE_CHECK.baojuan(run(['proxy', 'proxy'])), false, '只有 2 張');
+  const S = run(['proxy', 'proxy', 'proxy', 'self']);
+  assert.strictEqual(S.stats.selfDeliver, 1);
+  assert.strictEqual(S.stats.proxyDeliver, 3);
+  assert.strictEqual(E.TITLE_CHECK.baojuan(S), false);
+});
+
+test('投其所好次數：收下且反應 love 才算；拒收不算', () => {
+  const S = fresh();
+  S.hand = [{ id: 1, product: 'yunv', spike: null, tr: {} }, { id: 2, product: 'yunv', spike: null, tr: {} }];
+  E.visit(D, S, 'huafei', 1, ZERO);
+  assert.strictEqual(S.stats.loves, 1);
+  E.visit(D, S, 'huafei', 2, ONE);
+  assert.strictEqual(S.stats.loves, 1);
+});
+
+test('TITLES 共 16 個，順位照 §9 第二輪，每個都有判定', () => {
+  assert.strictEqual(JSON.stringify(D.TITLES.map((t) => t.name)), JSON.stringify(['麝香代言人', '原著重現', '雙面零溶', '斷子絕孫專賣店', '炎洗宮米其林', '溫太醫不要', '甘露寺預備役', '後宮好閨蜜', '包捐才是本體', '白忙一場', '敬事房大金主', '白蓮花', '零溶a黑暗料理', '螽斯門零溶', '真・妙音娘子', '炎洗宮小透明']));
+  D.TITLES.forEach((t) => assert.strictEqual(typeof E.TITLE_CHECK[t.id], 'function', t.id));
+  D.TITLES.forEach((t) => assert.ok(!/[A-Za-z]/.test((t.name + t.comment + t.hint).replace(/零溶a/g, '')), `${t.id} 不能有英文`));
+});
