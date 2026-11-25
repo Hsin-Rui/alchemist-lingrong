@@ -190,7 +190,7 @@
       orders: [], hand: [], seq: 0,
       flip: null, bribe: 0, bribedToday: false, groundUntil: 0,
       noFlipNights: 0, empressBoost: false, tired: false,
-      stats: { spikesUsed: 0, success: 0, caught: 0, groundedDays: 0, victims: [], ruined: [], sings: 0, bribes: 0, junk: 0, births: 0, muskRuin: 0 },
+      stats: { spikesUsed: 0, success: 0, caught: 0, groundedDays: 0, victims: [], ruined: [], sings: 0, bribes: 0, junk: 0, births: 0, muskRuin: 0, sutras: 0 },
       log: [], dayLog: [], result: null,
     };
   }
@@ -969,6 +969,25 @@
     return S.result;
   }
 
+  // ───────── 禁足抄經（§15.5）─────────
+  const SUTRA_PUNCT = /[，。、！？；：「」]/;
+  // 一句拆成字塊：去掉標點、打亂（rand 注入）。回 [{ ch, i }]，i＝這個字在句中（不含標點）的順序
+  function sutraTiles(line, rand) {
+    const tiles = [...line].filter((c) => !SUTRA_PUNCT.test(c)).map((ch, i) => ({ ch, i }));
+    for (let k = tiles.length - 1; k > 0; k--) { const j = Math.floor(rand() * (k + 1)); [tiles[k], tiles[j]] = [tiles[j], tiles[k]]; }
+    return tiles;
+  }
+  // 抄完一句：只有禁足能抄；花 1 時辰、抄經次數 +1、手上多一本《後宮心經》
+  function copySutra(D, S) {
+    if (!(S.day <= S.groundUntil)) return { blocked: true };
+    S.slot++;
+    S.stats.sutras = (S.stats.sutras || 0) + 1;
+    const item = { id: ++S.seq, product: 'sutra', spike: null, forOrder: null, tr: {} };
+    S.hand.push(item);
+    S.dayLog.push('抄了一本《後宮心經》');
+    return { ok: true, itemId: item.id };
+  }
+
   // 拜訪各宮：花 1 時辰。handId 空＝空手（友好 +1，不擲骰）；帶禮：rand>=收禮機率 → 拒收（禮物退回）；
   // 收下 → applySpike＋伴手禮友好（加料的禮誰都能收）。junk 不能送 → { noItem:true }
   function visit(D, S, who, handId, rand) {
@@ -1049,7 +1068,7 @@
     newState, TITLE_CHECK, computeEnding,
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
-    findRecipe, maskScore, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
+    findRecipe, sutraTiles, copySutra, maskScore, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
     potTraits, rollBubbles, stirTraits, finishZone, applyFinish, finalTraits,
     buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, startDay, advanceDay,
   };

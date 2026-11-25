@@ -389,6 +389,27 @@ function connect(url) {
     check('快速調合可以關掉', await ev("!document.querySelector('[data-v=quick]').classList.contains('on')"));
     await G(`S.inv = window.__inv2; S.lots = window.__lots2; S.slot = window.__slot2; S.hand = window.__hand2; __e2e.go("home");`);
 
+    // ── 禁足抄經（§15.5）：只有禁足時有按鈕；←→＋Enter 點字塊；點錯多一滴墨；抄完手上多一本心經 ──
+    await hideByMouse();
+    check('沒禁足：主畫面沒有抄經', await G('S.groundUntil = 0; __e2e.go("home"); return !document.querySelector("[data-a=sutra]");'));
+    await G('window.__sg = { slot: S.slot, hand: S.hand.slice(), stats: S.stats.sutras || 0 }; S.slot = 0; S.groundUntil = S.day + 1; __e2e.go("home");');
+    await ev("document.querySelector('[data-a=sutra]').click()");
+    check('禁足：按抄經 → 抄經畫面', (await scr()) === 'sutra');
+    await press('ArrowDown');
+    f = await focus();
+    check('抄經預設＝第一個字塊', f && f.key.startsWith('tile|'), JSON.stringify(f));
+    // 用鍵盤點一個錯的字：把游標移到不是下一個字的字塊
+    const wrongK = await ev("(() => { const s = __e2e.sutra(); return s.tiles.findIndex((t) => t.i !== s.next); })()");
+    for (let m = 0; m < 20 && (await focus())?.key !== `tile|${wrongK}#1`; m++) await press('ArrowRight');
+    await press('Enter');
+    check('鍵盤點錯 → 墨漬 +1、進度不變', await ev("__e2e.sutra().blots === 1 && __e2e.sutra().next === 0 && document.querySelectorAll('.sp-blot').length === 1"));
+    // 其餘照順序點完
+    await ev("(() => { const s = __e2e.sutra(); for (let n = 0; n < s.tiles.length; n++) { const k = s.tiles.findIndex((t) => t.i === n); document.querySelector(`[data-a=tile][data-v=\"${k}\"]`).click(); } })()");
+    check('抄完 → 播 J2–J4', await waitFor("!!document.querySelector('.dialog-layer')", 3000));
+    await press('Escape');
+    check('抄完回主畫面、手上多一本心經、時辰 +1', await waitFor("document.getElementById('app').dataset.screen === 'home'", 3000) && await G('return S.hand.some((h) => h.product === "sutra") && S.slot === 1 && S.stats.sutras === window.__sg.stats + 1;'));
+    await G('S.groundUntil = 0; S.slot = window.__sg.slot; S.hand = window.__sg.hand; __e2e.go("home");');
+
     // ── 採集地下城：方向鍵只有地下城走路；收工後結果單預設 ──
     await hideByMouse();
     await G('__e2e.go("gather");');

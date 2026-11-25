@@ -1304,3 +1304,29 @@ test('applySpike：木薯粉、貓薄荷只對當晚侍寢的人有效；給別�
   assert.strictEqual(r2.outcome, 'debuff');
   assert.strictEqual(S.conc.huafei.debuff, 'catnip');
 });
+
+test('copySutra：只有禁足能抄；花 1 時辰、次數 +1、手上多一本心經', () => {
+  const S = fresh();
+  assert.deepStrictEqual(E.copySutra(D, S), { blocked: true });
+  assert.strictEqual(S.slot, 0);
+  S.groundUntil = S.day + 1;
+  const r = E.copySutra(D, S);
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(S.slot, 1);
+  assert.strictEqual(S.stats.sutras, 1);
+  const item = S.hand.find((h) => h.id === r.itemId);
+  assert.strictEqual(item.product, 'sutra');
+  assert.deepStrictEqual(item.tr, {});
+});
+
+test('sutraTiles：去掉標點、每個字一塊、順序號 0..n−1；6 句都在資料裡', () => {
+  assert.strictEqual(D.SUTRA_LINES.length, 6);
+  for (const line of D.SUTRA_LINES) {
+    const tiles = E.sutraTiles(line, seq([0.3, 0.7, 0.1, 0.9, 0.5]));
+    const chars = [...line].filter((c) => !/[，。]/.test(c));
+    assert.strictEqual(tiles.length, chars.length);
+    assert.deepStrictEqual(tiles.map((t) => t.i).sort((a, b) => a - b), chars.map((_, i) => i));
+    tiles.forEach((t) => assert.strictEqual(t.ch, chars[t.i]));
+    assert.ok(tiles.every((t) => !/[，。]/.test(t.ch)), '標點不在字塊裡');
+  }
+});

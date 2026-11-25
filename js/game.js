@@ -289,8 +289,41 @@
   }
 
   function go(s) {
+    if (screen === 'sutra' && s !== 'sutra') { sutra = null; A.playBgm('main'); }
     screen = s;
     render();
+  }
+
+  // ───────── 禁足抄經（§15.5）─────────
+  let sutra = null; // { line, tiles, used:Set, next, blots, shake }
+  function openSutra() {
+    if (!grounded() || S.slot >= R.slotsPerDay) return;
+    const line = D.SUTRA_LINES[Math.floor(rand() * D.SUTRA_LINES.length)];
+    sutra = { line, tiles: E.sutraTiles(line, rand), used: new Set(), next: 0, blots: 0, shake: -1 };
+    A.playBgm('sutra');
+    go('sutra');
+  }
+  function pickTile(k) {
+    if (!sutra || sutra.used.has(k)) return;
+    const t = sutra.tiles[k];
+    if (t.i !== sutra.next) {
+      // 點錯：字塊抖一下、經書多一滴墨（不卡關）
+      sutra.blots++;
+      sutra.shake = k;
+      A.sfx('fail');
+      render();
+      return;
+    }
+    sutra.used.add(k);
+    sutra.next++;
+    sutra.shake = -1;
+    A.sfx('pop');
+    if (sutra.next < sutra.tiles.length) { render(); return; }
+    E.copySutra(D, S);
+    A.sfx('ding');
+    render();
+    busy = true;
+    setTimeout(() => { busy = false; playDialog(D.SUTRA_DONE, () => finishAction(() => go('home')), 'study'); }, 700);
   }
 
   function finishAction(next) {
@@ -994,7 +1027,8 @@
       return `<div class="screen theme-light">
         ${topBar()}
         <div class="scroll">
-          ${grounded() ? `<div class="grounded">禁足中（到第 ${S.groundUntil} 天）：不能出門採集、交貨、拜訪，也不能侍寢</div>` : ''}
+          ${grounded() ? `<div class="grounded">禁足中（到第 ${S.groundUntil} 天）：不能出門採集、交貨、拜訪，也不能侍寢
+            <button class="btn small gold" data-a="sutra"${S.slot >= R.slotsPerDay ? ' disabled' : ''}>抄經（1 時辰）</button></div>` : ''}
           <div class="stage bg-yanxi">
             ${portrait('lingrong', grounded() ? 'shock' : 'smile', 'stage-portrait')}
             <div class="bubble">${esc(hintLine())}</div>
@@ -1015,6 +1049,30 @@
           <button data-a="go" data-v="status"><b>宮</b><span>後宮</span></button>
           <button data-a="sleep"><b>寢</b><span>就寢</span></button>
         </nav>
+      </div>`;
+    },
+
+    sutra() {
+      if (!sutra) return views.home();
+      const done = sutra.next >= sutra.tiles.length;
+      let n = 0;
+      const paper = [...sutra.line].map((c) => {
+        if (/[，。、！？；：]/.test(c)) return `<span class="sp-punct">${c}</span>`;
+        const k = n++;
+        return k < sutra.next ? `<span class="sp-ch">${c}</span>` : '<span class="sp-ch blank"></span>';
+      }).join('');
+      // 墨漬：位置由序號決定（重畫不會跳）
+      const blots = Array.from({ length: sutra.blots }, (_, i) => `<i class="sp-blot" style="left:${(i * 37 + 12) % 86}%;top:${(i * 53 + 20) % 70}%;--s:${0.7 + ((i * 7) % 5) / 10}"></i>`).join('');
+      const firstFree = sutra.tiles.findIndex((_, k) => !sutra.used.has(k));
+      return `<div class="screen theme-dark sutra-screen bg-study">
+        ${subHeader('禁足抄經', '依照句子的順序點字・點錯會多一滴墨', true, false, !done)}
+        <div class="scroll pad">
+          <div class="sp-say">${portrait('baojuan', '_', 'sp-face')}<p>${esc(done ? '抄好了！' : D.SUTRA_START[2])}</p></div>
+          <div class="sp-paper${done ? ' done' : ''}"><div class="sp-line">${paper}</div>${blots}</div>
+          <div class="sp-tiles">${sutra.tiles.map((t, k) => (sutra.used.has(k)
+            ? '<span class="sp-tile gone"></span>'
+            : `<button class="sp-tile${sutra.shake === k ? ' shake' : ''}" data-a="tile" data-v="${k}"${DEF(k === firstFree)}>${t.ch}</button>`)).join('')}</div>
+        </div>
       </div>`;
     },
 
@@ -1557,7 +1615,7 @@
   // 數字鍵 1～6 → 導覽列六個動作；只在主畫面與子畫面、沒有彈出視窗時有效
   const HOTKEYS = { 1: ['go', 'shop'], 2: ['go', 'gather'], 3: ['craftfor', ''], 4: ['giftto', ''], 5: ['go', 'status'], 6: ['sleep'] };
   const HOTKEY_TARGET = { 1: 'shop', 2: 'gather', 3: 'craft', 4: 'gift', 5: 'status' }; // 已在該畫面就不重開（免得清掉調合／送禮的選擇）
-  const SUB_SCREENS = new Set(['shop', 'gather', 'craft', 'gift', 'status']);
+  const SUB_SCREENS = new Set(['shop', 'gather', 'craft', 'gift', 'status', 'sutra']);
   const HOTKEY_SCREENS = new Set(['home', ...SUB_SCREENS]);
 
   // Esc（非對話）：關彈出視窗（鎖定視窗如金縷衣無效）；結果單與交貨／送禮結果頁＝回炎洗宮；子畫面＝回主畫面
@@ -1633,7 +1691,7 @@
   window.addEventListener('resize', () => { if (cursor.on) syncCursor(); });
 
   // ───────── 事件 ─────────
-  const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'dgquit', 'dgstay', 'cf', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
+  const QUIET = new Set(['tile', 'adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'dgquit', 'dgstay', 'cf', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
   app.addEventListener('click', (e) => {
     const el = e.target.closest('[data-a]');
     if (!el || el.disabled || busy) return;
@@ -1691,6 +1749,8 @@
       case 'spikeinfo': spikeInfo(v); break;
       case 'closemodal': modal = null; render(); break;
       case 'sleep': sleepEarly(); break;
+      case 'sutra': openSutra(); break;
+      case 'tile': pickTile(Number(v)); break;
       case 'sleepyes': modal = null; S.slot = R.slotsPerDay; endDay(); break;
       case 'sing': modal = null; settleNight(v === '1'); break;
       case 'next': nextDay(); break;
@@ -1705,7 +1765,7 @@
       ...Object.values(D.CHARS).flatMap((c) => Object.values(c.imgs).map((f) => `characters/${f}`)),
       'characters/guard',
       ...[...Object.keys(D.ITEMS), ...Object.keys(D.PRODUCTS), 'silver'].map((id) => `items/${id}`),
-      ...['yanxi', 'garden', 'taiyi', 'shop', 'yikun', 'xianfu', 'suiyu', 'night'].map((b) => `backgrounds/${b}`),
+      ...['yanxi', 'garden', 'taiyi', 'shop', 'yikun', 'xianfu', 'suiyu', 'night', 'study', 'workshop'].map((b) => `backgrounds/${b}`),
     ];
     [...new Set(files)].forEach((f) => { new Image().src = `assets/${f}.webp`; });
   }
@@ -1784,7 +1844,7 @@
   }
   // 測試用：網址後面加 #e2e 時開放狀態給 tools/keyboard-e2e.js 造情境（不影響正常遊戲）
   if (location.hash === '#e2e') {
-    window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, render, go, openCraft, playDialog };
+    window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, sutra: () => sutra, render, go, openCraft, playDialog };
   }
   // 標題曲：瀏覽器要等玩家第一次點擊／按鍵才准出聲。assets/audio/bgm_title.lite.mp3 沒有就播主題曲
   const titleBgm = () => { if (screen === 'title' && !dlg) { A.unlock(); A.playBgm('title', 'main'); } };

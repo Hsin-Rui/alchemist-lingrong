@@ -505,3 +505,28 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 @keyframes giftbounce { 0% { transform: translate(90px, -120px) scale(.6); opacity: 0; } 60% { transform: translate(0, 10px) scale(1.1); opacity: 1; } 100% { transform: translate(0, 0) scale(1); } }@media (prefers-reduced-motion: reduce) { .petals { display: none; } .gift-bounce, .love-banner { animation: none; } }
 .deliver-btns .btn { flex: 1; }
 .deliver-btns .btn small { display: block; font-size: 11px; font-weight: 400; opacity: .8; }
+
+/* 禁足抄經（§15.5） */
+.bg-study { background: linear-gradient(180deg, rgba(20,14,30,.35), rgba(20,14,30,.7)), url(../assets/backgrounds/study.webp) center/cover, #2a2030; }
+.grounded .btn { display: block; margin: 6px auto 0; min-height: 0; padding: 5px 18px; font-size: 14px; letter-spacing: 1px; }
+.sutra-screen .scroll { display: flex; flex-direction: column; gap: 14px; }
+.sp-say { display: flex; align-items: center; gap: 10px; background: rgba(251,243,222,.92); color: var(--ink); border-radius: 12px; padding: 8px 12px; }
+.sp-say p { margin: 0; font-weight: 700; }
+.sp-face { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; flex: none; }
+.sp-face img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.sp-paper { position: relative; min-height: 150px; padding: 22px 16px; border-radius: 6px; overflow: hidden;
+  background: repeating-linear-gradient(90deg, transparent 0 46px, rgba(160,60,40,.18) 46px 47px), #f6ecd6; box-shadow: 0 6px 18px rgba(0,0,0,.45), inset 0 0 30px rgba(140,100,40,.18); }
+.sp-line { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 4px 2px; justify-content: center; font-family: var(--serif); font-size: 28px; font-weight: 900; color: #2a1d18; line-height: 1.3; }
+.sp-ch { display: inline-grid; place-items: center; width: 34px; height: 40px; animation: stamp .3s ease-out both; }
+.sp-ch.blank { margin: 0 3px; width: 28px; border-bottom: 2px solid rgba(90,60,40,.35); animation: none; }
+.sp-punct { display: inline-grid; place-items: end center; width: 16px; height: 40px; }
+.sp-paper.done { box-shadow: 0 0 0 3px var(--amber), 0 6px 18px rgba(0,0,0,.45); }
+.sp-blot { position: absolute; width: calc(22px * var(--s)); height: calc(18px * var(--s)); border-radius: 50% 45% 55% 40%; background: radial-gradient(circle at 40% 40%, #1b1416, #000 70%); opacity: .82; animation: blot .4s ease-out both; }
+@keyframes blot { from { transform: scale(.2); opacity: 0; } to { transform: scale(1); opacity: .82; } }
+.sp-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 8px; }
+.sp-tile { height: 56px; border-radius: 8px; border: 2px solid #a8783a; background: linear-gradient(180deg, #fff8e6, #ecd9b0); color: #2a1d18; font-family: var(--serif); font-size: 26px; font-weight: 900; cursor: pointer; box-shadow: 0 3px 0 #8a5e2a; }
+.sp-tile:active { transform: translateY(2px); box-shadow: 0 1px 0 #8a5e2a; }
+.sp-tile.gone { visibility: hidden; }
+.sp-tile.shake { animation: tileshake .35s; border-color: var(--red); }
+@keyframes tileshake { 25% { transform: translateX(-5px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-3px); } }
+@media (prefers-reduced-motion: reduce) { .sp-tile.shake, .sp-blot, .sp-ch { animation: none; } }

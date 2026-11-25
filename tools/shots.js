@@ -38,6 +38,8 @@ const SCENES = {
   'visit-refused': [SETUP + "S.result = { kind: 'gift', who: 'huafei', product: 'tonic', spike: null, refused: true, reaction: 'hate', friendDelta: 0 }; __e2e.go('result');", 'WAIT1200'],
   'order-ready': [SETUP + "S.orders = [{ id: 901, who: 'zhenhuan', product: 'cake', due: S.day + 2 }]; S.hand.push({ id: 902, product: 'cake', spike: null, forOrder: 901, tr: { tian: 3 } }); __e2e.go('home');"],
   'order-grounded': [SETUP + "S.orders = [{ id: 901, who: 'zhenhuan', product: 'cake', due: S.day + 2 }]; S.hand.push({ id: 902, product: 'cake', spike: null, forOrder: 901, tr: {} }); S.groundUntil = S.day + 1; __e2e.go('home');"],
+  'sutra-home': [SETUP + "S.groundUntil = S.day + 1; __e2e.go('home');"],
+  sutra: [SETUP + "S.groundUntil = S.day + 1; __e2e.go('home');", click('[data-a=sutra]'), click('[data-a=tile]'), click('[data-a=tile]'), click('[data-a=tile]'), 'WAIT400'],
   shop: [SETUP + "__e2e.go('shop');", "document.querySelector('.scroll').scrollTop = 99999;"],
 };
 

@@ -46,6 +46,7 @@ window.GAME_DATA = (() => {
     tonic: { name: '安胎藥', ch: '藥', recipe: ['angelica', 'jujube'], reward: 34, gift: 6 },
     safflower: { name: '紅花', ch: '紅', recipe: ['petal', 'liquor'], out: 'inv' },
     junk: { name: '一坨黑黑的東西', ch: '黑', recipe: null },
+    sutra: { name: '後宮心經', ch: '經', recipe: null, gift: 5, fixedGift: true }, // 禁足抄經的成品（§15.5）：送誰都 +5、一定收下
   };
   const NORMAL_ORDERS = ['yunv', 'cake', 'suihan', 'incense', 'shuhen'];
 
@@ -253,6 +254,10 @@ window.GAME_DATA = (() => {
   const DEBUFF_WASTED = ['lingrong', 'shock', '（……今晚又不是她侍寢。白下了。）'];
   // 貓薄荷：夜晚貓咪鬧場
   const CATS_LINE = ['cats', '_', '喵——！喵喵喵——！喵嗚——！', { sfx: 'meow' }];
+  // 禁足抄經（§15.5）：每次從 6 句挑一句
+  const SUTRA_LINES = ['賤人就是矯情。', '逆風如解意，容易莫摧殘。', '勸君莫惜金縷衣，勸君惜取少年時。', '他們個個都要害本宮。', '庭前芍藥妖無格，池上芙蕖淨少情。', '舊夢依稀，往事迷離，春花秋月裡。'];
+  const SUTRA_START = ['baojuan', '_', '小主，紙墨都備好了。']; // J1
+  const SUTRA_DONE = [['narr', '', '零溶抄好了一本《後宮心經》。'], ['baojuan', '_', '小主……這好像不是佛經吧？'], ['lingrong', 'smile', '心誠則靈。']]; // J2–J4
   // 包捐代交（D7 出發、D8 回來）
   const PROXY_LINES = [
     ['baojuan', '_', '奴婢這就替小主跑一趟！'],
@@ -441,6 +446,6 @@ window.GAME_DATA = (() => {
 
   return {
     TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
-    request, THANKS, REFUSE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
+    request, THANKS, REFUSE, SUTRA_LINES, SUTRA_START, SUTRA_DONE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
   };
 })();
