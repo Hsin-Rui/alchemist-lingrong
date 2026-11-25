@@ -981,6 +981,17 @@
     return S.result;
   }
 
+  // ───────── 教學模式（§15.2）─────────
+  // 第一天擺成教學局面：沒有桂花（得去御花園採）、訂單只有真環的藕粉桂花糖糕。在 startDay 之後呼叫。
+  function setupTutorial(D, S) {
+    S.tutorial = { step: 'gather' };
+    S.inv.osmanthus = 0;
+    S.lots = S.lots.filter((l) => l.id !== 'osmanthus');
+    if (!(S.inv.lotus > 0)) S.inv.lotus = 1;
+    S.orders = [{ id: ++S.seq, who: 'zhenhuan', product: 'cake', due: S.day + D.RULES.orderDays - 1 }];
+    return S.orders[0];
+  }
+
   // ───────── 禁足抄經（§15.5）─────────
   const SUTRA_PUNCT = /[，。、！？；：「」]/;
   // 一句拆成字塊：去掉標點、打亂（rand 注入）。回 [{ ch, i }]，i＝這個字在句中（不含標點）的順序
@@ -1088,7 +1099,7 @@
     newState, TITLE_CHECK, computeEnding,
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
-    findRecipe, sutraTiles, copySutra, maskScore, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
+    findRecipe, setupTutorial, sutraTiles, copySutra, maskScore, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
     potTraits, rollBubbles, stirTraits, finishZone, jitterZones, applyFinish, finalTraits,
     buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, startDay, advanceDay,
   };

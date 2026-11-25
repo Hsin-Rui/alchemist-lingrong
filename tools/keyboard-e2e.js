@@ -650,6 +650,19 @@ function connect(url) {
     check('結局（深色面）框為琥珀', f && f.color === AMBER, f && f.color);
     await shot('ending-amber');
 
+    // ── 開場選項（§15.1）：Esc 不能跳過選項；←→ 換選項；Enter 確定 ──
+    await load({ width: 480, height: 900, deviceScaleFactor: 1, mobile: false });
+    await ev("document.querySelector('[data-a=start]').click()");
+    await press('Escape'); // 略過開場 → 停在選項那一句
+    check('開場 Esc 略過 → 停在教學選項', await waitFor("!!document.querySelector('[data-a=dlgchoice]')", 3000));
+    await press('Escape');
+    check('選項那一句 Esc 無效', await ev("!!document.querySelector('[data-a=dlgchoice]')"));
+    await press('ArrowRight');
+    check('→ 換到「不用了」', await ev("document.querySelector('.dlg-choice.on')?.dataset.v === 'skip'"));
+    await press('Enter'); // 字還在打 → 先打完
+    await press('Enter');
+    check('Enter 選「不用了」→ A7', await waitFor("(document.querySelector('.dlg-text')?.dataset.full || '').includes('恩寵目前墊底')", 3000));
+
     // ── 手機寬度＋觸控：整輪看不到焦點框 ──
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     await load({ width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
@@ -671,7 +684,8 @@ function connect(url) {
       if (s === 'ending' && !(await hasDlg())) break;
       if (await focus()) touchBox = true;
       taps++;
-      if (await hasDlg()) await tap('.skip-btn');
+      if (await ev("!!document.querySelector('[data-a=dlgchoice]')")) await tap('[data-a=dlgchoice][data-v=skip]'); // 開場選項：不用了
+      else if (await hasDlg()) await tap('.skip-btn');
       else if (await hasModal('sing')) await tap('[data-a=sing][data-v="0"]');
       else if (await hasModal('sleepyes')) await tap('[data-a=sleepyes]');
       else if (s === 'title') await tap('[data-a=start]');

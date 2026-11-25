@@ -176,11 +176,17 @@
   const daysLeft = (o) => o.due - S.day + 1;
 
   // ───────── 對話（逐字顯示） ─────────
-  function playDialog(lines, done, bg = 'yanxi') {
-    dlg = { lines, i: 0, done, bg };
+  // onChoice：最後一句帶選項（opt.choice）時，玩家選完呼叫 onChoice(值)
+  function playDialog(lines, done, bg = 'yanxi', onChoice = null) {
+    dlg = { lines, i: 0, done, bg, onChoice, pick: 0 };
     render();
   }
+  const choiceAt = (d) => d.lines.findIndex((l) => l[3] && l[3].choice);
   function finishDialog() {
+    // 略過整段時，有選項的那一句不能跳過：直接跳到那一句
+    const ci = choiceAt(dlg);
+    if (ci >= 0 && dlg.i < ci) { dlg.i = ci; stopTyper(); render(); return; }
+    if (ci >= 0) return;
     const done = dlg.done;
     dlg = null;
     stopTyper();
@@ -190,6 +196,7 @@
     if (!dlg) return;
     if (dlg.lockUntil && performance.now() < dlg.lockUntil) return; // 防連按
     if (typer) { completeTyper(); return; }
+    if (dlg.lines[dlg.i][3] && dlg.lines[dlg.i][3].choice) return; // 選項那一句要選了才走
     dlg.i++;
     if (dlg.i >= dlg.lines.length) finishDialog();
     else render();
@@ -257,14 +264,30 @@
     A.unlock();
     A.playBgm('title', 'main'); // 開場對話繼續播標題曲，第一天開始才換主題曲
     S = E.newState(D);
-    screen = 'title'; // 再玩一次時，教學對話要疊在標題頁上（結局頁需要上一局的結果）
-    playDialog(D.TUTORIAL, startDay);
+    screen = 'title'; // 再玩一次時，開場對話要疊在標題頁上（結局頁需要上一局的結果）
+    // §15.1：開場 → 問要不要教學
+    playDialog(D.OPENING, null, 'yanxi', (v) => {
+      if (v === 'tut') playDialog(D.TUT_INTRO, () => startDay(true));
+      else playDialog(D.NO_TUTORIAL, () => startDay());
+    });
+    if (dlg) dlg.fadeIn = true; // A1（淡入，炎洗宮）
   }
 
-  function startDay() {
+  // tut：教學模式的第一天——擺成教學局面，早上的新訂單換成吹緊吸那段（A18–A21）
+  function startDay(tut = false) {
     A.playBgm('main');
     A.sfx('gong');
-    playDialog(renderStartLines(E.startDay(D, S, rand)), () => go('home'));
+    const report = E.startDay(D, S, rand);
+    if (tut) { E.setupTutorial(D, S); report.newOrders = []; report.noOrders = false; }
+    playDialog([...renderStartLines(report), ...(tut ? D.TUT_ORDER : [])], () => go('home'));
+  }
+  function pickChoice(v) {
+    if (!dlg || !dlg.onChoice) return;
+    const cb = dlg.onChoice;
+    dlg = null;
+    stopTyper();
+    A.sfx('click');
+    cb(v);
   }
 
   // 依引擎回傳的開日報告組對話 lines（引擎變更狀態、不碰對話；比照 renderNightLines）
@@ -1416,19 +1439,30 @@
     if (dlgSpeed === 'instant') completeTyper();
   }
 
+  // 教學的小恩寵榜（A10、A16）：up＝零溶往上跳一格（只是演出，不改數值）
+  function rankPanel(up) {
+    const ids = ['lingrong', ...D.TARGETS].sort((a, b) => S.favor[b] - S.favor[a]);
+    const li = ids.indexOf('lingrong');
+    return `<div class="rank-pop${up ? ' up' : ''}"><b>後宮恩寵榜</b>${ids.map((id, k) => {
+      const to = up && k === li ? k - 1 : up && k === li - 1 ? k + 1 : k;
+      return `<div class="rk-row${id === 'lingrong' ? ' me' : ''}" style="--from:${k};--to:${to};--c:${D.CHARS[id].color}"><span>${D.CHARS[id].name}</span><i style="width:${S.favor[id]}%"></i><em>${S.favor[id]}</em></div>`;
+    }).join('')}</div>`;
+  }
+
   function dialogView() {
     const [who, expr, text, opt] = dlg.lines[dlg.i];
     const isNarr = who === 'narr';
     const color = isNarr ? '#6b5a80' : D.CHARS[who].color;
     const fx = opt && opt.fx ? ` fx-${opt.fx}` : ''; // 演出標記（e2e 也看這個 class）
-    return `<div class="dialog-layer bg-${dlg.bg}" data-a="adv">
+    return `<div class="dialog-layer bg-${dlg.bg}${dlg.fadeIn && dlg.i === 0 ? ' fade-in' : ''}" data-a="adv">
       ${opt && opt.fx === 'dim' ? '<div class="fx-veil"></div>' : ''}
       <div class="dlg-ctrls"><button class="speed-btn" data-a="speed">${speedLabel()}</button><button class="skip-btn" data-a="skip">略過 ≫</button></div>
       ${isNarr ? '' : portrait(who, expr, `dlg-portrait${fx}`)}
-      <div class="dialog-box ${isNarr ? `narr${fx}` : ''}" style="--c:${color}">
+      ${opt && opt.panel ? rankPanel(opt.panel === 'rankup') : ''}
+      <div class="dialog-box ${isNarr ? `narr${fx}` : ''}${opt && opt.choice ? ' has-choice' : ''}" style="--c:${color}">
         ${isNarr ? '' : `<div class="speaker">${D.CHARS[who].name}</div>`}
         <div class="dlg-text" data-full="${esc(text)}"></div>
-        <div class="dlg-next">▼</div>
+        ${opt && opt.choice ? `<div class="dlg-choices">${opt.choice.map(([v, label], k) => `<button class="dlg-choice${dlg.pick === k ? ' on' : ''}" data-a="dlgchoice" data-v="${v}">▸ ${esc(label)}</button>`).join('')}</div>` : '<div class="dlg-next">▼</div>'}
       </div>
     </div>`;
   }
@@ -1646,6 +1680,18 @@
       if (dlg) A.toggleMute(); else act('mute'); // 對話中不重繪，免得目前這句重新打字
       return;
     }
+    if (dlg && dlg.lines[dlg.i][3] && dlg.lines[dlg.i][3].choice) {
+      // 選項那一句：方向鍵換、Enter／空白鍵確定（字還在打就先打完）；Esc 無效（不能跳過選擇）
+      const ch = dlg.lines[dlg.i][3].choice;
+      if (NAV_DIRS[k]) {
+        e.preventDefault();
+        dlg.pick = (dlg.pick + (k === 'ArrowLeft' || k === 'ArrowUp' ? ch.length - 1 : 1)) % ch.length;
+        app.querySelectorAll('.dlg-choice').forEach((b, j) => b.classList.toggle('on', j === dlg.pick)); // 只換高亮，不重打字
+        return;
+      }
+      if ((k === ' ' || k === 'Enter') && !e.repeat) { e.preventDefault(); if (typer) completeTyper(); else pickChoice(ch[dlg.pick][0]); return; }
+      if (k === 'Escape') { e.preventDefault(); return; }
+    }
     if (dlg) {
       if (k === ' ' || k === 'Enter') {
         e.preventDefault();
@@ -1763,6 +1809,7 @@
       case 'closemodal': modal = null; render(); break;
       case 'sleep': sleepEarly(); break;
       case 'sutra': openSutra(); break;
+      case 'dlgchoice': pickChoice(v); break;
       case 'shoptab': shopTab = v; render(); break;
       case 'tile': pickTile(Number(v)); break;
       case 'sleepyes': modal = null; S.slot = R.slotsPerDay; endDay(); break;

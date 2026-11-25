@@ -401,15 +401,35 @@ window.GAME_DATA = (() => {
     ['narr', '', '黃上震怒：安小主禁足炎洗宮 {days} 天，好好反省！'],
   ];
 
-  const TUTORIAL = [
-    ['baojuan', '_', '小主！小主您醒啦！'],
-    ['lingrong', 'smile', '包捐，我在這後宮……是不是最不受寵的那一個？'],
-    ['baojuan', '_', '呃……小主恩寵確實是墊底的。但小主會煉金啊！'],
-    ['baojuan', '_', '每天早上，敬事房會傳話今晚黃上翻誰的牌子。只有侍寢，恩寵才會漲。小主有銀子的話，也可以給敬事房包個大紅包……'],
-    ['baojuan', '_', '各宮娘娘會來下訂單。替她們做東西，交情就會變好；交情好的娘娘侍寢時，可能會在黃上耳邊替小主美言幾句。'],
-    ['lingrong', 'evil', '……交情不好的，就在她侍寢前送點「加了料」的禮。'],
-    ['baojuan', '_', '小主英明！不過太醫溫十粗眼睛很利，被抓到可是要禁足的。跟娘娘交情越好，她越不會懷疑小主。'],
-    ['baojuan', '_', '十天後，就看小主能不能在這後宮裡……逆襲了！'],
+  // ───────── 開場與教學（§15，台詞總表 A 組）─────────
+  // A1（淡入，炎洗宮）是舞台指示，用對話層淡入表現
+  const OPENING = [
+    ['lingrong', 'shock', '……好苦。我不是吃了苦杏仁嗎？'],
+    ['baojuan', '_', '小主！小主您醒啦！什麼杏仁？您這是睡糊塗了。'],
+    ['baojuan', '_', '今兒個可得打起精神，十天後黃上要下旨晉封六宮呢！'],
+    ['lingrong', 'smile', '晉封……'],
+    ['baojuan', '_', '要不要奴婢跟小主說說，每天該怎麼過？（第一天是否進入教學模式？）', { choice: [['tut', '好，妳說吧'], ['skip', '不用了']] }],
+  ];
+  const NO_TUTORIAL = [
+    ['baojuan', '_', '是。……不過小主，您的恩寵目前墊底。'],
+    ['lingrong', 'smile', '我知道。所以我要煉金。'],
+  ];
+  const TUT_INTRO = [
+    ['baojuan', '_', '每天早上，敬事房會傳話今晚黃上翻誰的牌子。'],
+    ['baojuan', '_', '只有侍寢，恩寵才會漲。小主您看，這是後宮的恩寵榜……', { panel: 'rank' }],
+    ['lingrong', 'shock', '……包捐，我在這後宮，是不是最不受寵的那一個？', { panel: 'rank' }],
+    ['baojuan', '_', '呃……小主的恩寵確實是墊底的。'],
+    ['baojuan', '_', '但小主會煉金啊！'],
+    ['lingrong', 'smile', '……煉金？'],
+    ['baojuan', '_', '是呀！娘娘們會派人來下訂單，小主親自把東西送過去，交情就會變好。'],
+    ['baojuan', '_', '交情好的娘娘侍寢時，說不定會在黃上耳邊替小主美言幾句。', { panel: 'rankup' }],
+    ['lingrong', 'evil', '（壞笑）……是啊。我會煉金。'],
+  ];
+  const TUT_ORDER = [
+    ['chuijinxi', '_', '安小主安好。奴婢是睡慾軒的吹緊吸。'],
+    ['chuijinxi', '_', '我家真環娘娘想吃藕粉桂花糖糕，不知能否勞煩小主？'],
+    ['baojuan', '_', '小主，藕粉桂花糖糕要藕粉和桂花。藕粉咱們有，桂花得去御花園摘。'],
+    ['baojuan', '_', '咱們走吧！'],
   ];
 
   // ───────── 結局 ─────────
@@ -455,6 +475,6 @@ window.GAME_DATA = (() => {
 
   return {
     TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
-    request, THANKS, REFUSE, FIRST_GROUNDED, SUTRA_LINES, SUTRA_START, SUTRA_DONE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
+    request, THANKS, REFUSE, FIRST_GROUNDED, SUTRA_LINES, SUTRA_START, SUTRA_DONE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, OPENING, NO_TUTORIAL, TUT_INTRO, TUT_ORDER, END_TOP, END_LING, TITLES, IDLE,
   };
 })();

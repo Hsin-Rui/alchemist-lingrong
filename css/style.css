@@ -550,3 +550,21 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .scell:active:not(:disabled) { transform: translateY(1px); }
 .music-hint { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); padding: 6px 14px; border-radius: 999px; background: rgba(20,14,30,.6); color: #F4C66A; font-size: 13px; pointer-events: none; animation: hintpulse 1.6s ease-in-out infinite alternate; z-index: 5; }
 @keyframes hintpulse { from { opacity: .55; } to { opacity: 1; } }
+
+/* 開場：淡入、對話框選項、教學的小恩寵榜 */
+.dialog-layer.fade-in { animation: dlgfade 1.2s ease-out both; }
+@keyframes dlgfade { from { filter: brightness(0); } to { filter: none; } }
+.dlg-choices { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.dlg-choice { flex: 1; min-width: 120px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--line); background: var(--card); font-family: inherit; font-size: 15px; font-weight: 700; color: var(--ink); cursor: pointer; text-align: left; }
+.dlg-choice.on, .dlg-choice:hover { border-color: var(--crimson); color: var(--crimson); }
+.rank-pop { position: absolute; left: 0; right: 0; margin: 0 auto; top: 12%; width: min(320px, 86%); z-index: 6; padding: 12px 14px 8px; border-radius: 14px; background: rgba(255,253,248,.96); box-shadow: 0 8px 24px rgba(0,0,0,.3); animation: rkpop .35s ease-out both; }
+@keyframes rkpop { from { transform: scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+.rank-pop > b { display: block; font-family: var(--serif); color: var(--crimson); margin-bottom: 6px; }
+.rank-pop { --rh: 32px; }
+.rk-row { position: relative; display: grid; grid-template-columns: 54px 1fr 28px; align-items: center; gap: 6px; height: var(--rh); font-size: 13px; font-weight: 700; }
+.rk-row i { display: block; height: 12px; border-radius: 6px; background: var(--c); }
+.rk-row em { font-style: normal; color: var(--muted); text-align: right; }
+.rk-row.me { color: var(--crimson); }
+.rank-pop.up .rk-row { animation: rkmove .7s cubic-bezier(.3,1.4,.5,1) .4s both; }
+@keyframes rkmove { from { transform: none; } to { transform: translateY(calc((var(--to) - var(--from)) * var(--rh))); } }
+.rank-pop.up .rk-row.me { z-index: 1; }

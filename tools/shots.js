@@ -111,7 +111,10 @@ function connect(url) {
       for (let i = 0; i < 50 && !(await ev("!!document.querySelector('[data-a=start]')")); i++) await sleep(100); // 等頁面載好
       // 開新局、略過開場對話，回到主畫面
       await ev("document.querySelector('[data-a=start]').click()");
-      for (let i = 0; i < 20 && await ev("!!document.querySelector('[data-a=skip]')"); i++) { await ev("document.querySelector('[data-a=skip]').click()"); await sleep(150); }
+      for (let i = 0; i < 30 && await ev("!!document.querySelector('[data-a=skip]')"); i++) {
+        await ev("(document.querySelector('[data-a=dlgchoice][data-v=skip]') || document.querySelector('[data-a=skip]')).click()"); // 開場選項：不用了
+        await sleep(150);
+      }
       await ev("window.__e2e.go('home')");
       for (const step of SCENES[name]) {
         if (step.startsWith('WAIT')) { await sleep(Number(step.slice(4))); continue; }

@@ -1364,3 +1364,16 @@ test('sutraTiles：重複的字（他們個個都要害本宮）各有一塊，�
   const tiles = E.sutraTiles('他們個個都要害本宮。', () => 0.5);
   assert.strictEqual(tiles.filter((t) => t.ch === '個').length, 2);
 });
+
+test('setupTutorial：沒有桂花（含帶特性的份）、訂單只有真環的藕粉桂花糖糕、記下教學狀態', () => {
+  const S = fresh();
+  E.addUnit(S, 'osmanthus', { xiang: 2 });
+  S.orders = [{ id: 99, who: 'huafei', product: 'yunv', due: 3 }];
+  const o = E.setupTutorial(D, S);
+  assert.strictEqual(S.inv.osmanthus, 0);
+  assert.ok(!S.lots.some((l) => l.id === 'osmanthus'));
+  assert.ok(S.inv.lotus >= 1, '藕粉要有');
+  assert.deepStrictEqual(S.orders.map((x) => [x.who, x.product]), [['zhenhuan', 'cake']]);
+  assert.strictEqual(o.due, S.day + D.RULES.orderDays - 1);
+  assert.deepStrictEqual(S.tutorial, { step: 'gather' });
+});
