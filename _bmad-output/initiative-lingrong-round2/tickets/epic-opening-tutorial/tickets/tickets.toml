@@ -1,0 +1,33 @@
+# epic-opening-tutorial 的 story，表格順序＝建造順序。
+[[entry]]
+id = 1
+type = "story"
+title = "新開場與教學選項"
+description = "開場對話換成 A1–A6，最後一句問要不要教學（好，妳說吧／不用了）；不用了 → A7–A8；好 → A9–A21（含小恩寵榜與零溶往上跳一格的演出），教學開局沒有桂花、固定一張真環的藕粉桂花糖糕訂單。"
+verify = "在遊戲裡兩個選項各走一次：台詞照 A 組、不用了沒有教學台詞；教學開局手上沒桂花、只有真環的糖糕訂單（單元或 playthrough 測試）。"
+covers = ["R1", "R2"]
+after = ["4.2"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "教學第一天的引導"
+description = "教學模式第一天：主畫面發光圈依序指向採集→調合→交貨；第一次進御花園 A22–A23、調合用 A24–A27、做好後 A28（指向親自交貨）、第一天晚上 A29、第二天早上 A30 結束教學。"
+verify = "鍵盤 e2e 用教學模式從開場走完第一天（採集、調合、親自交貨、夜晚），每一步都出現對應台詞與發光圈；不用了的局沒有任何發光圈。"
+covers = ["R1", "R2"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "第一次被翻牌子的說明"
+description = "零溶第一次被翻牌子的那天早上，包捐說 G4、零溶說 G5（不分模式、只有一次）。"
+verify = "單元或 playthrough 測試：第一次被翻有 G4–G5，第二次沒有。"
+covers = ["R1", "R2"]
+after = [1]
+hitl = false
+risk = "low"
