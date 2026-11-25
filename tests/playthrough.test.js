@@ -266,3 +266,26 @@ test('開場：先播 A2–A6，最後一句有兩個選項；不用了 → A7�
   assert.strictEqual(b.S.orders[0].product, 'cake');
   assert.strictEqual(b.S.orders[0].who, 'zhenhuan');
 });
+
+test('第一次被翻牌子：包捐說明金縷衣（G4–G5），第二次不再說', () => {
+  const g = bootGame({ hash: '#e2e' });
+  let t = 0;
+  g.win.performance.now = () => (t += 1000);
+  const E = g.win.GameEngine;
+  const orig = E.startDay;
+  E.startDay = (...args) => { const r = orig(...args); r.flip = 'lingrong'; args[1].flip = 'lingrong'; return r; };
+  const texts = () => { const out = []; for (let i = 0; i < 80 && /data-a="(skip|adv)"/.test(g.app._html); i++) { const m = g.app._html.match(/data-full="([^"]*)"/); if (m && out[out.length - 1] !== m[1]) out.push(m[1]); g.click('adv'); } return out; };
+  g.click('start');
+  for (let i = 0; i < 10 && !/data-a="dlgchoice"/.test(g.app._html); i++) g.click('adv');
+  g.click('dlgchoice', 'skip');
+  const day1 = texts();
+  assert.ok(day1.some((x) => x.includes('唱一曲金縷衣')), '第一次：G4');
+  assert.ok(day1.some((x) => x.includes('少一個時辰')), '第一次：G5');
+  g.click('sleep'); g.click('sleepyes');
+  if (/data-a="sing"/.test(g.app._html)) g.click('sing', '0');
+  texts();
+  g.click('next');
+  const day2 = texts();
+  assert.ok(day2.some((x) => x.includes('翻的是您的牌子')), '第二天也被翻');
+  assert.ok(!day2.some((x) => x.includes('唱一曲金縷衣')), '第二次不再說明');
+});

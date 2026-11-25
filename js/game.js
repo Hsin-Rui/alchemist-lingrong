@@ -311,6 +311,8 @@
     if (report.boosted) lines.push(...D.EMPRESS);
     if (report.flip === 'lingrong') {
       lines.push(['baojuan', '_', '小主！小主！敬事房傳話——今晚黃上翻的是您的牌子！', { lock: true }], ['lingrong', 'evil', '終於……輪到我了。']);
+      // 第一次被翻（沒禁足）：包捐說明金縷衣（G4–G5，不分模式、只有一次）
+      if (!report.grounded && !S.seenFlip) { S.seenFlip = true; lines.push(...D.FIRST_FLIP); }
     } else if (report.flip) {
       lines.push(['baojuan', '_', `小主，敬事房傳話，今晚黃上翻了${charName(report.flip)}的牌子。`]);
       lines.push(report.flipFriend >= 50
