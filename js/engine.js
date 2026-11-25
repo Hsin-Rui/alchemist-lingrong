@@ -1001,6 +1001,14 @@
     const item = S.hand.find((h) => h.id === handId);
     if (!item || item.product === 'junk') return { noItem: true };
     S.slot++;
+    if (D.PRODUCTS[item.product].fixedGift) {
+      // 《後宮心經》：品質固定，送誰都 +gift、一定收下（不擲骰、不看喜好）
+      S.hand = S.hand.filter((h) => h !== item);
+      const friendDelta = addFriend(S, who, D.PRODUCTS[item.product].gift);
+      S.result = { kind: 'gift', who, product: item.product, spike: null, reaction: 'fixed', friendDelta, reward: 0, outcome: 'plain' };
+      S.dayLog.push(`拜訪${charName(D, who)}，送了${itemName(D, item.product)}`);
+      return S.result;
+    }
     const reaction = giftReaction(D, who, item.product, item.tr).kind;
     if (rand() >= acceptChance(D, S, who, reaction)) {
       S.result = { kind: 'gift', who, product: item.product, spike: item.spike, refused: true, reaction, friendDelta: 0 };

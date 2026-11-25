@@ -263,6 +263,12 @@ window.GAME_DATA = (() => {
     ['baojuan', '_', '奴婢這就替小主跑一趟！'],
     ['baojuan', '_', '送到了！賞銀在這兒……不過娘娘問，小主怎麼沒親自來？'],
   ];
+  // 第一次禁足（G6–G8）
+  const FIRST_GROUNDED = [
+    ['baojuan', '_', '小主別難過……禁足這幾天出不了門，也不能侍寢。'],
+    ['baojuan', '_', '訂單的東西，奴婢替小主跑腿送去，賞銀照拿。小主就在宮裡調合，或是……抄抄經，修身養性？'],
+    ['lingrong', 'smile', '抄經……好啊。'],
+  ];
   // 拜訪各宮：進門（E1–E3）、空手（E4–E6）
   const VISIT_ENTER = {
     huafei: [['huafei', 'happy', '喲，稀客。安妹妹今天怎麼有空來一捆宮？']],
@@ -289,6 +295,7 @@ window.GAME_DATA = (() => {
       hate: [['huafei', 'meh', '這麼寡淡的東西，也好意思拿來？']],
       hateP: { tonic: [['huafei', 'meh', '安胎藥？安妹妹這是在笑本宮？']] },
       mixed: [['huafei', 'meh', '東西是好東西……可惜味道寡淡了些。']],
+      fixed: [['huafei', 'meh', '抄這些東西給本宮……算了，放著吧。']],
     },
     meizhuang: {
       plain: [['meizhuang', 'happy', '妹妹有心了。']],
@@ -296,6 +303,7 @@ window.GAME_DATA = (() => {
       hate: [['meizhuang', 'meh', '這……太花俏了些，不太合我的性子。']],
       hateP: {},
       mixed: [['meizhuang', 'meh', '我很喜歡，只是……下回別弄得這麼花俏。']],
+      fixed: [['meizhuang', 'happy', '妹妹禁足還不忘修身養性，難得。……咦，這抄的是什麼？']],
     },
     zhenhuan: {
       plain: [['zhenhuan', 'happy', '謝謝妹妹，我收下了。']],
@@ -303,6 +311,7 @@ window.GAME_DATA = (() => {
       hate: [['zhenhuan', 'meh', '這味道太重了……我聞著不太舒服。']],
       hateP: { zuotai: [['zhenhuan', 'meh', '坐胎藥？……妹妹的好意，我心領了。']] },
       mixed: [['zhenhuan', 'meh', '妹妹有心了。只是這味道……稍微重了點。']],
+      fixed: [['zhenhuan', 'happy', '這抄的……怎麼好像在哪聽過？']],
     },
   };
 
@@ -446,6 +455,6 @@ window.GAME_DATA = (() => {
 
   return {
     TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
-    request, THANKS, REFUSE, SUTRA_LINES, SUTRA_START, SUTRA_DONE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
+    request, THANKS, REFUSE, FIRST_GROUNDED, SUTRA_LINES, SUTRA_START, SUTRA_DONE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
   };
 })();

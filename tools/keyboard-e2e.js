@@ -822,7 +822,9 @@ function connect(url) {
     const fc = await focus();
     check('被抓結果頁：鍵盤游標落在按鈕上', !!fc && /^resultdone/.test(fc.key), JSON.stringify(fc));
     await press('Enter');
-    check('被抓結果頁：Enter 回炎洗宮', await waitScr('home'));
+    check('被抓結果頁：Enter → 第一次禁足，包捐說明（G6）', await waitFor("(document.querySelector('.dlg-text')?.dataset.full || '').includes('禁足這幾天')", 3000));
+    await press('Escape');
+    check('被抓結果頁：說明完回炎洗宮', await waitScr('home'));
     // 略過：被抓對話「且慢！」鎖句中按 Esc → 直接結果頁，演出照常
     await loadFx('caught');
     await press('Escape');
@@ -834,7 +836,9 @@ function connect(url) {
     await ev(HELPERS);
     const btn = await ev("__t.center('.footer-cta .btn')");
     await click(btn[0], btn[1]);
-    check('被抓結果頁：按鈕可用滑鼠點（暗幕不擋）', await waitScr('home'));
+    check('被抓結果頁：按鈕可用滑鼠點（暗幕不擋）', await waitFor("!!document.querySelector('.dialog-layer')", 3000));
+    await press('Escape');
+    await waitScr('home');
     // 減少動態：不晃，其他照常
     await loadFx('caught', true);
     check('被抓＋減少動態：溫太醫衝入照常', await ev("document.querySelector('.dlg-portrait.fx-enter').getAnimations().length > 0"));

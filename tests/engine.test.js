@@ -1330,3 +1330,17 @@ test('sutraTiles：去掉標點、每個字一塊、順序號 0..n−1；6 句�
     assert.ok(tiles.every((t) => !/[，。]/.test(t.ch)), '標點不在字塊裡');
   }
 });
+
+test('visit：《後宮心經》送誰都 +5、一定收下（不擲收禮骰、不看喜好）', () => {
+  for (const who of D.TARGETS) {
+    const S = fresh();
+    S.friend[who] = 0;
+    S.hand = [{ id: 1, product: 'sutra', spike: null, tr: {} }];
+    const r = E.visit(D, S, who, 1, () => { throw new Error('心經不該擲骰'); });
+    assert.strictEqual(r.refused, undefined);
+    assert.strictEqual(r.friendDelta, 5);
+    assert.strictEqual(S.friend[who], 5);
+    assert.strictEqual(S.hand.length, 0);
+    assert.ok(D.VISIT_REACT[who].fixed.length, `${who} 有收心經的台詞`);
+  }
+});

@@ -921,7 +921,7 @@
   function hintLine() {
     const ready = S.orders.find((o) => readyItem(o));
     if (grounded() && ready) return '小主禁足中，東西做好了就交給奴婢跑腿吧。'; // H1
-    if (grounded()) return `禁足中……只能在宮裡煉東西了。（到第 ${S.groundUntil} 天）`; // H2 待抄經（epic 4）上線再換
+    if (grounded()) return `禁足中……小主可以調合，或抄抄經。（到第 ${S.groundUntil} 天）`; // H2
     const f = S.flip;
     if (isTarget(f) && !S.conc[f].debuff && S.hand.some((h) => h.spike)) return `今晚是${charName(f)}侍寢……手上這份「心意」，該送過去了。`; // H3
     if (ready) return `東西做好了，親自送去給${charName(ready.who)}，交情會更好。`; // H4
@@ -1745,7 +1745,12 @@
       case 'giftto': giftWho = v || (isTarget(S.flip) ? S.flip : null); go('gift'); break;
       case 'giftwho': giftWho = v; render(); break;
       case 'gift': doVisit(giftWho, v ? Number(v) : null); break;
-      case 'resultdone': finishAction(() => go('home')); break;
+      case 'resultdone': {
+        // 第一次被禁足：回宮時包捐說明禁足能做什麼（G6–G8）
+        if (grounded() && !S.seenGrounded) { S.seenGrounded = true; playDialog(D.FIRST_GROUNDED, () => finishAction(() => go('home'))); break; }
+        finishAction(() => go('home'));
+        break;
+      }
       case 'spikeinfo': spikeInfo(v); break;
       case 'closemodal': modal = null; render(); break;
       case 'sleep': sleepEarly(); break;
