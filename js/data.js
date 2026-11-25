@@ -156,14 +156,14 @@ window.GAME_DATA = (() => {
     // 恩寵
     serveFavor: 10,
     serveFailFavor: -10,
-    pillowFavor: 8,
+    pillowFavor: 15, // 2026-11-25 模擬器調整：8→15，交情才划算
     singExtraFavor: 5, // 侍寢時演唱金縷衣：恩寵額外 +5（共 +15），隔天早上要休息
     birthFavor: 20,
     pregnancyChance: 0.3,
     pregnancyNights: 4,
     // 枕邊風：機率 = 友好 − pillowBase（%），上限 pillowMax
     pillowBase: 20,
-    pillowMax: 60,
+    pillowMax: 80, // 2026-11-25：60→80
     // 友好
     deliverFriend: 5,
     deliverTraitStep: 3, // 親自交：成品特性總和每 3 級，友好再 +1（§14.4）
@@ -198,7 +198,7 @@ window.GAME_DATA = (() => {
     muskMiscarryChance: 0.5,
     fx: {
       infertile: -10, miscarry: -20, saffMiscarry: -25,
-      cassava: -10, catnip: -8,
+      cassava: -15, catnip: -12, // 2026-11-25：只對當晚侍寢有效後加重（-10／-8 → -15／-12）
     },
   };
 

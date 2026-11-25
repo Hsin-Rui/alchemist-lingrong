@@ -25,7 +25,7 @@ function play(Dv, R, bot, rand, hauls) {
   // 統計物件（引擎不寫 S.m，由本檔從報告／結果翻出）
   S.m = {
     lingFlips: 0, sings: 0, pillow: 0, preg: 0, births: 0, miscarry: 0, infertile: 0, serveFail: 0,
-    delivered: 0, late: 0, ordersTotal: 0, bribes: 0, gifts: 0, refused: 0, empress: 0, silverEarned: 0,
+    delivered: 0, proxy: 0, late: 0, ordersTotal: 0, bribes: 0, gifts: 0, visits: 0, love: 0, refused: 0, empress: 0, silverEarned: 0,
   };
   const have = (id) => S.inv[id] || 0;
   const grounded = () => S.day <= S.groundUntil;
@@ -44,8 +44,9 @@ function play(Dv, R, bot, rand, hauls) {
   // 給機器人用的動作：簽章維持與重構前一致，內部改呼叫引擎並把結果翻成 S.m。
   const api = {
     S, D: Dv, R, have, grounded, rand,
-    catchChance: (who, spike, via) => E.catchChance(Dv, S, who, spike, via),
-    acceptChance: (who) => E.acceptChance(Dv, S, who),
+    catchChance: (who, spike, via, tr) => E.catchChance(Dv, S, who, spike, via, tr),
+    acceptChance: (who, kind) => E.acceptChance(Dv, S, who, kind),
+    giftFriend: (who, item) => E.giftFriend(Dv, who, item.product, item.tr),
     findRecipe: (a, b) => E.findRecipe(Dv, a, b),
     // 零溶明天被翻的機率（純量）；沿用重構前語意（權重全空時為 NaN）。
     flipOdds(bribe) {
@@ -57,7 +58,7 @@ function play(Dv, R, bot, rand, hauls) {
     bribe() { const r = E.bribe(Dv, S); if (r.ok) S.m.bribes++; return r.ok; },
     gather(loc) {
       if (grounded()) return false;
-      if (hauls && hauls[loc]) E.applyGatherHaul(Dv, S, loc, hauls[loc][Math.floor(rand() * hauls[loc].length)]);
+      if (hauls && hauls[loc]) { const h = hauls[loc][Math.floor(rand() * hauls[loc].length)]; E.applyGatherHaul(Dv, S, loc, h.got, h.haul); }
       else E.gather(Dv, S, loc, rand);
       return true;
     },
@@ -66,23 +67,27 @@ function play(Dv, R, bot, rand, hauls) {
       if (mats.some((id) => have(id) < mats.filter((m) => m === id).length)) return false;
       return E.craft(Dv, S, { mats, spike }).product;
     },
+    // 禁足時包捐代交（只拿賞銀、不花時辰）；否則親自交
     deliver(order) {
-      if (grounded()) return false;
       // 沿用重構前的選件：手上第一個符合品項的成品
       const item = S.hand.find((h) => h.product === order.product);
       if (!item) return false;
-      const res = E.deliver(Dv, S, order.id, item.id, rand);
+      const how = grounded() ? 'proxy' : 'self';
+      const res = E.deliver(Dv, S, order.id, item.id, rand, how);
       S.m.delivered++;
+      if (how === 'proxy') S.m.proxy++;
       if (!res.caught) S.m.silverEarned += res.reward;
       tallySpike(res);
       return true;
     },
-    gift(who, item) {
-      if (grounded() || item.product === 'junk') return false;
-      if (item.spike && who !== S.flip) return false;
-      S.m.gifts++;
-      const res = E.gift(Dv, S, who, item.id, rand);
+    // 拜訪各宮（§14）：item 空＝空手
+    visit(who, item) {
+      if (grounded() || (item && item.product === 'junk')) return false;
+      S.m.visits++;
+      if (item) S.m.gifts++;
+      const res = E.visit(Dv, S, who, item ? item.id : null, rand);
       if (res.refused) { S.m.refused++; return 'refused'; }
+      if (res.reaction === 'love') S.m.love++;
       tallySpike(res);
       return true;
     },
@@ -117,7 +122,7 @@ function play(Dv, R, bot, rand, hauls) {
 
 // ───────── 機器人 ─────────
 // 共通：交貨 > 做訂單 > 採集缺的素材。spikeFor 決定做訂單時要不要加料。
-function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, bribeSmart = false, sing = true, makeSaff = false, buySpikes = false }) {
+function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, bribeSmart = false, sing = true, makeSaff = false, buySpikes = false, social = false }) {
   return {
     name, sing,
     act(G) {
@@ -125,18 +130,16 @@ function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, b
       // 0. 有錢就打點敬事房（明天被翻的機率）
       if (bribeSmart ? S.silver >= G.R.bribeCost && G.flipOdds(0) < 0.35 : S.silver >= G.R.bribeCost + bribeReserve) G.bribe();
       if (buySpikes && S.silver >= 80 && have('cassava') < 1) G.buy('cassava');
-      // 1. 交貨
-      if (!G.grounded()) {
-        const o = S.orders.find((x) => S.hand.some((h) => h.product === x.product));
-        if (o) return G.deliver(o);
-      }
+      // 1. 交貨（禁足時包捐代交，不花時辰）
+      const o1 = S.orders.find((x) => S.hand.some((h) => h.product === x.product));
+      if (o1) return G.deliver(o1);
       // 2. 加料送禮給今晚侍寢的人
       if (giftSpike && !G.grounded() && D.TARGETS.includes(S.flip) && (!bribeSmart || S.favor[S.flip] >= S.favor.lingrong - 10)) {
         // 料要在調合時加進去：手上有加了出包料的成品就送，沒有就先做一個
         const isDebuff = (x) => DEBUFFS.includes(x);
         const ready = S.hand.find((h) => isDebuff(h.spike));
-        const safe = (sp) => G.acceptChance(S.flip) >= 0.6 && G.catchChance(S.flip, sp, 'gift') < 0.15;
-        if (ready && safe(ready.spike)) return G.gift(S.flip, ready);
+        const safe = (sp, tr) => G.acceptChance(S.flip) >= 0.6 && G.catchChance(S.flip, sp, 'gift', tr) < 0.15;
+        if (ready && safe(ready.spike, ready.tr)) return G.visit(S.flip, ready);
         const sp = DEBUFFS.find((x) => have(x) > 0);
         if (!ready && sp && safe(sp) && S.slot < G.R.slotsPerDay - 1) {
           const pid = D.NORMAL_ORDERS.find((p) => D.PRODUCTS[p].recipe.every((id) => have(id) >= 1));
@@ -155,6 +158,20 @@ function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, b
       }
       // 4. 煉紅花
       if (makeSaff && have('petal') > 0 && (have('liquor') > 0 || G.buy('liquor'))) return G.craft(['petal', 'liquor']);
+      // 4.5 交際：手上有沒綁訂單的成品，送給最喜歡它的人（機器人知道喜好＝玩家試出來之後）
+      if (social && !G.grounded()) {
+        const spare = S.hand.find((h) => h.product !== 'junk' && !h.spike && !h.forOrder);
+        if (spare) {
+          const who = D.TARGETS.slice().sort((a, b) => G.giftFriend(b, spare) - G.giftFriend(a, spare))[0];
+          return G.visit(who, spare);
+        }
+        // 沒訂單要做時，為今晚侍寢的人做一份她喜歡的伴手禮（養枕邊風）
+        if (!todo.length && D.TARGETS.includes(S.flip) && S.slot < G.R.slotsPerDay - 1) {
+          const can = D.NORMAL_ORDERS.concat(['zuotai', 'tonic']).filter((p) => D.PRODUCTS[p].recipe.every((id) => have(id) >= 1));
+          const best = can.sort((a, b) => G.giftFriend(S.flip, { product: b, tr: {} }) - G.giftFriend(S.flip, { product: a, tr: {} }))[0];
+          if (best) return G.craft(D.PRODUCTS[best].recipe);
+        }
+      }
       // 5. 採集訂單缺的東西
       if (!G.grounded()) {
         const need = new Set();
@@ -163,7 +180,8 @@ function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, b
         const inTaiyi = [...need].some((id) => D.GATHER.taiyi.table.some(([x]) => x === id));
         if (inTaiyi && (!inGarden || G.rand() < 0.5)) return G.gather('taiyi');
         if (inGarden) return G.gather('garden');
-        // 沒缺東西：壞心機器人去太醫院找料，其他人去御花園備料
+        // 沒缺東西：交際型去拜訪今晚侍寢的人（空手 +1，養枕邊風）；壞心機器人去太醫院找料，其他人去御花園備料
+        if (social && D.TARGETS.includes(S.flip)) return G.visit(S.flip, null);
         return G.gather(makeSaff ? 'taiyi' : 'garden');
       }
       return false; // 禁足又沒事做 → 就寢
@@ -176,7 +194,7 @@ const DEBUFFS = ['cassava', 'catnip'];
 function smartSpike(G, who) {
   const { S, have } = G;
   const c = S.conc[who];
-  const ok = (sp) => have(sp) > 0 && G.catchChance(who, sp, 'deliver') < 0.15;
+  const ok = (sp) => have(sp) > 0 && G.catchChance(who, sp, 'deliver') < 0.15; // 調合時還不知道成品特性，照沒遮掩估
   if (c.status === 'pregnant') { if (ok('safflower')) return 'safflower'; if (ok('musk')) return 'musk'; }
   if (c.status === 'normal' && ok('safflower')) return 'safflower';
   if (S.flip === who) { const d = DEBUFFS.find(ok); if (d) return d; }
@@ -186,6 +204,8 @@ function smartSpike(G, who) {
 
 const BOTS = [
   makeBot({ name: '正經', spikeFor: () => null, bribeReserve: 40 }),
+  // 交際：正經做訂單，空檔去各宮走動、多的成品送給喜歡的人（第二輪新玩法）
+  makeBot({ name: '交際', spikeFor: () => null, bribeReserve: 40, social: true }),
   makeBot({ name: '隨手加料', spikeFor: (G) => { const s = [...DEBUFFS, 'musk', 'safflower'].filter((x) => G.have(x) > 0); return s.length && G.rand() < 0.5 ? s[0] : null; }, bribeReserve: 40 }),
   makeBot({ name: '精算', spikeFor: smartSpike, giftSpike: true, bribeReserve: 0, makeSaff: true, buySpikes: true }),
   // 高手：只整恩寵追得上自己的人，打點只在被翻機率低的時候
@@ -202,14 +222,14 @@ function mulberry32(a) {
   };
 }
 
-// 每張地下城地圖預先玩 n 趟，回 { loc: [got, …] }
+// 每張地下城地圖預先玩 n 趟，回 { loc: [{ got, haul }, …] }
 const POOL = 2000;
 function dungeonHauls(D, n = POOL) {
   const { playDungeon } = require('./gather-bot.js');
   const out = {};
   for (const loc of Object.keys(D.GATHER).filter((l) => D.GATHER[l].dungeon)) {
     const rand = mulberry32(777);
-    out[loc] = Array.from({ length: n }, () => playDungeon(D, loc, rand, { careful: true }).got);
+    out[loc] = Array.from({ length: n }, () => { const run = playDungeon(D, loc, rand, { careful: true }); return { got: run.got, haul: run.haul }; }); // haul 帶每份的特性
   }
   return out;
 }
@@ -263,7 +283,7 @@ if (require.main === module) {
     console.log(`\n【${bot}】逆襲成功（恩寵第一） ${(r.winRate * 100).toFixed(1)}%｜平均名次 ${r.avgRank.toFixed(2)}｜零溶恩寵 ${r.ling.toFixed(0)}｜最高對手 ${r.topRival.toFixed(0)}`);
     console.log(`  被翻 ${r.m.lingFlips.toFixed(2)} 次｜打點 ${r.m.bribes.toFixed(2)}｜枕邊風 ${r.m.pillow.toFixed(2)}｜黃后進言 ${r.m.empress.toFixed(2)}｜被抓 ${r.caught.toFixed(2)}｜禁足 ${r.grounded.toFixed(1)} 天`);
     console.log(`  懷孕 ${r.m.preg.toFixed(2)}｜生產 ${r.m.births.toFixed(2)}（${(r.birthGames * 100).toFixed(0)}% 的局看得到）｜小產 ${r.m.miscarry.toFixed(2)}｜不孕 ${r.m.infertile.toFixed(2)}｜侍寢出包 ${r.m.serveFail.toFixed(2)}`);
-    console.log(`  訂單 ${r.m.ordersTotal.toFixed(1)}｜交貨 ${r.m.delivered.toFixed(1)}｜逾期 ${r.m.late.toFixed(1)}｜賺 ${r.m.silverEarned.toFixed(0)} 銀｜剩 ${r.silverLeft.toFixed(0)} 銀`);
+    console.log(`  訂單 ${r.m.ordersTotal.toFixed(1)}｜交貨 ${r.m.delivered.toFixed(1)}（代交 ${r.m.proxy.toFixed(1)}）｜逾期 ${r.m.late.toFixed(1)}｜拜訪 ${r.m.visits.toFixed(1)}（投其所好 ${r.m.love.toFixed(1)}）｜賺 ${r.m.silverEarned.toFixed(0)} 銀｜剩 ${r.silverLeft.toFixed(0)} 銀`);
     const nm = Object.fromEntries(D.TITLES.map((t) => [t.id, t.name]));
     console.log('  主封號', Object.entries(r.endings).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${nm[k]} ${(v * 100).toFixed(0)}%`).join('、'));
     console.log('  拿到過', Object.entries(r.got).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${nm[k]} ${(v * 100).toFixed(0)}%`).join('、'));
