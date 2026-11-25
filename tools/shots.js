@@ -43,6 +43,8 @@ const SCENES = {
   'shop-spike': [SETUP + "__e2e.go('shop');", click('[data-a=shoptab][data-v=spike]')],
   'shop-sell': [SETUP + "__e2e.go('shop');", click('[data-a=shoptab][data-v=sell]')],
   'craft-finish': [SETUP + "localStorage.setItem('lingrong-quickcraft', '0'); __e2e.openCraft(null);", click('[data-v=\"recipe:cake\"]'), click('[data-v=\"lot:0:0\"]'), click('[data-v=\"lot:1:0\"]'), click('[data-v=cook]'), 'WAIT10500', click('[data-v=\"spike:cassava\"]'), 'WAIT300', click('[data-v=go4]'), 'WAIT1500'],
+  'tut-gather': [SETUP + "E.setupTutorial(D, S); S.inv.osmanthus = 0; __e2e.go('home');"],
+  'tut-craft': [SETUP + "E.setupTutorial(D, S); S.inv.osmanthus = 1; __e2e.go('home');"],
   shop: [SETUP + "__e2e.go('shop');", "document.querySelector('.scroll').scrollTop = 99999;"],
 };
 

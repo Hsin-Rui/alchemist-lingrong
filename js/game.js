@@ -60,6 +60,13 @@
   const have = (id) => S.inv[id] || 0;
   const isTarget = (who) => D.TARGETS.includes(who);
   const grounded = () => S.day <= S.groundUntil;
+  // 教學第一天走到哪一步：gather → craft → deliver → night → end（第二天早上結束）；不是教學局＝null
+  const tutStep = () => {
+    if (!S || !S.tutorial) return null;
+    if (S.tutorial.step === 'gather' && (S.inv.osmanthus || 0) > 0) S.tutorial.step = 'craft'; // 桂花到手（採的或買的）就往下一步
+    return S.tutorial.step;
+  };
+  const SPOT = (on) => (on ? ' tut-spot' : ''); // 教學的發光圈
   const pct = (x) => `${Math.round(x * 100)}%`;
 
   const rarity = (w) => (w >= 3 ? '常見' : w >= 1.5 ? '偶爾' : '稀有');
@@ -279,7 +286,12 @@
     A.sfx('gong');
     const report = E.startDay(D, S, rand);
     if (tut) { E.setupTutorial(D, S); report.newOrders = []; report.noOrders = false; }
-    playDialog([...renderStartLines(report), ...(tut ? D.TUT_ORDER : [])], () => go('home'));
+    const lines = [...renderStartLines(report), ...(tut ? D.TUT_ORDER : [])];
+    if (!tut && S.tutorial) { // 教學第二天早上：結束教學（A30）
+      if (tutStep() === 'end') lines.push(D.TUT_END);
+      S.tutorial = null;
+    }
+    playDialog(lines, () => go('home'));
   }
   function pickChoice(v) {
     if (!dlg || !dlg.onChoice) return;
@@ -415,6 +427,7 @@
     report.births.forEach((b) => {
       lines.push(['narr', '', `${charName(b.who)}平安誕下皇嗣！黃上龍心大悅，恩寵 +${b.favDelta}`], ['lingrong', 'shock', '（讓她生下來了……）']);
     });
+    if (tutStep() === 'night') { lines.push(D.TUT_NIGHT); S.tutorial.step = 'end'; } // A29
     return lines;
   }
 
@@ -488,6 +501,7 @@
   // 監聽與 rAF 只在進場時註冊、離場時移除（headless 回歸網不會進場）。
   function enterGather(loc) {
     if (needOut()) return;
+    if (tutStep() === 'gather' && !S.tutorial.seenDungeon) { S.tutorial.seenDungeon = true; playDialog(D.TUT_GATHER, () => enterGather(loc)); return; } // A22–A23
     if (!window.PIXEL_ART || !DV) { gather(loc); return; } // 像素資料或繪圖模組沒載到就退回快速採集
     gatherResult = null;
     gatherScene = {
@@ -795,10 +809,12 @@
       quick: quickCraft,
       onQuick: (on) => { quickCraft = on; try { localStorage.setItem('lingrong-quickcraft', on ? '1' : '0'); } catch { /* 忽略 */ } },
       firstSpike: !S.seenSpike,
+      tutorial: tutStep() === 'craft',
       onSeen: (k) => { if (k === 'spike') S.seenSpike = true; },
       cook: (sel) => {
         craftResult = E.craft(D, S, { ...sel, forOrder: craftSel.forOrder, forWho: craftSel.forWho });
         const r = craftResult;
+        if (tutStep() === 'craft' && r.order && r.product === r.order.product) { S.tutorial.step = 'deliver'; S.tutorial.sayDeliver = true; }
         return { product: r.product, traits: r.tr, spike: r.spike, toInv: r.toInv, lostSpike: r.lostSpike };
       },
       actions: () => {
@@ -831,6 +847,7 @@
     if (how === 'self' && needOut()) return;
     const r = E.deliver(D, S, orderId, itemId, rand, how);
     if (r.noItem) { go('home'); return; }
+    if (tutStep() === 'deliver' && !r.proxy) S.tutorial.step = 'night';
     A.sfx('pop');
     if (r.proxy) {
       // 包捐跑腿：出發、（加了料就接加料的結果）、回來
@@ -946,6 +963,10 @@
 
   // 包捐每天一句（台詞總表 H 組）：由上往下，符合第一個條件就說那一句
   function hintLine() {
+    // 教學第一天：包捐指向下一步（A20、H6、A28）
+    if (tutStep() === 'gather') return '小主，藕粉桂花糖糕要藕粉和桂花。藕粉咱們有，桂花得去御花園摘。';
+    if (tutStep() === 'craft') return '材料都齊了，來調合吧！';
+    if (tutStep() === 'deliver') return D.TUT_DELIVER[2];
     const ready = S.orders.find((o) => readyItem(o));
     if (grounded() && ready) return '小主禁足中，東西做好了就交給奴婢跑腿吧。'; // H1
     if (grounded()) return `禁足中……小主可以調合，或抄抄經。（到第 ${S.groundUntil} 天）`; // H2
@@ -998,7 +1019,7 @@
       body = `<div class="ready">${item.spike ? tok(item.spike) : tok(item.product)}
           <span>成品已備好・${item.spike ? `偷加了${itemName(item.spike)}` : '正正經經'}</span></div>
         <div class="row-btns deliver-btns">
-          <button class="btn primary" data-a="deliver" data-v="${o.id}"${DEF(isDef && !grounded())} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中，不能出門' : `親自送去${c.palace}`}</button>
+          <button class="btn primary${SPOT(tutStep() === 'deliver')}" data-a="deliver" data-v="${o.id}"${DEF(isDef && !grounded())} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中，不能出門' : `親自送去${c.palace}`}</button>
           <button class="btn ghost" data-a="proxy" data-v="${o.id}"${DEF(isDef && grounded())}>包捐代交<small>只拿賞銀</small></button>
         </div>`;
     } else {
@@ -1010,7 +1031,7 @@
       }).join('');
       const ok = recipeOk(o.product);
       body = `<div class="needs">${rows}</div>
-        <button class="btn ${ok ? 'primary' : ''} wide" data-a="craftfor" data-v="${o.id}"${DEF(isDef)} ${ok ? '' : 'disabled'}>${ok ? '調合' : '材料還不夠'}</button>`;
+        <button class="btn ${ok ? 'primary' : ''} wide${SPOT(ok && tutStep() === 'craft')}" data-a="craftfor" data-v="${o.id}"${DEF(isDef && tutStep() !== 'gather')} ${ok ? '' : 'disabled'}>${ok ? '調合' : '材料還不夠'}</button>`;
     }
     return `<article class="ocard ${left === 1 ? 'urgent' : ''}" style="--c:${c.color}">
       <div class="ocard-head">${avatar(o.who)}
@@ -1070,7 +1091,7 @@
         ${spikeBar()}
         <nav class="bottomnav">
           <button data-a="go" data-v="shop"><b>商</b><span>小舖</span></button>
-          <button data-a="go" data-v="gather"${DEF(!(S.orders.length && orderMainOk(S.orders[0])))}><b>採</b><span>採集</span></button>
+          <button class="${SPOT(tutStep() === 'gather')}" data-a="go" data-v="gather"${DEF(tutStep() === 'gather' || (!tutStep() && !(S.orders.length && orderMainOk(S.orders[0]))))}><b>採</b><span>採集</span></button>
           <button data-a="craftfor" data-v=""><b>煉</b><span>調合</span></button>
           <button data-a="giftto" data-v=""><b>訪</b><span>拜訪</span></button>
           <button data-a="go" data-v="status"><b>宮</b><span>後宮</span></button>
@@ -1153,7 +1174,7 @@
           <div class="loc-banner bg-${g.bg}"><span>${g.name}</span>${hits.length ? `<em>有你缺的${hits.join('、')}</em>` : ''}</div>
           <div class="loc-body">
             <div class="drops">${g.table.map(([id, w]) => `<span class="drop ${D.ITEMS[id].type === 'spike' || id === 'petal' ? 'spike' : ''} ${needed.has(id) ? 'need' : ''} ${w < 1.5 ? 'rare' : ''}">${D.ITEMS[id].type === 'spike' ? '料：' : ''}${itemName(id)}・${rarity(w)}</span>`).join('')}</div>
-            <button class="btn ${hits.length ? 'primary' : ''} wide" data-a="${hasDungeon(loc) ? 'enter' : 'gather'}" data-v="${loc}"${DEF(i === 0)} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中' : loc === 'taiyi' ? '偷溜進太醫院' : '潛入御花園偷採'}</button>
+            <button class="btn ${hits.length ? 'primary' : ''} wide${SPOT(tutStep() === 'gather' && loc === 'garden')}" data-a="${hasDungeon(loc) ? 'enter' : 'gather'}" data-v="${loc}"${DEF(i === 0)} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中' : loc === 'taiyi' ? '偷溜進太醫院' : '潛入御花園偷採'}</button>
           </div></article>`;
       };
       let sheet = '';
@@ -1790,11 +1811,22 @@
         if (!r) { go('home'); break; }
         craftResult = null;
         closeCraft();
+        if (S.tutorial && S.tutorial.sayDeliver) { // 教學：做好了 → A28 再往下
+          S.tutorial.sayDeliver = false;
+          playDialog([D.TUT_DELIVER], () => act('craftdone2', v + '|' + (r.order ? r.order.id : '') + '|' + (r.itemId || '')));
+          break;
+        }
         if (v === 'proxy' && r.order) { doDeliver(r.order.id, r.itemId, 'proxy'); break; } // 代交不花時辰，不用先檢查天黑
         finishAction(() => (v === 'deliver' && r.order ? doDeliver(r.order.id, r.itemId) : go('home')));
         break;
       }
       case 'deliver': doDeliver(Number(v)); break;
+      case 'craftdone2': { // 教學 A28 播完之後接回原本的「回宮／直接送去／代交」
+        const [how, oid, iid] = v.split('|');
+        if (how === 'proxy' && oid) { doDeliver(Number(oid), Number(iid) || null, 'proxy'); break; }
+        finishAction(() => (how === 'deliver' && oid ? doDeliver(Number(oid), Number(iid) || null) : go('home')));
+        break;
+      }
       case 'proxy': doDeliver(Number(v), null, 'proxy'); break;
       case 'giftto': giftWho = v || (isTarget(S.flip) ? S.flip : null); go('gift'); break;
       case 'giftwho': giftWho = v; render(); break;

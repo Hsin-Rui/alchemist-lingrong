@@ -568,3 +568,8 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .rank-pop.up .rk-row { animation: rkmove .7s cubic-bezier(.3,1.4,.5,1) .4s both; }
 @keyframes rkmove { from { transform: none; } to { transform: translateY(calc((var(--to) - var(--from)) * var(--rh))); } }
 .rank-pop.up .rk-row.me { z-index: 1; }
+
+/* 教學：發光圈指向下一步 */
+.tut-spot { position: relative; z-index: 1; animation: tutspot 1.2s ease-in-out infinite; }
+@keyframes tutspot { 0%, 100% { box-shadow: 0 0 0 3px rgba(244,198,106,.95), 0 0 0 7px rgba(244,198,106,.25); } 50% { box-shadow: 0 0 0 4px rgba(244,198,106,1), 0 0 18px 9px rgba(244,198,106,.45); } }
+@media (prefers-reduced-motion: reduce) { .tut-spot { animation: none; box-shadow: 0 0 0 4px rgba(244,198,106,1); } }

@@ -214,7 +214,11 @@ function connect(url) {
     await press('Enter'); await press('Enter');
     const line2 = await ev("document.querySelector('.dlg-text')?.dataset.full");
     check('Space、Enter 推進對話', line1 !== line0 && line2 !== line1, `${line0} / ${line1} / ${line2}`);
-    for (let i = 0; i < 400 && await hasDlg(); i++) await press('Space', { wait: 15 });
+    for (let i = 0; i < 400 && await hasDlg(); i++) {
+      // 開場選項：這一輪選「不用了」（教學模式另有一段專門測）
+      if (await ev("!!document.querySelector('[data-a=dlgchoice]') && document.querySelector('.dlg-choice.on')?.dataset.v !== 'skip'")) await press('ArrowRight');
+      await press('Space', { wait: 15 });
+    }
     check('連按 Space 跑完開場對話進主畫面', !(await hasDlg()) && (await scr()) === 'home');
 
     // ── 主畫面：首次方向鍵出現在第一張訂單卡主要按鈕，不移動 ──
@@ -662,6 +666,50 @@ function connect(url) {
     await press('Enter'); // 字還在打 → 先打完
     await press('Enter');
     check('Enter 選「不用了」→ A7', await waitFor("(document.querySelector('.dlg-text')?.dataset.full || '').includes('恩寵目前墊底')", 3000));
+
+    // ── 教學模式第一天（§15.2）：發光圈依序指向採集→調合→交貨，各步驟的包捐台詞，晚上 A29、隔天 A30 ──
+    await load({ width: 480, height: 900, deviceScaleFactor: 1, mobile: false });
+    await ev("document.querySelector('[data-a=start]').click()");
+    await press('Escape');
+    await waitFor("!!document.querySelector('[data-a=dlgchoice]')", 3000);
+    await ev("document.querySelector('[data-a=dlgchoice][data-v=tut]').click()");
+    const dlgSeen = [];
+    const drain = async () => { for (let i = 0; i < 80 && await hasDlg(); i++) { const t = await ev("document.querySelector('.dlg-text')?.dataset.full || ''"); if (t && dlgSeen[dlgSeen.length - 1] !== t) dlgSeen.push(t); await ev("document.querySelector('.dialog-layer').click()"); await sleep(60); } };
+    await drain();
+    check('教學：開局 A10 恩寵榜、A18 吹緊吸', dlgSeen.some((t) => t.includes('後宮的恩寵榜')) && dlgSeen.some((t) => t.includes('睡慾軒的吹緊吸')));
+    check('教學：主畫面發光圈在「採集」', await ev("!!document.querySelector('.bottomnav .tut-spot[data-v=gather]')"));
+    await ev("document.querySelector('[data-a=go][data-v=gather]').click()");
+    check('教學：採集畫面發光圈在御花園', await ev("!!document.querySelector('.tut-spot[data-v=garden]')"));
+    await ev("document.querySelector('[data-a=enter][data-v=garden]').click()");
+    check('教學：第一次進御花園先說明侍衛（A22）', await waitFor("(document.querySelector('.dlg-text')?.dataset.full || '').includes('侍衛也走一步')", 3000));
+    await press('Escape');
+    await waitFor("!!document.querySelector('.dg.on')", 4000);
+    await sleep(900);
+    await G('S.inv.osmanthus = 1;'); // 當作採到桂花
+    await press('Escape'); await press('Enter'); // 收工
+    await waitFor("!!document.querySelector('#app .sheet-layer')", 4000);
+    await ev("document.querySelector('[data-a=gatherdone][data-v=home]').click()");
+    check('教學：有桂花後發光圈移到「調合」', await waitFor("!!document.querySelector('.tut-spot[data-a=craftfor]')", 2000));
+    await ev("document.querySelector('.tut-spot[data-a=craftfor]').click()");
+    check('教學：調合第一步用 A24', await waitFor("(document.querySelector('.cf-say')?.textContent || '').includes('採集來的會帶特性')", 3000));
+    await ev("document.querySelector('[data-v=quick]').classList.contains('on') || document.querySelector('[data-v=quick]').click()");
+    await ev("document.querySelector('[data-v=cook]').click()");
+    await ev("document.querySelector('[data-v=go4]').click()");
+    await waitFor("!!document.querySelector('[data-a=craftdone]')", 4000);
+    await ev("document.querySelector('[data-v=quick]')?.click()");
+    await ev("document.querySelector('[data-a=craftdone][data-v=home]').click()");
+    check('教學：做好後 A28', await waitFor("(document.querySelector('.dlg-text')?.dataset.full || '').includes('要是奴婢代送')", 3000));
+    await drain();
+    check('教學：發光圈移到「親自送去」', await ev("!!document.querySelector('.tut-spot[data-a=deliver]')"));
+    await ev("document.querySelector('.tut-spot[data-a=deliver]').click()");
+    await drain();
+    for (let i = 0; i < 6 && (await scr()) !== 'night'; i++) { await ev("(document.querySelector('[data-a=resultdone]') || document.querySelector('[data-a=sleepyes]') || document.querySelector('[data-a=sleep]') || document.querySelector('[data-a=sing][data-v=\"0\"]'))?.click()"); await sleep(200); await drain(); }
+    check('教學：第一天晚上 A29', dlgSeen.some((t) => t.includes('今晚侍寢的娘娘，恩寵會漲')));
+    await ev("document.querySelector('[data-a=next]')?.click()");
+    await sleep(300);
+    await drain();
+    check('教學：第二天早上 A30、教學結束', dlgSeen.some((t) => t.includes('明天起，就看小主自己拿主意了')) && await G('return !S.tutorial;'));
+    check('教學結束後沒有發光圈', await ev("!document.querySelector('.tut-spot')"));
 
     // ── 手機寬度＋觸控：整輪看不到焦點框 ──
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });

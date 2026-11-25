@@ -200,7 +200,7 @@ window.CraftFlow = (() => {
             <div class="cf-grid">${owned.map((id) => `<button type="button" class="cf-mat-btn" ${B(`mat:${id}`)}${avail(id) <= 0 || st.freeMats.length >= 3 ? ' disabled' : st.freeMats.length < 2 ? def() : ''}>${tok(id)}<span>${esc(D.ITEMS[id].name)}</span><small>×${avail(id)}</small></button>`).join('')}</div>`;
         }
         if (mats().length) {
-          panel += `<h3>每樣挑一份</h3>${mats().map((m, i) => {
+          panel += `<div class="cf-row"><h3>每樣挑一份</h3>${st.free ? '' : quickToggle()}</div>${mats().map((m, i) => {
             const opts = options(i);
             return `<div class="cf-mat"><div class="cf-mat-h">${tok(m)}<b>${esc(D.ITEMS[m].name)}</b></div><div class="cf-lots">${opts.map((l) => {
               const on = st.lots[i] === l.uid;
@@ -395,7 +395,7 @@ window.CraftFlow = (() => {
       st.product = o.forProduct;
       autoFill();
       step1();
-      say('order', { w: o.forWho || '', p: D.PRODUCTS[o.forProduct].name });
+      if (o.tutorial) say('tutBook'); else say('order', { w: o.forWho || '', p: D.PRODUCTS[o.forProduct].name });
     } else {
       step1();
       say(o.tutorial ? 'tutBook' : 'book');

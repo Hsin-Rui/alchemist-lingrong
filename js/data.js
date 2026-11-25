@@ -425,6 +425,14 @@ window.GAME_DATA = (() => {
     ['baojuan', '_', '交情好的娘娘侍寢時，說不定會在黃上耳邊替小主美言幾句。', { panel: 'rankup' }],
     ['lingrong', 'evil', '（壞笑）……是啊。我會煉金。'],
   ];
+  // 教學第一天的引導（A22–A23 第一次進御花園、A28 做好、A29 第一天晚上、A30 結束）；A24–A27 在調合模組裡
+  const TUT_GATHER = [
+    ['baojuan', '_', '御花園有侍衛巡邏。小主走一步，侍衛也走一步，被看見就得回宮。'],
+    ['baojuan', '_', '不過別怕，被請回宮也不會怎樣，撿到的東西都算小主的。'],
+  ];
+  const TUT_DELIVER = ['baojuan', '_', '做好了！小主親自送去，娘娘會更歡喜。要是奴婢代送，就只拿得到賞銀喔。'];
+  const TUT_NIGHT = ['baojuan', '_', '今晚侍寢的娘娘，恩寵會漲。跟小主交情好的，還可能替小主說好話。'];
+  const TUT_END = ['baojuan', '_', '明天起，就看小主自己拿主意了！'];
   const TUT_ORDER = [
     ['chuijinxi', '_', '安小主安好。奴婢是睡慾軒的吹緊吸。'],
     ['chuijinxi', '_', '我家真環娘娘想吃藕粉桂花糖糕，不知能否勞煩小主？'],
@@ -475,6 +483,6 @@ window.GAME_DATA = (() => {
 
   return {
     TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
-    request, THANKS, REFUSE, FIRST_GROUNDED, SUTRA_LINES, SUTRA_START, SUTRA_DONE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, OPENING, NO_TUTORIAL, TUT_INTRO, TUT_ORDER, END_TOP, END_LING, TITLES, IDLE,
+    request, THANKS, REFUSE, FIRST_GROUNDED, SUTRA_LINES, SUTRA_START, SUTRA_DONE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, OPENING, NO_TUTORIAL, TUT_INTRO, TUT_ORDER, TUT_GATHER, TUT_DELIVER, TUT_NIGHT, TUT_END, END_TOP, END_LING, TITLES, IDLE,
   };
 })();
