@@ -86,10 +86,22 @@
     return out;
   };
   // 珠珠停在 pos（0～100，橫條的百分比位置）屬於哪一區：'down'|'keep'|'up'
-  function finishZone(D, pos) {
+  // zones 可省略（預設 RULES.craft.zones）；起鍋每次用 jitterZones 浮動過的分區
+  function finishZone(D, pos, zones) {
+    const Z = zones || D.RULES.craft.zones;
     let x = 0;
-    for (const [w, z] of D.RULES.craft.zones) { x += w; if (pos < x) return z; }
-    return D.RULES.craft.zones[D.RULES.craft.zones.length - 1][1];
+    for (const [w, z] of Z) { x += w; if (pos < x) return z; }
+    return Z[Z.length - 1][1];
+  }
+  // 起鍋分區每次浮動：兩端降級區各 8～18%、升級區 9～17% 且位置在 30～70% 之間，其餘是維持（每段至少 8%）
+  function jitterZones(rand) {
+    const r = (a, b) => a + rand() * (b - a);
+    const d1 = Math.round(r(8, 18)), d2 = Math.round(r(8, 18)), u = Math.round(r(9, 17));
+    let c = r(30, 70);
+    c = Math.min(Math.max(c, d1 + 8 + u / 2), 100 - d2 - 8 - u / 2);
+    const k1 = Math.round(c - u / 2 - d1);
+    const k2 = 100 - d1 - k1 - u - d2;
+    return [[d1, 'down'], [k1, 'keep'], [u, 'up'], [k2, 'keep'], [d2, 'down']];
   }
   // 起鍋：只作用在最強的那種特性（平手依 D.TRAITS 順序）；升到最高 3 級、降到 0 就消失。沒有特性 → 不變
   function applyFinish(D, tr, zone) {
@@ -1077,7 +1089,7 @@
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
     findRecipe, sutraTiles, copySutra, maskScore, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
-    potTraits, rollBubbles, stirTraits, finishZone, applyFinish, finalTraits,
+    potTraits, rollBubbles, stirTraits, finishZone, jitterZones, applyFinish, finalTraits,
     buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

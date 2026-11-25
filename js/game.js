@@ -296,6 +296,7 @@
 
   // ───────── 禁足抄經（§15.5）─────────
   let sutra = null; // { line, tiles, used:Set, next, blots, shake }
+  let shopTab = 'mat'; // 小舖分頁：mat／spike／sell
   function openSutra() {
     if (!grounded() || S.slot >= R.slotsPerDay) return;
     const line = D.SUTRA_LINES[Math.floor(rand() * D.SUTRA_LINES.length)];
@@ -1077,37 +1078,41 @@
     },
 
     shop() {
-      const buyRow = (id) => {
+      // 分頁＋格子（原本是一條很長的清單）：素材／料／賣東西
+      const tab = shopTab;
+      const buyCell = (id) => {
         const it = D.ITEMS[id];
-        const isDef = id === D.SHOP.find((x) => S.silver >= D.ITEMS[x].price);
-        const desc = it.type === 'spike' ? it.desc : id === 'liquor' ? '加紅花瓣可以煉出紅花' : '';
-        return `<div class="row">${tok(id)}<div class="row-main"><b>${it.name}</b>${it.type === 'spike' ? '<span class="tag">料</span>' : ''}<small>${desc ? `${desc}・` : ''}持有 ${have(id)}</small></div>
-          <button class="btn small ${S.silver >= it.price ? 'primary' : ''}" data-a="buy" data-v="${id}"${DEF(isDef)} ${S.silver < it.price ? 'disabled' : ''}>${coin(it.price)}</button></div>`;
+        const ok = S.silver >= it.price;
+        const note = it.type === 'spike' ? it.desc : id === 'liquor' ? '加紅花瓣煉紅花' : '';
+        return `<button class="scell${ok ? '' : ' poor'}" data-a="buy" data-v="${id}"${DEF(id === firstBuy)} ${ok ? '' : 'disabled'}>
+          ${tok(id, 'lg')}<b>${it.name}</b>${note ? `<small class="scell-note">${note}</small>` : ''}
+          <span class="scell-foot">${coin(it.price)}<em>持有 ${have(id)}</em></span></button>`;
       };
-      // 賣：一般份一列（一次賣一份），帶特性的每份各一列
-      const sellable = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat' && D.ITEMS[id].price);
-      const sellRows = sellable.flatMap((id) => {
-        const plain = have(id) - lotCount(id);
-        const rows = S.lots.filter((l) => l.id === id).map((l) => `<div class="row">${tok(id)}<div class="row-main"><b>${itemName(id)}</b>${trChips(l.tr, 'sm')}</div>
-          <button class="btn small" data-a="sell" data-v="${id}:${l.uid}">賣 ${coin(E.sellPrice(D, id, l.tr))}</button></div>`);
-        if (plain > 0) rows.unshift(`<div class="row">${tok(id)}<div class="row-main"><b>${itemName(id)}</b><small>一般・持有 ${plain}</small></div>
-          <button class="btn small" data-a="sell" data-v="${id}">賣 ${coin(E.sellPrice(D, id, {}))}</button></div>`);
-        return rows;
-      });
       const mats = D.SHOP.filter((id) => D.ITEMS[id].type === 'mat');
       const spikes = D.SHOP.filter((id) => D.ITEMS[id].type === 'spike');
+      const list = tab === 'spike' ? spikes : mats;
+      const firstBuy = list.find((x) => S.silver >= D.ITEMS[x].price);
+      // 賣：一般份一格（一次賣一份），帶特性的每份各一格
+      const sellable = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat' && D.ITEMS[id].price && have(id) > 0);
+      const sellCells = sellable.flatMap((id) => {
+        const plain = have(id) - lotCount(id);
+        const cells = S.lots.filter((l) => l.id === id).map((l) => `<button class="scell" data-a="sell" data-v="${id}:${l.uid}">
+          ${tok(id, 'lg')}<b>${itemName(id)}</b>${trChips(l.tr, 'sm')}<span class="scell-foot">賣 ${coin(E.sellPrice(D, id, l.tr))}</span></button>`);
+        if (plain > 0) cells.unshift(`<button class="scell" data-a="sell" data-v="${id}">
+          ${tok(id, 'lg')}<b>${itemName(id)}</b><small class="scell-note">一般・持有 ${plain}</small><span class="scell-foot">賣 ${coin(E.sellPrice(D, id, {}))}</span></button>`);
+        return cells;
+      });
+      const TABS = [['mat', '素材'], ['spike', '料'], ['sell', '賣東西']];
+      const body = tab === 'sell'
+        ? (sellCells.length ? `<p class="muted shop-tip">售價一半，每級特性多 1 兩</p><div class="sgrid">${sellCells.join('')}</div>` : '<p class="muted">沒有能賣的素材。</p>')
+        : `<p class="muted shop-tip">${tab === 'spike' ? '紅花瓣只有太醫院採得到喔。' : '小舖買的沒有特性，採集來的才有'}</p><div class="sgrid">${list.map(buyCell).join('')}</div>`;
       return `<div class="screen theme-light">
         ${subHeader('包捐的跑腿小舖', '買賣都不花時辰，禁足中也能買賣')}
         <div class="scroll">
-          <div class="stage bg-shop">${portrait('baojuan', '_', 'stage-portrait')}<div class="bubble">小主要買什麼？多的東西，奴婢也能拿去換銀子。</div></div>
+          <div class="shop-head">${portrait('baojuan', '_', 'shop-face')}<div class="bubble">小主要買什麼？多的東西，奴婢也能拿去換銀子。</div></div>
           <div class="pad">
-          <h3>素材 <small>小舖買的沒有特性，採集來的才有</small></h3>
-          ${mats.map(buyRow).join('')}
-          <h3>料</h3>
-          ${spikes.map(buyRow).join('')}
-          <p class="muted">紅花瓣只有太醫院採得到喔。</p>
-          <h3>賣東西 <small>售價一半，每級特性多 1 兩</small></h3>
-          ${sellRows.length ? sellRows.join('') : '<p class="muted">沒有能賣的素材。</p>'}
+          <div class="seg" role="tablist">${TABS.map(([k, t]) => `<button class="seg-btn${tab === k ? ' on' : ''}" data-a="shoptab" data-v="${k}" role="tab" aria-selected="${tab === k}">${t}</button>`).join('')}</div>
+          ${body}
         </div></div>
       </div>`;
     },
@@ -1755,6 +1760,7 @@
       case 'closemodal': modal = null; render(); break;
       case 'sleep': sleepEarly(); break;
       case 'sutra': openSutra(); break;
+      case 'shoptab': shopTab = v; render(); break;
       case 'tile': pickTile(Number(v)); break;
       case 'sleepyes': modal = null; S.slot = R.slotsPerDay; endDay(); break;
       case 'sing': modal = null; settleNight(v === '1'); break;
@@ -1848,6 +1854,13 @@
     }
   }
   // 測試用：網址後面加 #e2e 時開放狀態給 tools/keyboard-e2e.js 造情境（不影響正常遊戲）
+  // 試玩用：網址後面加 #抄經，直接開一局、禁足中、進抄經小遊戲（不用等被抓）
+  if (decodeURIComponent(location.hash) === '#抄經') {
+    S = E.newState(D);
+    S.groundUntil = S.day + 1;
+    screen = 'home';
+    setTimeout(openSutra, 0);
+  }
   if (location.hash === '#e2e') {
     window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, sutra: () => sutra, render, go, openCraft, playDialog };
   }

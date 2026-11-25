@@ -40,6 +40,9 @@ const SCENES = {
   'order-grounded': [SETUP + "S.orders = [{ id: 901, who: 'zhenhuan', product: 'cake', due: S.day + 2 }]; S.hand.push({ id: 902, product: 'cake', spike: null, forOrder: 901, tr: {} }); S.groundUntil = S.day + 1; __e2e.go('home');"],
   'sutra-home': [SETUP + "S.groundUntil = S.day + 1; __e2e.go('home');"],
   sutra: [SETUP + "S.groundUntil = S.day + 1; __e2e.go('home');", click('[data-a=sutra]'), click('[data-a=tile]'), click('[data-a=tile]'), click('[data-a=tile]'), 'WAIT400'],
+  'shop-spike': [SETUP + "__e2e.go('shop');", click('[data-a=shoptab][data-v=spike]')],
+  'shop-sell': [SETUP + "__e2e.go('shop');", click('[data-a=shoptab][data-v=sell]')],
+  'craft-finish': [SETUP + "localStorage.setItem('lingrong-quickcraft', '0'); __e2e.openCraft(null);", click('[data-v=\"recipe:cake\"]'), click('[data-v=\"lot:0:0\"]'), click('[data-v=\"lot:1:0\"]'), click('[data-v=cook]'), 'WAIT10500', click('[data-v=\"spike:cassava\"]'), 'WAIT300', click('[data-v=go4]'), 'WAIT1500'],
   shop: [SETUP + "__e2e.go('shop');", "document.querySelector('.scroll').scrollTop = 99999;"],
 };
 
@@ -105,7 +108,7 @@ function connect(url) {
   try {
     for (const name of names) {
       await cdp.send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}/index.html?${Date.now()}#e2e` });
-      await sleep(600);
+      for (let i = 0; i < 50 && !(await ev("!!document.querySelector('[data-a=start]')")); i++) await sleep(100); // 等頁面載好
       // 開新局、略過開場對話，回到主畫面
       await ev("document.querySelector('[data-a=start]').click()");
       for (let i = 0; i < 20 && await ev("!!document.querySelector('[data-a=skip]')"); i++) { await ev("document.querySelector('[data-a=skip]').click()"); await sleep(150); }

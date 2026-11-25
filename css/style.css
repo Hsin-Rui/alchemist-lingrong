@@ -530,3 +530,21 @@ h2 small { font-family: 'Noto Sans TC', sans-serif; font-weight: 400; font-size:
 .sp-tile.shake { animation: tileshake .35s; border-color: var(--red); }
 @keyframes tileshake { 25% { transform: translateX(-5px); } 50% { transform: translateX(5px); } 75% { transform: translateX(-3px); } }
 @media (prefers-reduced-motion: reduce) { .sp-tile.shake, .sp-blot, .sp-ch { animation: none; } }
+
+/* 小舖：分頁＋格子 */
+.shop-head { display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px 0; background: linear-gradient(180deg, rgba(248,227,196,.6), transparent), url(../assets/backgrounds/shop.webp) center 30%/cover; min-height: 110px; }
+.shop-face { width: 78px; height: 100px; flex: none; }
+.shop-face img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.shop-head .bubble { position: static; margin-bottom: 12px; flex: 1; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 12px; background: var(--line); margin-bottom: 8px; position: sticky; top: 0; z-index: 2; }
+.seg-btn { border: none; border-radius: 9px; padding: 8px 0; background: transparent; font-family: inherit; font-size: 14px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.seg-btn.on { background: var(--card); color: var(--crimson); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.shop-tip { margin: 2px 0 8px; font-size: 12px; }
+.sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.scell { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 6px 8px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); font-family: inherit; color: var(--ink); cursor: pointer; text-align: center; }
+.scell b { font-size: 14px; }
+.scell-note { font-size: 11px; color: var(--muted); line-height: 1.3; }
+.scell-foot { display: flex; align-items: center; gap: 6px; margin-top: auto; font-weight: 700; font-size: 13px; }
+.scell-foot em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); }
+.scell.poor { opacity: .45; }
+.scell:active:not(:disabled) { transform: translateY(1px); }

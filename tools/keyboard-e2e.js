@@ -387,6 +387,21 @@ function connect(url) {
     await G(`__e2e.openCraft(null);`);
     await ev("document.querySelector('[data-v=quick]').click()"); // 關掉快速調合（記憶體裡的開關也要關）
     check('快速調合可以關掉', await ev("!document.querySelector('[data-v=quick]').classList.contains('on')"));
+    // 起鍋：點畫面任何地方（這裡點頁首）都能停珠珠；升降區每次浮動
+    await G(`S.inv = { lotus: 1, osmanthus: 1 }; S.slot = 0; __e2e.openCraft(null);`);
+    await ev("document.querySelector('[data-v=\"recipe:cake\"]').click()");
+    await ev("document.querySelector('[data-v=cook]').click()");
+    await waitFor("document.querySelector('.cf-steps li.on')?.textContent.includes('加料')", 14000);
+    await ev("document.querySelector('[data-v=go4]').click()");
+    await waitFor("!!document.querySelector('.cf-bead')", 2000);
+    const zw1 = await ev("[...document.querySelectorAll('.cf-bar span')].map((x) => x.style.width).join(',')");
+    const hp = await ev("__t.center('.subhead')");
+    await click(hp[0], hp[1]);
+    check('起鍋：點頁首也能停珠珠', /升一級|維持|降一級/.test(await ev("document.querySelector('.cf-verdict')?.textContent || ''")));
+    await waitFor("!!document.querySelector('[data-a=craftdone]')", 4000);
+    await ev("document.querySelector('[data-a=craftdone]').click()");
+    check('起鍋分區寬度存在（每次浮動，五段加總 100%）', zw1.split(',').reduce((a, w) => a + parseFloat(w), 0) === 100, zw1);
+    await G('__e2e.go("home");');
     await G(`S.inv = window.__inv2; S.lots = window.__lots2; S.slot = window.__slot2; S.hand = window.__hand2; __e2e.go("home");`);
 
     // ── 禁足抄經（§15.5）：只有禁足時有按鈕；←→＋Enter 點字塊；點錯多一滴墨；抄完手上多一本心經 ──

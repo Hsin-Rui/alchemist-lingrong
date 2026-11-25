@@ -136,3 +136,13 @@
 .cf-stage.done.junk .cf-tok.big { box-shadow: 0 0 0 4px #444; }
 .cf-pour { position: absolute; left: 50%; top: 20px; margin-left: -20px; z-index: 3; animation: cf-pour 1s ease-in forwards; }
 @keyframes cf-pour { 0% { transform: translateY(-40px) rotate(0); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(120px) rotate(200deg) scale(.4); opacity: 0; } }
+
+/* 加料：格子（原本一列一列太長） */
+.cf-sgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.cf-scell { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; border-radius: 12px; border: 2px solid transparent; background: var(--cf-bg2); color: var(--cf-ink); font-family: inherit; font-size: 13px; cursor: pointer; text-align: center; min-width: 0; }
+.cf-scell b { font-size: 14px; }
+.cf-scell.on { border-color: var(--cf-amber); background: #4a3a5e; }
+.cf-scell:disabled { opacity: .4; cursor: not-allowed; }
+.cf-snote { font-size: 11px; line-height: 1.3; color: var(--cf-amber); }
+.cf-snote.good { color: var(--cf-ok); } .cf-snote.bad { color: #F09090; }
+.cf-sdesc { min-height: 2.6em; }

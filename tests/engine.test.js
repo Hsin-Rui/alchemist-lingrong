@@ -1344,3 +1344,18 @@ test('visit：《後宮心經》送誰都 +5、一定收下（不擲收禮骰、
     assert.ok(D.VISIT_REACT[who].fixed.length, `${who} 有收心經的台詞`);
   }
 });
+
+test('jitterZones：五段加總 100、兩端降級 8～18、升級 9～17、維持每段至少 8；finishZone 吃自訂分區', () => {
+  for (const v of [0, 0.25, 0.5, 0.75, 0.999]) {
+    const Z = E.jitterZones(() => v);
+    assert.strictEqual(Z.reduce((a, [w]) => a + w, 0), 100);
+    assert.deepStrictEqual(Z.map(([, z]) => z), ['down', 'keep', 'up', 'keep', 'down']);
+    assert.ok(Z[0][0] >= 8 && Z[0][0] <= 18 && Z[4][0] >= 8 && Z[4][0] <= 18);
+    assert.ok(Z[2][0] >= 9 && Z[2][0] <= 17);
+    assert.ok(Z[1][0] >= 7 && Z[3][0] >= 7, JSON.stringify(Z));
+  }
+  const Z = [[10, 'down'], [40, 'keep'], [10, 'up'], [30, 'keep'], [10, 'down']];
+  assert.strictEqual(E.finishZone(D, 55, Z), 'up');
+  assert.strictEqual(E.finishZone(D, 5, Z), 'down');
+  assert.strictEqual(E.finishZone(D, 70, Z), 'keep');
+});
