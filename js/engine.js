@@ -153,7 +153,31 @@
       return r && r.slice().sort().join('+') === key;
     });
   }
-  const acceptChance = (D, S, who) => Math.min(100, S.friend[who] + D.RULES.giftAcceptBonus) / 100;
+  // ───────── 拜訪各宮（§14）─────────
+  // 反應：成品喜歡 +1／不喜歡 −1，帶的特性喜歡每種 +1／討厭每種 −1；加總 >0 投其所好、<0 嫌棄、=0 兩邊都有＝又愛又嫌、其他普通
+  function giftReaction(D, who, product, tr) {
+    const P = D.PREFS[who];
+    const ts = Object.keys(tr || {}).filter((t) => tr[t] > 0);
+    const likeP = P.likeP.includes(product), hateP = P.hateP.includes(product);
+    const likeT = ts.filter((t) => P.likeT.includes(t)).length, hateT = ts.filter((t) => P.hateT.includes(t)).length;
+    const net = (likeP ? 1 : 0) - (hateP ? 1 : 0) + likeT - hateT;
+    const both = (likeP || likeT > 0) && (hateP || hateT > 0);
+    return { net, kind: net > 0 ? 'love' : net < 0 ? 'hate' : both ? 'mixed' : 'plain' };
+  }
+  // 伴手禮的友好：（基本值＋喜歡特性每級 −討厭特性每級）× 成品係數，四捨五入、最低 0
+  function giftFriend(D, who, product, tr) {
+    const P = D.PREFS[who];
+    const C = D.RULES.giftCoef;
+    let v = D.PRODUCTS[product].gift || 0;
+    for (const [t, lv] of Object.entries(tr || {})) {
+      if (P.likeT.includes(t)) v += lv;
+      if (P.hateT.includes(t)) v -= lv;
+    }
+    const coef = P.likeP.includes(product) ? C.like : P.hateP.includes(product) ? C.hate : C.plain;
+    return Math.max(0, Math.round(v * coef));
+  }
+  // 收禮機率＝友好＋30%（最高 100%）；反應是嫌棄時再扣
+  const acceptChance = (D, S, who, kind) => Math.max(0, Math.min(100, S.friend[who] + D.RULES.giftAcceptBonus - (kind === 'hate' ? D.RULES.hateAcceptPenalty : 0))) / 100;
 
   function newState(D) {
     const R = D.RULES;
@@ -209,9 +233,14 @@
 
   // ───────── 規則（被抓機率、翻牌子權重、枕邊風）─────────
   // via: 'deliver'（她自己點的東西，比較不會懷疑）或 'gift'
-  function catchChance(D, S, who, spike, via) {
+  // 遮掩分：成品的濃郁×2＋香氣＋甜蜜（§14.5）
+  const maskScore = (D, tr) => Object.entries(D.RULES.maskWeights).reduce((a, [t, w]) => a + w * ((tr && tr[t]) || 0), 0);
+  // 被抓機率：基礎機率先被遮掩壓低（最低 maskFloor），再乘友好倍率、交貨再減半。tr＝成品的特性
+  function catchChance(D, S, who, spike, via, tr) {
     const R = D.RULES;
-    return D.ITEMS[spike].catch
+    const base = D.ITEMS[spike].catch;
+    const masked = Math.min(base, Math.max(R.maskFloor, base * (1 - R.maskStep * maskScore(D, tr))));
+    return masked
       * Math.max(R.friendCatchFloor, 1 - S.friend[who] / R.friendCatchDivisor)
       * (via === 'deliver' ? R.deliverCatchFactor : 1);
   }
@@ -244,12 +273,12 @@
 
   // ───────── 加料 ─────────
   // 預測加料效果（純函式，不擲骰）
-  function predict(D, S, who, spike, via) {
+  function predict(D, S, who, spike, via, tr) {
     const R = D.RULES;
     if (!spike) return { txt: '正經交貨', cls: 'neutral' };
     const c = S.conc[who];
     const it = D.ITEMS[spike];
-    const risk = catchChance(D, S, who, spike, via);
+    const risk = catchChance(D, S, who, spike, via, tr);
     const out = { risk, riskTxt: `被抓風險：${riskLevel(risk)}` };
     if (spike === 'musk') {
       if (c.status === 'infertile') return { ...out, txt: '無效（已不孕）', cls: 'bad' };
@@ -261,16 +290,16 @@
       if (c.status === 'pregnant') return { ...out, txt: `小產＋不孕 ${R.fx.saffMiscarry}`, cls: 'good' };
       return { ...out, txt: `不孕 ${R.fx.infertile}`, cls: 'good' };
     }
-    return { ...out, txt: `${it.debuff} ${R.fx[spike]}${S.flip === who ? '・今晚出包' : ''}`, cls: 'good', it };
+    return { ...out, txt: S.flip === who ? `${it.debuff} ${R.fx[spike]}・今晚出包` : it.debuff, cls: 'good', it }; // 不是今晚侍寢的人：不提醒會白費
   }
 
   // 真正下料（擲骰、改狀態、推 S.log/S.stats）。rand 注入。
-  function applySpike(D, S, who, spike, via, rand) {
+  function applySpike(D, S, who, spike, via, rand, tr) {
     const R = D.RULES;
     if (!spike) return { outcome: 'plain' };
     S.stats.spikesUsed++;
     const it = D.ITEMS[spike];
-    if (rand() < catchChance(D, S, who, spike, via)) {
+    if (rand() < catchChance(D, S, who, spike, via, tr)) {
       const friendDelta = addFriend(S, who, R.caughtFriend);
       S.groundUntil = Math.max(S.groundUntil, S.day + it.ground);
       S.stats.caught++;
@@ -297,6 +326,8 @@
       if (c.status === 'infertile') outcome = 'safflower_useless';
       else if (c.status === 'pregnant') { outcome = 'miscarry_safflower'; fav = R.fx.saffMiscarry; label = '小產'; c.status = 'infertile'; c.preg = 0; ruin = true; }
       else { outcome = 'safflower_infertile'; fav = R.fx.infertile; label = '不孕'; c.status = 'infertile'; ruin = true; }
+    } else if (S.flip !== who) {
+      outcome = 'debuff_useless'; // 木薯粉、貓薄荷只在當晚侍寢時發作；送給別人就白費了
     } else {
       outcome = 'debuff';
       c.debuff = spike;
@@ -913,47 +944,56 @@
 
   // 交貨：移訂單＋手牌，applySpike，未被抓給 reward（無效×uselessRewardRate）＋deliverFriend，設 S.result。
   // itemId：指定要送哪一個成品（剛調合好的那個）；沒指定就送最新做好的。找不到成品 → { noItem:true }
-  function deliver(D, S, orderId, itemId, rand) {
+  // how：'self' 親自交（花 1 時辰、賞銀＋友好 5＋特性總和每 3 級 +1）；'proxy' 包捐代交（不花時辰、只拿賞銀，禁足也能用）
+  function deliver(D, S, orderId, itemId, rand, how = 'self') {
     const R = D.RULES;
+    const proxy = how === 'proxy';
     const order = S.orders.find((o) => o.id === orderId);
     const item = order && ((itemId && S.hand.find((h) => h.id === itemId && canFill(S, order, h))) || readyItem(S, order));
     if (!item) return { noItem: true };
-    S.slot++;
+    if (!proxy) S.slot++;
     S.orders = S.orders.filter((o) => o !== order);
     S.hand = S.hand.filter((h) => h !== item);
     const who = order.who;
-    const res = applySpike(D, S, who, item.spike, 'deliver', rand);
+    const res = applySpike(D, S, who, item.spike, 'deliver', rand, item.tr);
     let reward = 0;
     let friendDelta = res.friendDelta || 0;
     if (!res.caught) {
       const base = D.PRODUCTS[item.product].reward;
       reward = res.useless ? Math.round(base * R.uselessRewardRate) : base;
-      if (!res.useless) friendDelta = addFriend(S, who, R.deliverFriend);
+      if (!res.useless && !proxy) friendDelta = addFriend(S, who, R.deliverFriend + Math.floor(traitSum(item.tr) / R.deliverTraitStep));
       S.silver += reward;
     }
-    S.result = { kind: 'deliver', who, product: item.product, spike: item.spike, reward, friendDelta, ...res };
-    S.dayLog.push(`交貨給${charName(D, who)}：${res.caught ? '被抓！' : `賞銀 +${reward}`}${res.label ? `，${res.label}` : ''}`);
+    S.result = { kind: 'deliver', who, product: item.product, spike: item.spike, reward, friendDelta, proxy, ...res };
+    S.dayLog.push(`${proxy ? '包捐代交' : '交貨'}給${charName(D, who)}：${res.caught ? '被抓！' : `賞銀 +${reward}`}${res.label ? `，${res.label}` : ''}`);
     return S.result;
   }
 
-  // 送禮：rand>=acceptChance → 拒收（S.result.refused）；否則 applySpike＋收禮友好，設 S.result。
-  // junk／加料非侍寢者由外殼先擋；找不到成品 → { noItem:true }，被擋 → { blocked:true }
-  function gift(D, S, who, handId, rand) {
+  // 拜訪各宮：花 1 時辰。handId 空＝空手（友好 +1，不擲骰）；帶禮：rand>=收禮機率 → 拒收（禮物退回）；
+  // 收下 → applySpike＋伴手禮友好（加料的禮誰都能收）。junk 不能送 → { noItem:true }
+  function visit(D, S, who, handId, rand) {
+    if (handId == null) {
+      S.slot++;
+      const friendDelta = addFriend(S, who, D.RULES.visitEmptyFriend);
+      S.result = { kind: 'gift', who, empty: true, friendDelta, reward: 0 };
+      S.dayLog.push(`空手拜訪${charName(D, who)}`);
+      return S.result;
+    }
     const item = S.hand.find((h) => h.id === handId);
     if (!item || item.product === 'junk') return { noItem: true };
-    if (item.spike && who !== S.flip) return { blocked: true };
     S.slot++;
-    if (rand() >= acceptChance(D, S, who)) {
-      S.result = { kind: 'gift', who, product: item.product, spike: item.spike, refused: true, friendDelta: 0 };
-      S.dayLog.push(`送禮給${charName(D, who)}被拒收`);
+    const reaction = giftReaction(D, who, item.product, item.tr).kind;
+    if (rand() >= acceptChance(D, S, who, reaction)) {
+      S.result = { kind: 'gift', who, product: item.product, spike: item.spike, refused: true, reaction, friendDelta: 0 };
+      S.dayLog.push(`拜訪${charName(D, who)}，禮被拒收`);
       return S.result;
     }
     S.hand = S.hand.filter((h) => h !== item);
-    const res = applySpike(D, S, who, item.spike, 'gift', rand);
+    const res = applySpike(D, S, who, item.spike, 'gift', rand, item.tr);
     let friendDelta = res.friendDelta || 0;
-    if (!res.caught && !res.useless) friendDelta = addFriend(S, who, D.PRODUCTS[item.product].gift);
-    S.result = { kind: 'gift', who, product: item.product, spike: item.spike, friendDelta, reward: 0, ...res };
-    S.dayLog.push(`送${itemName(D, item.product)}給${charName(D, who)}${res.caught ? '，被抓！' : res.label ? `，${res.label}` : ''}`);
+    if (!res.caught && !res.useless) friendDelta = addFriend(S, who, giftFriend(D, who, item.product, item.tr));
+    S.result = { kind: 'gift', who, product: item.product, spike: item.spike, reaction, friendDelta, reward: 0, ...res };
+    S.dayLog.push(`拜訪${charName(D, who)}，送了${itemName(D, item.product)}${res.caught ? '，被抓！' : res.label ? `，${res.label}` : ''}`);
     return S.result;
   }
 
@@ -989,7 +1029,9 @@
     const cands = D.TARGETS.filter((t) => S.orders.filter((o) => o.who === t).length < R.maxOpenOrdersPerChar);
     for (let i = 0; i < n && cands.length; i++) {
       const who = cands.splice(Math.floor(rand() * cands.length), 1)[0];
-      const product = S.conc[who].status === 'pregnant' ? 'tonic' : pick(D.NORMAL_ORDERS, rand);
+      let product = S.conc[who].status === 'pregnant' ? 'tonic' : pick(D.NORMAL_ORDERS, rand);
+      // 滑妃不知道自己不孕，不時點坐胎藥（只對她多擲一次，別人的骰序不變）
+      if (who === 'huafei' && product !== 'tonic' && rand() < R.zuotaiChance) product = 'zuotai';
       S.orders.push({ id: ++S.seq, who, product, due: S.day + R.orderDays - 1 });
       report.newOrders.push({ who, product });
     }
@@ -1007,9 +1049,9 @@
     newState, TITLE_CHECK, computeEnding,
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
-    findRecipe, acceptChance, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
+    findRecipe, maskScore, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
     potTraits, rollBubbles, stirTraits, finishZone, applyFinish, finalTraits,
-    buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
+    buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof window !== 'undefined') window.GameEngine = API;

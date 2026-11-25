@@ -28,10 +28,10 @@ window.GAME_DATA = (() => {
     liquor: { name: '烈酒', ch: '酒', type: 'mat', price: 20 },
     petal: { name: '紅花瓣', ch: '瓣', type: 'mat' },
     // 料（§7）
-    musk: { name: '麝香', ch: '麝', type: 'spike', price: 50, desc: '慢性毒。下滿 3 劑才不孕；有喜時 50% 小產', catch: 0.10, ground: 2 },
-    safflower: { name: '紅花', ch: '紅', type: 'spike', desc: '猛藥。一次就不孕；有喜時小產並且不孕', catch: 0.40, ground: 4 },
-    cassava: { name: '木薯粉', ch: '薯', type: 'spike', price: 15, desc: '上吐下瀉一天，侍寢必出包', catch: 0.15, ground: 1, debuff: '上吐下瀉' },
-    catnip: { name: '貓薄荷', ch: '貓', type: 'spike', price: 20, desc: '晚上招來一群貓咪，侍寢必出包', catch: 0.15, ground: 1, debuff: '貓咪鬧場' },
+    musk: { name: '麝香', ch: '麝', type: 'spike', price: 50, desc: '慢性毒。下滿 3 劑才不孕；有喜時 50% 小產', catch: 0.12, ground: 2 },
+    safflower: { name: '紅花', ch: '紅', type: 'spike', desc: '猛藥。一次就不孕；有喜時小產並且不孕', catch: 0.45, ground: 4 },
+    cassava: { name: '木薯粉', ch: '薯', type: 'spike', price: 15, desc: '上吐下瀉一天，當晚侍寢必出包', catch: 0.18, ground: 1, debuff: '上吐下瀉' },
+    catnip: { name: '貓薄荷', ch: '貓', type: 'spike', price: 20, desc: '晚上招來一群貓咪，當晚侍寢必出包', catch: 0.18, ground: 1, debuff: '貓咪鬧場' },
   };
 
   // out: 'hand' 成品拿在手上（交貨、送禮）；'inv' 放回道具欄（例如煉出來的料）
@@ -113,18 +113,25 @@ window.GAME_DATA = (() => {
   const CHARS = {
     lingrong: { name: '零溶', color: '#7b8fd1', face: '零', imgs: { smile: 'lingrong_smile', evil: 'lingrong_evil', shock: 'lingrong_shock' } },
     baojuan: { name: '包捐', color: '#5f9a7a', face: '捐', imgs: { _: 'baojuan' } },
-    huafei: { name: '滑妃', color: '#d0453b', face: '滑', palace: '一捆宮', bg: 'yikun', maid: 'songzhi', imgs: { happy: 'huafei_happy', oops: 'huafei_oops' } },
-    meizhuang: { name: '審沒裝', color: '#d99a2b', face: '審', palace: '嫌福宮', bg: 'xianfu', maid: 'caiyue', imgs: { happy: 'meizhuang_happy', oops: 'meizhuang_oops' } },
-    zhenhuan: { name: '真環', color: '#e07f9c', face: '環', palace: '睡慾軒', bg: 'suiyu', maid: 'chuijinxi', imgs: { happy: 'zhenhuan_happy', oops: 'zhenhuan_oops' } },
+    huafei: { name: '滑妃', color: '#d0453b', face: '滑', palace: '一捆宮', bg: 'yikun', maid: 'songzhi', imgs: { happy: 'huafei_happy', oops: 'huafei_oops', meh: 'huafei_meh' } },
+    meizhuang: { name: '審沒裝', color: '#d99a2b', face: '審', palace: '嫌福宮', bg: 'xianfu', maid: 'caiyue', imgs: { happy: 'meizhuang_happy', oops: 'meizhuang_oops', meh: 'meizhuang_meh' } },
+    zhenhuan: { name: '真環', color: '#e07f9c', face: '環', palace: '睡慾軒', bg: 'suiyu', maid: 'chuijinxi', imgs: { happy: 'zhenhuan_happy', oops: 'zhenhuan_oops', meh: 'zhenhuan_meh' } },
     huangshang: { name: '黃上', color: '#d4a800', face: '黃', imgs: { _: 'huangshang', happy: 'huangshang_happy' } },
     huanghou: { name: '黃后', color: '#7a4e9a', face: '后', imgs: { _: 'huanghou' } },
     doctor: { name: '太醫溫十粗', color: '#4f7a8a', face: '溫', imgs: { _: 'doctor' } },
     // 各宮宮女：替主子下訂單（立繪沒有時用 face 字代替）
     songzhi: { name: '送吱', color: '#c0504a', face: '吱', imgs: { _: 'maid_songzhi' } },
     caiyue: { name: '踩月', color: '#d0a040', face: '月', imgs: { _: 'maid_caiyue' } },
+    cats: { name: '貓咪們', color: '#a0805a', face: '喵', imgs: { _: 'cats' } },
     chuijinxi: { name: '吹緊吸', color: '#d98aa2', face: '吸', imgs: { _: 'maid_chuijinxi' } },
   };
   const TARGETS = ['huafei', 'meizhuang', 'zhenhuan'];
+  // 三位妃嬪的喜好（§14.2，藏起來：畫面不暗示、不記錄）：喜歡／討厭的特性、喜歡／不喜歡的成品
+  const PREFS = {
+    huafei: { likeT: ['hua', 'nong'], hateT: ['qing'], likeP: ['yunv', 'incense', 'zuotai'], hateP: ['cake', 'tonic'] },
+    meizhuang: { likeT: ['qing', 'tian'], hateT: ['hua'], likeP: ['cake', 'zuotai', 'tonic'], hateP: ['yunv'] },
+    zhenhuan: { likeT: ['xiang', 'tian'], hateT: ['nong'], likeP: ['cake', 'suihan', 'yunv'], hateP: ['zuotai'] },
+  };
   const ALL = ['lingrong', ...TARGETS];
 
   const RULES = {
@@ -149,20 +156,26 @@ window.GAME_DATA = (() => {
     // 恩寵
     serveFavor: 10,
     serveFailFavor: -10,
-    pillowFavor: 8,
+    pillowFavor: 15, // 2026-11-25 模擬器調整：8→15，交情才划算
     singExtraFavor: 5, // 侍寢時演唱金縷衣：恩寵額外 +5（共 +15），隔天早上要休息
     birthFavor: 20,
     pregnancyChance: 0.3,
     pregnancyNights: 4,
     // 枕邊風：機率 = 友好 − pillowBase（%），上限 pillowMax
     pillowBase: 20,
-    pillowMax: 60,
+    pillowMax: 80, // 2026-11-25：60→80
     // 友好
     deliverFriend: 5,
+    deliverTraitStep: 3, // 親自交：成品特性總和每 3 級，友好再 +1（§14.4）
+    zuotaiChance: 0.25, // 滑妃的普通訂單換成坐胎藥的機率（她以為自己還能生）
     rejectFriend: -1,
     lateFriend: -5,
     caughtFriend: -30,
     giftAcceptBonus: 30, // 收禮機率 = 友好 + 30
+    // 拜訪各宮（§14.1、§14.3）：伴手禮友好 =（成品 gift ＋喜歡特性每級 −討厭特性每級）× 係數；嫌棄時收禮機率再扣
+    giftCoef: { like: 1.2, plain: 1, hate: 0.8 },
+    hateAcceptPenalty: 20,
+    visitEmptyFriend: 1,
     // 敬事房
     bribeCost: 150,
     bribeWeight: 100,
@@ -173,7 +186,11 @@ window.GAME_DATA = (() => {
     empressFactor: 2,
     // 加料
     uselessRewardRate: 0.5,
-    // 被抓機率 = 料的基礎機率 × max(下限, 1 − 友好 ÷ 除數) × (交貨時再 × deliverCatchFactor)
+    // 被抓機率 = 遮掩後的機率 × max(下限, 1 − 友好 ÷ 除數) × (交貨時再 × deliverCatchFactor)
+    // 遮掩（§14.5）：遮掩分＝濃郁×2＋香氣＋甜蜜，每分 −6%，最低壓到 8%
+    maskWeights: { nong: 2, xiang: 1, tian: 1 },
+    maskStep: 0.06,
+    maskFloor: 0.08,
     friendCatchDivisor: 100,
     friendCatchFloor: 0.2,
     deliverCatchFactor: 0.5,
@@ -181,7 +198,7 @@ window.GAME_DATA = (() => {
     muskMiscarryChance: 0.5,
     fx: {
       infertile: -10, miscarry: -20, saffMiscarry: -25,
-      cassava: -10, catnip: -8,
+      cassava: -15, catnip: -12, // 2026-11-25：只對當晚侍寢有效後加重（-10／-8 → -15／-12）
     },
   };
 
@@ -232,10 +249,56 @@ window.GAME_DATA = (() => {
     zhenhuan: [['zhenhuan', 'happy', '妹妹真是貼心。'], ['lingrong', 'smile', '姐姐別客氣，妹妹只是想對姐姐好。']],
   };
 
+  // 木薯粉、貓薄荷送給今晚沒侍寢的人：白天照樣發作，但白費了（送出後才讓玩家發現）
+  const DEBUFF_WASTED = ['lingrong', 'shock', '（……今晚又不是她侍寢。白下了。）'];
+  // 貓薄荷：夜晚貓咪鬧場
+  const CATS_LINE = ['cats', '_', '喵——！喵喵喵——！喵嗚——！', { sfx: 'meow' }];
+  // 包捐代交（D7 出發、D8 回來）
+  const PROXY_LINES = [
+    ['baojuan', '_', '奴婢這就替小主跑一趟！'],
+    ['baojuan', '_', '送到了！賞銀在這兒……不過娘娘問，小主怎麼沒親自來？'],
+  ];
+  // 拜訪各宮：進門（E1–E3）、空手（E4–E6）
+  const VISIT_ENTER = {
+    huafei: [['huafei', 'happy', '喲，稀客。安妹妹今天怎麼有空來一捆宮？']],
+    meizhuang: [['meizhuang', 'happy', '妹妹來了，快坐。踩月，上茶。']],
+    zhenhuan: [['zhenhuan', 'happy', '妹妹來得正好，陪我說說話。']],
+  };
+  const VISIT_EMPTY = {
+    huafei: [['huafei', 'happy', '空著手來？妳是來看本宮笑話的？']],
+    meizhuang: [['meizhuang', 'happy', '妹妹能來就好，帶什麼東西。']],
+    zhenhuan: [['zhenhuan', 'happy', '姐妹之間，不必拘禮。']],
+  };
+
+  // 拒收（E18、E20、E21）＋零溶的內心話（E22）
   const REFUSE = {
-    huafei: [['huafei', 'happy', '本宮缺你這點東西？拿走拿走，別髒了本宮的地。'], ['lingrong', 'shock', '（……被轟出來了。）']],
-    meizhuang: [['meizhuang', 'happy', '妹妹的心意我領了，東西就不必了。'], ['lingrong', 'shock', '（姐姐……還在跟我客氣嗎？）']],
-    zhenhuan: [['zhenhuan', 'happy', '無功不受祿，妹妹收回去吧。'], ['lingrong', 'shock', '（她在防我？）']],
+    huafei: [['huafei', 'meh', '本宮缺妳這點東西？拿走拿走，別髒了本宮的地。'], ['lingrong', 'shock', '（……被轟出來了。）']],
+    meizhuang: [['meizhuang', 'meh', '妹妹的心意我領了，東西……還是拿回去吧。'], ['lingrong', 'shock', '（姐姐……還在跟我客氣嗎？）']],
+    zhenhuan: [['zhenhuan', 'happy', '妹妹客氣了。吹緊吸，替我送安妹妹回去。'], ['lingrong', 'shock', '（她在防我？）']],
+  };
+  // 收下伴手禮的反應（E7–E17、E26–E28）：hateP＝不喜歡的成品專屬句，沒有就用 hate
+  const VISIT_REACT = {
+    huafei: {
+      plain: [['huafei', 'happy', '放著吧。']],
+      love: [['huafei', 'happy', '這正是本宮想要的！安妹妹妳倒是比那些奴才機靈。']],
+      hate: [['huafei', 'meh', '這麼寡淡的東西，也好意思拿來？']],
+      hateP: { tonic: [['huafei', 'meh', '安胎藥？安妹妹這是在笑本宮？']] },
+      mixed: [['huafei', 'meh', '東西是好東西……可惜味道寡淡了些。']],
+    },
+    meizhuang: {
+      plain: [['meizhuang', 'happy', '妹妹有心了。']],
+      love: [['meizhuang', 'happy', '妹妹怎麼知道我喜歡這個？知我者，妹妹也。']],
+      hate: [['meizhuang', 'meh', '這……太花俏了些，不太合我的性子。']],
+      hateP: {},
+      mixed: [['meizhuang', 'meh', '我很喜歡，只是……下回別弄得這麼花俏。']],
+    },
+    zhenhuan: {
+      plain: [['zhenhuan', 'happy', '謝謝妹妹，我收下了。']],
+      love: [['zhenhuan', 'happy', '妹妹真懂我。這份心意，我記下了。']],
+      hate: [['zhenhuan', 'meh', '這味道太重了……我聞著不太舒服。']],
+      hateP: { zuotai: [['zhenhuan', 'meh', '坐胎藥？……妹妹的好意，我心領了。']] },
+      mixed: [['zhenhuan', 'meh', '妹妹有心了。只是這味道……稍微重了點。']],
+    },
   };
 
   // 加料結果（共通版，{n} 會換成對方名字）
@@ -377,7 +440,7 @@ window.GAME_DATA = (() => {
   ];
 
   return {
-    TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, ALL, RULES,
-    request, THANKS, REFUSE, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
+    TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
+    request, THANKS, REFUSE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
   };
 })();

@@ -100,11 +100,6 @@
     const e = Object.entries(tr || {});
     return e.length ? `<span class="trs ${cls}">${e.map(([t, lv], i) => `<span class="trc" style="--c:${D.TRAITS[t].color};--i:${i}">${D.TRAITS[t].name}<i>${'●'.repeat(lv)}${'○'.repeat(3 - lv)}</i></span>`).join('')}</span>` : '';
   }
-  // 鍋裡湯色：依特性顏色（等級高的在前）做漸層
-  function liquid(tr) {
-    const cs = Object.entries(tr).sort((a, b) => b[1] - a[1]).map(([t]) => D.TRAITS[t].color);
-    return cs.length === 1 ? `linear-gradient(160deg, ${cs[0]}, #6E5A3A)` : `linear-gradient(160deg, ${cs.join(', ')})`;
-  }
   // 某素材有幾份帶特性
   const lotCount = (id) => S.lots.filter((l) => l.id === id).length;
   function tok(id, cls = '') {
@@ -169,6 +164,7 @@
   function outcomeLines(who, spike, res) {
     if (res.caught) return markFx(lockLine(fmt(D.CAUGHT, { who, spike, days: res.days }), 0), who, 'caught'); // 被抓那一句（且慢！）鎖 0.6 秒
     if (res.outcome === 'plain') return D.THANKS[who];
+    if (res.outcome === 'debuff_useless') return [...D.DEBUFF_LINES[who][spike], D.DEBUFF_WASTED]; // 白天照樣發作，但今晚不是她侍寢
     const lines = res.outcome === 'debuff' ? D.DEBUFF_LINES[who][spike] : fmt(D.OUTCOME_LINES[res.outcome], { who, dose: res.dose });
     const tier = fxTier(res);
     return tier ? markFx(lockLine(lines, hitIndex(lines)), who, tier) : lines;
@@ -231,6 +227,7 @@
     const text = el.dataset.full;
     const opt = dlg.lines[dlg.i][3];
     if (opt && opt.fx) playLineFx(opt.fx);
+    if (opt && opt.sfx) A.sfx(opt.sfx);
     if (opt && opt.lock) {
       // 高潮句：直接整句，LOCK_MS 內按鍵無效，▼ 之後才出現
       el.innerHTML = textHtml(text);
@@ -342,6 +339,7 @@
       if (report.serve.kind === 'debuff') {
         const d = report.serve.favDelta;
         const debuff = report.serve.debuff;
+        if (debuff === 'catnip') lines.push(D.CATS_LINE); // 貓咪鬧場：先聽到貓叫
         lines.push(['huangshang', '_', D.SERVE_FAIL_HS[debuff]], ['narr', '', D.SERVE_FAIL[debuff].replace('{n}', name)], ['narr', '', `侍寢出包！${name}恩寵 ${d}`], ['lingrong', 'evil', '（計畫通。）']);
       } else {
         const d = report.serve.favDelta;
@@ -749,6 +747,7 @@
         const canDeliver = !done && !grounded() && r.order && r.product !== 'junk' && !r.toInv;
         const out = [{ a: 'craftdone', v: 'home', label: done ? '天色晚了，回宮' : '回炎洗宮', def: !canDeliver, primary: !canDeliver }];
         if (canDeliver) out.push({ a: 'craftdone', v: 'deliver', label: `直接送去${D.CHARS[r.order.who].palace}`, primary: true, def: true });
+        if (r.order && r.product !== 'junk' && !r.toInv) out.push({ a: 'craftdone', v: 'proxy', label: '包捐代交' });
         return out;
       },
       onStep: (n) => { if (n !== craftSel.stage) cursor.key = null; craftSel.stage = n; },
@@ -767,23 +766,39 @@
   }
 
   // itemId：指定要送哪一個成品（剛調合好的那個）；沒指定就送最新做好的
-  function doDeliver(orderId, itemId = null) {
-    if (needOut()) return;
-    const r = E.deliver(D, S, orderId, itemId, rand);
+  // how：'self' 親自送（要出門）；'proxy' 包捐代交（禁足也行、不花時辰、只拿賞銀）
+  function doDeliver(orderId, itemId = null, how = 'self') {
+    if (how === 'self' && needOut()) return;
+    const r = E.deliver(D, S, orderId, itemId, rand, how);
     if (r.noItem) { go('home'); return; }
     A.sfx('pop');
+    if (r.proxy) {
+      // 包捐跑腿：出發、（加了料就接加料的結果）、回來
+      const [go1, back] = D.PROXY_LINES;
+      const mid = r.caught || (r.outcome && r.outcome !== 'plain') ? outcomeLines(r.who, r.spike, r) : [];
+      playDialog([go1, ...mid, ...(r.caught ? [] : [back])], () => go('result'), r.caught ? D.CHARS[r.who].bg : 'yanxi');
+      return;
+    }
     playDialog(outcomeLines(r.who, r.spike, r), () => go('result'), D.CHARS[r.who].bg);
   }
 
-  function doGift(who, handId) {
+  // 拜訪各宮（§14）：handId 空＝空手
+  function doVisit(who, handId) {
     if (needOut()) return;
-    const item = S.hand.find((h) => h.id === handId);
-    if (!item || item.product === 'junk') return;
-    if (item.spike && who !== S.flip) { toast('加料的禮只能送給今晚侍寢的人'); return; }
-    const r = E.gift(D, S, who, handId, rand);
-    if (r.refused) { playDialog(D.REFUSE[r.who], () => go('result'), D.CHARS[r.who].bg); return; }
-    A.sfx('pop');
-    playDialog(outcomeLines(r.who, r.spike, r), () => go('result'), D.CHARS[r.who].bg);
+    const item = handId == null ? null : S.hand.find((h) => h.id === handId);
+    if (handId != null && (!item || item.product === 'junk')) return;
+    const r = E.visit(D, S, who, item ? item.id : null, rand);
+    const enter = D.VISIT_ENTER[who] || [];
+    if (r.empty) { playDialog([...enter, ...D.VISIT_EMPTY[who]], () => go('result'), D.CHARS[who].bg); return; }
+    if (r.refused) { playDialog([...enter, ...D.REFUSE[r.who]], () => go('result'), D.CHARS[r.who].bg); return; }
+    A.sfx(r.reaction === 'love' ? 'ding' : 'pop');
+    // 收下：被抓 → 太醫那段；否則先說反應（E 組），有料得手再接加料的結果
+    const lines = r.caught ? outcomeLines(r.who, r.spike, r) : [...visitReact(r), ...(r.outcome && r.outcome !== 'plain' ? outcomeLines(r.who, r.spike, r) : [])];
+    playDialog([...enter, ...lines], () => go('result'), D.CHARS[r.who].bg);
+  }
+  function visitReact(r) {
+    const V = D.VISIT_REACT[r.who];
+    return (r.reaction === 'hate' && V.hateP[r.product]) || V[r.reaction] || V.plain;
   }
 
   function sleepEarly() {
@@ -869,19 +884,22 @@
     </div>`;
   }
 
+  // 包捐每天一句（台詞總表 H 組）：由上往下，符合第一個條件就說那一句
   function hintLine() {
-    if (grounded()) return `禁足中……只能在宮裡煉東西了。（到第 ${S.groundUntil} 天）`;
-    const f = S.flip;
-    if (isTarget(f) && !S.conc[f].debuff && S.hand.some((h) => h.spike)) return `今晚是${charName(f)}侍寢……手上這份「心意」，該送過去了。`;
     const ready = S.orders.find((o) => readyItem(o));
-    if (ready) return `東西做好了，該送去給${charName(ready.who)}了。`;
+    if (grounded() && ready) return '小主禁足中，東西做好了就交給奴婢跑腿吧。'; // H1
+    if (grounded()) return `禁足中……只能在宮裡煉東西了。（到第 ${S.groundUntil} 天）`; // H2 待抄經（epic 4）上線再換
+    const f = S.flip;
+    if (isTarget(f) && !S.conc[f].debuff && S.hand.some((h) => h.spike)) return `今晚是${charName(f)}侍寢……手上這份「心意」，該送過去了。`; // H3
+    if (ready) return `東西做好了，親自送去給${charName(ready.who)}，交情會更好。`; // H4
     for (const o of S.orders) {
       const miss = D.PRODUCTS[o.product].recipe.find((id) => !have(id));
-      if (miss) return `${itemName(miss)}不夠，得去${locName(sourcesOf(miss)[0].loc)}一趟。`;
+      if (miss) return `${itemName(miss)}不夠，可以去${locName(sourcesOf(miss).find((x) => x.loc !== 'shop')?.loc || sourcesOf(miss)[0].loc)}採，或在小舖買。`; // H5
     }
-    if (S.orders.some((o) => recipeOk(o.product))) return '材料都齊了，來調合吧！';
+    if (S.orders.some((o) => recipeOk(o.product))) return '材料都齊了，來調合吧！'; // H6
+    if (!S.orders.length) return '今天沒有訂單，小主可以去各宮走動走動。'; // H7
     const preg = D.TARGETS.find((t) => S.conc[t].status === 'pregnant');
-    if (preg) return `${charName(preg)}有喜了呢……（呵）`;
+    if (preg) return `${charName(preg)}有喜了呢……（呵）`; // H8
     return D.IDLE[(S.day + S.slot) % D.IDLE.length];
   }
 
@@ -895,7 +913,7 @@
       const c = S.conc[f];
       body = `${avatar(f)}<div class="tn-main"><b>今晚${charName(f)}侍寢</b>
         <small>${c.debuff ? `已經${D.ITEMS[c.debuff].debuff}，今晚必定出包！` : `友好 ${S.friend[f]}・枕邊風 ${pct(E.pillowChance(D, S, f))}`}</small></div>
-        <button class="btn small ${c.debuff ? '' : 'primary'}" data-a="giftto" data-v="${f}" ${grounded() || c.debuff ? 'disabled' : ''}>送禮</button>`;
+        <button class="btn small ${c.debuff ? '' : 'primary'}" data-a="giftto" data-v="${f}" ${grounded() || c.debuff ? 'disabled' : ''}>拜訪</button>`;
     }
     return `<section class="tonight">
       <div class="tn-row">${body}</div>
@@ -907,7 +925,7 @@
   }
 
   // 主畫面預設：第一張訂單卡的主要按鈕（可按時）；否則導覽列「採集」
-  const orderMainOk = (o) => (readyItem(o) ? !grounded() : recipeOk(o.product));
+  const orderMainOk = (o) => (readyItem(o) ? true : recipeOk(o.product)); // 備好的訂單禁足時也能代交
   const DEF = (on) => (on ? ' data-def' : '');
 
   function orderCard(o, i) {
@@ -919,7 +937,10 @@
     if (item) {
       body = `<div class="ready">${item.spike ? tok(item.spike) : tok(item.product)}
           <span>成品已備好・${item.spike ? `偷加了${itemName(item.spike)}` : '正正經經'}</span></div>
-        <button class="btn primary wide" data-a="deliver" data-v="${o.id}"${DEF(isDef)} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中，不能出門' : `送去${c.palace}`}</button>`;
+        <div class="row-btns deliver-btns">
+          <button class="btn primary" data-a="deliver" data-v="${o.id}"${DEF(isDef && !grounded())} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中，不能出門' : `親自送去${c.palace}`}</button>
+          <button class="btn ghost" data-a="proxy" data-v="${o.id}"${DEF(isDef && grounded())}>包捐代交<small>只拿賞銀</small></button>
+        </div>`;
     } else {
       const rows = D.PRODUCTS[o.product].recipe.map((id) => {
         const n = have(id);
@@ -973,7 +994,7 @@
       return `<div class="screen theme-light">
         ${topBar()}
         <div class="scroll">
-          ${grounded() ? `<div class="grounded">禁足中（到第 ${S.groundUntil} 天）：不能出門採集、交貨、送禮，也不能侍寢</div>` : ''}
+          ${grounded() ? `<div class="grounded">禁足中（到第 ${S.groundUntil} 天）：不能出門採集、交貨、拜訪，也不能侍寢</div>` : ''}
           <div class="stage bg-yanxi">
             ${portrait('lingrong', grounded() ? 'shock' : 'smile', 'stage-portrait')}
             <div class="bubble">${esc(hintLine())}</div>
@@ -981,7 +1002,7 @@
           ${tonightCard()}
           <section class="orders">
             <h2>訂單 <small>${S.orders.length} 張</small></h2>
-            ${S.orders.length ? S.orders.map(orderCard).join('') : '<p class="muted">目前沒有訂單。可以先採集備料，或做點東西送禮。</p>'}
+            ${S.orders.length ? S.orders.map(orderCard).join('') : '<p class="muted">目前沒有訂單。可以先採集備料，或去各宮走動走動。</p>'}
             ${S.hand.some((h) => h.product === 'junk') ? `<p class="muted">（手上還有 ${S.hand.filter((h) => h.product === 'junk').length} 坨黑黑的東西……）</p>` : ''}
           </section>
         </div>
@@ -990,7 +1011,7 @@
           <button data-a="go" data-v="shop"><b>商</b><span>小舖</span></button>
           <button data-a="go" data-v="gather"${DEF(!(S.orders.length && orderMainOk(S.orders[0])))}><b>採</b><span>採集</span></button>
           <button data-a="craftfor" data-v=""><b>煉</b><span>調合</span></button>
-          <button data-a="giftto" data-v=""><b>禮</b><span>送禮</span></button>
+          <button data-a="giftto" data-v=""><b>訪</b><span>拜訪</span></button>
           <button data-a="go" data-v="status"><b>宮</b><span>後宮</span></button>
           <button data-a="sleep"><b>寢</b><span>就寢</span></button>
         </nav>
@@ -1092,32 +1113,36 @@
     gift() {
       const who = giftWho;
       const items = S.hand.filter((h) => h.product !== 'junk');
+      const off = grounded();
       const targetCard = (t) => {
         const tonight = S.flip === t;
-        return `<button class="gcard ${who === t ? 'on' : ''}" data-a="giftwho" data-v="${t}"${DEF(sendDef == null && t === (who || D.TARGETS[0]))} style="--c:${D.CHARS[t].color}">
+        return `<button class="gcard ${who === t ? 'on' : ''}" data-a="giftwho" data-v="${t}"${DEF(who == null && t === D.TARGETS[0])} style="--c:${D.CHARS[t].color}">
           ${avatar(t)}<span class="gcard-main"><b>${charName(t)}${tonight ? '<em>今晚侍寢</em>' : ''}</b>
-          <small>友好 ${S.friend[t]}・收禮機率 ${pct(E.acceptChance(D, S, t))}</small>
+          <small>${D.CHARS[t].palace}・友好 ${S.friend[t]}・收禮機率 ${pct(E.acceptChance(D, S, t))}</small>
           <span class="bar heart"><i style="width:${S.friend[t]}%"></i></span></span></button>`;
       };
       let list = '';
-      const sendDef = who && !grounded() ? (items.find((h) => !(h.spike && who !== S.flip)) || {}).id : null;
       if (who) {
-        list = items.length ? items.map((h) => {
-          const blocked = h.spike && who !== S.flip;
-          const p = h.spike ? E.predict(D, S, who, h.spike, 'gift') : null;
-          return `<div class="row gift-row ${blocked ? 'blocked' : ''}">${tok(h.product)}${h.spike ? tok(h.spike, 'sm') : ''}
+        // 不顯示預估友好：喜好要玩家自己試出來（§14.1）
+        const rows = items.map((h) => {
+          const p = h.spike ? E.predict(D, S, who, h.spike, 'gift', h.tr) : null;
+          return `<div class="row gift-row">${tok(h.product)}${h.spike ? tok(h.spike, 'sm') : ''}
             <div class="row-main"><b>${itemName(h.product)}${h.spike ? `<em class="spiked">＋${itemName(h.spike)}</em>` : ''}</b>${trChips(h.tr, 'sm')}
-            <small>${blocked ? '加料的禮只能送給今晚侍寢的人' : p ? `${p.txt}・${p.riskTxt}` : `收下後友好 +${D.PRODUCTS[h.product].gift}`}</small></div>
-            <button class="btn small ${blocked ? '' : 'primary'}" data-a="gift" data-v="${h.id}"${DEF(h.id === sendDef)} ${blocked || grounded() ? 'disabled' : ''}>送出</button></div>`;
-        }).join('') : '<p class="muted">手上沒有成品。先去調合一份吧！</p><button class="btn primary wide" data-a="craftfor" data-v="">去調合</button>';
+            ${p ? `<small>${p.txt}・${p.riskTxt}</small>` : ''}</div>
+            <button class="btn small primary" data-a="gift" data-v="${h.id}" ${off ? 'disabled' : ''}>帶這份去</button></div>`;
+        }).join('');
+        list = `<div class="row gift-row empty-visit"><span class="tok tok-none"><span class="tok-ch">空</span></span>
+            <div class="row-main"><b>空手拜訪</b><small>聊聊天，友好 +${R.visitEmptyFriend}</small></div>
+            <button class="btn small primary" data-a="gift" data-v=""${DEF(!off)} ${off ? 'disabled' : ''}>去${D.CHARS[who].palace}</button></div>
+          ${rows || '<p class="muted">手上沒有成品可以當伴手禮。</p>'}`;
       }
       return `<div class="screen theme-light">
-        ${subHeader('送禮', '花 1 個時辰・可以送給任何人；加料的禮只能送給今晚侍寢的人')}
+        ${subHeader('拜訪各宮', '花 1 個時辰・可以空手去，也可以帶一份成品當伴手禮')}
         <div class="scroll pad">
-          ${grounded() ? '<div class="grounded inline">禁足中，不能出門送禮</div>' : ''}
-          <h3>送給誰？</h3>
+          ${off ? '<div class="grounded inline">禁足中，不能出門拜訪</div>' : ''}
+          <h3>去誰那裡？</h3>
           <div class="gcards">${D.TARGETS.map(targetCard).join('')}</div>
-          ${who ? `<h3>送什麼？</h3>${list}` : '<p class="muted">先選一位娘娘。</p>'}
+          ${who ? `<h3>帶什麼去？</h3>${list}` : '<p class="muted">先選一位娘娘。</p>'}
         </div>
       </div>`;
     },
@@ -1131,14 +1156,17 @@
       else if (r.caught) { stamp = '被抓'; stampCls = 'red'; }
       else if (r.useless) { stamp = '無效'; stampCls = 'grey'; }
       else if (r.label) { stamp = r.label; stampCls = r.outcome === 'musk_dose' || r.outcome === 'musk_miss' ? 'purple' : 'red'; }
-      else { stamp = '收下'; stampCls = 'gold'; }
+      else if (r.empty) { stamp = '拜訪'; stampCls = 'gold'; }
+      else { stamp = { love: '投其所好', hate: '嫌棄', mixed: '又愛又嫌' }[r.reaction] || '收下'; stampCls = r.reaction === 'hate' ? 'grey' : 'gold'; }
       const tier = fxTier(r);
       if (tier) stampCls += ' fierce'; // 狠章（加料得手、被抓）
       const shake = tier === 'heavy' && !r.fxDone && !dlg; // 只有「重」在蓋章時晃一次；重繪不再晃
       const lines = [];
       if (r.kind === 'deliver') {
-        lines.push(`<div class="rline">${tok(r.product, 'sm')}<span>${r.caught ? '東西被沒收了' : `訂單完成・${itemName(r.product)}`}${r.useless ? '<small>（味道怪怪的，賞銀減半、不加友好）</small>' : ''}</span>
+        lines.push(`<div class="rline">${tok(r.product, 'sm')}<span>${r.caught ? '東西被沒收了' : `${r.proxy ? '包捐代交' : '訂單完成'}・${itemName(r.product)}`}${r.useless ? '<small>（味道怪怪的，賞銀減半、不加友好）</small>' : ''}</span>
           <b class="gold">銀 +${r.reward}${!r.caught && r.friendDelta ? `　友好 +${r.friendDelta}` : ''}</b></div>`);
+      } else if (r.empty) {
+        lines.push(`<div class="rline"><span class="tok tok-none sm"><span class="tok-ch">空</span></span><span>空手拜訪${c.palace}，聊了一會兒</span><b class="gold">友好 +${r.friendDelta}</b></div>`);
       } else {
         lines.push(`<div class="rline">${tok(r.product, 'sm')}<span>${r.refused ? '被拒收，禮物退回' : r.caught ? '禮物被沒收了' : `送出${itemName(r.product)}`}</span>
           <b class="gold">${!r.refused && !r.caught && r.friendDelta ? `友好 +${r.friendDelta}` : '—'}</b></div>`);
@@ -1155,10 +1183,17 @@
       const done = S.slot >= R.slotsPerDay;
       const hurt = r.caught ? false : r.favDelta < 0;
       // 被抓暗幕：一開始 0.45，章落下後 0.62（playResultFx 播）；重繪時直接維持 0.62
-      return `<div class="screen result bg-${c.bg}${tier ? ` fx-${tier}` : ''}${r.caught ? ' fx-caught' : ''}${shake ? ' fx-shake' : ''}">
+      const love = r.kind === 'gift' && r.reaction === 'love' && !r.refused && !r.caught;
+      const meh = r.kind === 'gift' && !r.caught && (r.reaction === 'hate' || r.reaction === 'mixed') && !r.refused;
+      // 拜訪的演出：投其所好＝花瓣＋大字；嫌棄、又愛又嫌＝嫌棄立繪；拒收＝零溶尷尬、禮物彈回
+      const who0 = r.caught ? 'doctor' : r.refused && r.kind === 'gift' ? 'lingrong' : r.who;
+      const expr = r.refused && r.kind === 'gift' ? 'shock' : hurt ? 'oops' : meh ? 'meh' : 'happy';
+      return `<div class="screen result bg-${c.bg}${tier ? ` fx-${tier}` : ''}${r.caught ? ' fx-caught' : ''}${shake ? ' fx-shake' : ''}${love ? ' fx-love' : ''}">
         ${r.caught ? `<div class="fx-veil${r.fxDone ? ' settled' : ''}"></div>` : ''}
+        ${love ? `<div class="petals" aria-hidden="true">${'<i></i>'.repeat(14)}</div><div class="love-banner">投其所好！<b>友好 +${r.friendDelta}</b></div>` : ''}
         <div class="result-stage">
-          ${portrait(r.caught ? 'doctor' : r.who, hurt ? 'oops' : 'happy', 'result-portrait')}
+          ${portrait(who0, expr, 'result-portrait')}
+          ${r.refused && r.kind === 'gift' && r.product ? `<span class="gift-bounce">${tok(r.product, 'lg')}</span>` : ''}
           <div class="stamp ${stampCls}">${stamp}</div>
           ${r.favDelta ? `<div class="float-num minus">${r.favDelta}</div>` : ''}
         </div>
@@ -1398,8 +1433,6 @@
   const NAV_DIRS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
   // 深色面：焦點框改用琥珀
   const DARK_SURFACE = '.topbar, .subhead, .bottomnav, .theme-dark, .night, .ending, .dialog-box.narr, .dark-sheet, .title-screen';
-  // 深色畫面裡的淺色面（調合的米色素材抽屜）：仍用朱紅
-  const LIGHT_INSET = '.drawer';
   let focusBox = null;
 
   function navScope() {
@@ -1453,7 +1486,7 @@
     focusBox.style.top = `${r.top - 5}px`;
     focusBox.style.width = `${r.width + 10}px`;
     focusBox.style.height = `${r.height + 10}px`;
-    focusBox.classList.toggle('dark', !!it.el.closest(DARK_SURFACE) && !it.el.closest(LIGHT_INSET));
+    focusBox.classList.toggle('dark', !!it.el.closest(DARK_SURFACE));
     focusBox.classList.add('on');
     focusBox.dataset.key = it.key;
   }
@@ -1645,13 +1678,15 @@
         if (!r) { go('home'); break; }
         craftResult = null;
         closeCraft();
+        if (v === 'proxy' && r.order) { doDeliver(r.order.id, r.itemId, 'proxy'); break; } // 代交不花時辰，不用先檢查天黑
         finishAction(() => (v === 'deliver' && r.order ? doDeliver(r.order.id, r.itemId) : go('home')));
         break;
       }
       case 'deliver': doDeliver(Number(v)); break;
+      case 'proxy': doDeliver(Number(v), null, 'proxy'); break;
       case 'giftto': giftWho = v || (isTarget(S.flip) ? S.flip : null); go('gift'); break;
       case 'giftwho': giftWho = v; render(); break;
-      case 'gift': doGift(giftWho, Number(v)); break;
+      case 'gift': doVisit(giftWho, v ? Number(v) : null); break;
       case 'resultdone': finishAction(() => go('home')); break;
       case 'spikeinfo': spikeInfo(v); break;
       case 'closemodal': modal = null; render(); break;
@@ -1690,7 +1725,7 @@
     screen = 'ending';
   }
   // 測試用：網址後面加 #演出 顯示事件選單，#演出=<事件> 直接播該事件的對話＋結果頁（不影響正常遊戲）。
-  // 走真的引擎（E.deliver／E.gift），只是先擺好對象狀態、用固定骰子，所以 S.result 與對話都跟正常遊玩一樣。
+  // 走真的引擎（E.deliver／E.visit），只是先擺好對象狀態、用固定骰子，所以 S.result 與對話都跟正常遊玩一樣。
   const fxHash = decodeURIComponent(location.hash);
   if (fxHash === '#演出' || fxHash.startsWith('#演出=')) {
     const NO_CATCH = 0.999; // 抓包骰 ≥ 機率 → 沒被抓；送禮骰 ≥ 收禮機率 → 拒收
@@ -1698,6 +1733,8 @@
     const FX_DEMO = {
       cassava: ['上吐下瀉（輕）', 'huafei', 'cassava', null, [NO_CATCH]],
       catnip: ['貓咪鬧場（輕）', 'huafei', 'catnip', null, [NO_CATCH]],
+      debuff_useless: ['木薯粉白下（不是今晚侍寢）', 'meizhuang', 'cassava', null, [NO_CATCH]],
+      cats_night: ['夜晚貓咪鬧場（貓叫）', 'huafei', null, null, []],
       musk_dose: ['麝香 2/3（中）', 'zhenhuan', 'musk', { status: 'normal', musk: 1 }, [NO_CATCH]],
       musk_miss: ['麝香落空（中）', 'zhenhuan', 'musk', { status: 'pregnant', preg: 1, musk: 0 }, [NO_CATCH, NO_CATCH]],
       musk_infertile: ['麝香不孕（重）', 'meizhuang', 'musk', { status: 'normal', musk: 2 }, [NO_CATCH]],
@@ -1727,19 +1764,22 @@
     } else {
       const [, who, spike, conc, dice, viaGift] = FX_DEMO[key];
       if (conc) Object.assign(S.conc[who], conc);
+      S.flip = key === 'debuff_useless' ? 'huafei' : who; // 木薯粉、貓薄荷只對當晚侍寢的人有效
       const seq = [...dice];
       const demoRand = () => (seq.length ? seq.shift() : NO_CATCH);
       const product = 'incense';
       S.hand.push({ id: 'fxdemo', product, spike });
       let r;
       if (viaGift) {
-        r = E.gift(D, S, who, 'fxdemo', demoRand);
+        r = E.visit(D, S, who, 'fxdemo', demoRand);
       } else {
         S.orders.push({ id: 'fxdemo', who, product, due: S.day + 1 });
         r = E.deliver(D, S, 'fxdemo', 'fxdemo', demoRand);
       }
-      const lines = r.refused ? D.REFUSE[who] : outcomeLines(who, spike, r);
-      dlg = { lines, i: 0, done: () => go('result'), bg: D.CHARS[who].bg };
+      const lines = key === 'cats_night'
+        ? [D.CATS_LINE, ['huangshang', '_', D.SERVE_FAIL_HS.catnip], ['narr', '', D.SERVE_FAIL.catnip.replace('{n}', charName(who))]]
+        : r.refused ? D.REFUSE[who] : outcomeLines(who, spike, r);
+      dlg = { lines, i: 0, done: () => go('result'), bg: key === 'cats_night' ? 'night' : D.CHARS[who].bg };
     }
   }
   // 測試用：網址後面加 #e2e 時開放狀態給 tools/keyboard-e2e.js 造情境（不影響正常遊戲）

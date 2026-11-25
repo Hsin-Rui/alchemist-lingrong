@@ -1,0 +1,66 @@
+# epic-visit-palaces 的 story，表格順序＝建造順序。
+[[entry]]
+id = 1
+type = "story"
+title = "拜訪各宮與新的友好公式"
+description = "引擎加拜訪：花 1 時辰、空手 +1、帶伴手禮照 §14.3 算友好（基本值、喜歡／討厭特性、成品係數）、反應分類（投其所好／嫌棄／又愛又嫌／普通）、收禮機率（嫌棄再 −20%）；喜好資料照 §14.2。畫面上「送禮」換成「拜訪」：選人 → 空手或選一份成品 → 結果。"
+verify = "單元測試涵蓋 §14.3 表格四個例子、四種反應、嫌棄的收禮機率、空手 +1、黑暗料理不能送；在遊戲裡拜訪三人各一次（空手與帶禮）。"
+covers = ["R1"]
+after = ["2.1"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "拜訪的反應演出與台詞"
+description = "進門台詞、空手、收下、投其所好（開心立繪＋花瓣＋大字友好 +N）、嫌棄（meh 立繪）、又愛又嫌、拒收（尷尬臉＋禮物彈回）、心經之外的 E 組台詞全部接上；不給任何喜好暗示。"
+verify = "四種反應與拒收各自顯示對應立繪、台詞與演出（情境截圖）；畫面與台詞不出現英文、不出現「安嬪」。"
+covers = ["R1", "R4"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "訂單與交貨：宮女、親自交、包捐代交、坐胎藥"
+description = "親自交友好改成 5＋每 3 級特性總和 +1；新增包捐代交（只拿賞銀、不加友好、禁足也能用、不花時辰）與 D7／D8 台詞；滑妃不時點坐胎藥；宮女下訂單用立繪；包捐每天一句換成 H 組。"
+verify = "單元測試：親自交友好 5～8、代交不加友好、禁足可代交、滑妃會出坐胎藥訂單；遊戲裡兩種交法都走得完。"
+covers = ["R2", "R4"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "新的加料規則與貓咪鬧場"
+description = "被抓機率改成 §14.5（基礎 12／45／18%、遮掩分壓低到最低 8%、友好與交貨倍率）；加料的禮誰都能收；木薯粉、貓薄荷只在當晚侍寢發作；貓咪鬧場夜晚演出（cats 立繪＋貓叫）；調合的料預測跟著顯示新機率。"
+verify = "單元測試涵蓋 §14.5 兩個例子與 8% 下限；送加料禮給非侍寢者不被擋；夜晚貓咪鬧場演出可在 #演出 看到。"
+covers = ["R3", "R4"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 5
+type = "story"
+title = "模擬器與數值平衡"
+description = "tools/simulate.js 機器人改用拜訪、代交、新被抓公式；量各機器人逆襲率與封號取得率，調數值（目前高手約 47% 偏高），結果寫回設計文件。"
+verify = "node tools/simulate.js 跑完；設計文件記下新勝率與調整理由。"
+covers = ["R5"]
+after = [2, 3, 4]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Refactor sweep"
+description = "整理本 epic 留下的重複與暫時程式碼（舊送禮畫面殘留、舊調合 CSS），文件同步。"
+verify = "node --test tests/、tools/simulate.js --quick、tools/gather-bot.js、tools/keyboard-e2e.js 全部通過。"
+covers = ["R1", "R2", "R3"]
+after = [1, 2, 3, 4, 5]
+hitl = false
+risk = "low"
