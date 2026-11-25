@@ -100,11 +100,6 @@
     const e = Object.entries(tr || {});
     return e.length ? `<span class="trs ${cls}">${e.map(([t, lv], i) => `<span class="trc" style="--c:${D.TRAITS[t].color};--i:${i}">${D.TRAITS[t].name}<i>${'●'.repeat(lv)}${'○'.repeat(3 - lv)}</i></span>`).join('')}</span>` : '';
   }
-  // 鍋裡湯色：依特性顏色（等級高的在前）做漸層
-  function liquid(tr) {
-    const cs = Object.entries(tr).sort((a, b) => b[1] - a[1]).map(([t]) => D.TRAITS[t].color);
-    return cs.length === 1 ? `linear-gradient(160deg, ${cs[0]}, #6E5A3A)` : `linear-gradient(160deg, ${cs.join(', ')})`;
-  }
   // 某素材有幾份帶特性
   const lotCount = (id) => S.lots.filter((l) => l.id === id).length;
   function tok(id, cls = '') {
@@ -1438,8 +1433,6 @@
   const NAV_DIRS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
   // 深色面：焦點框改用琥珀
   const DARK_SURFACE = '.topbar, .subhead, .bottomnav, .theme-dark, .night, .ending, .dialog-box.narr, .dark-sheet, .title-screen';
-  // 深色畫面裡的淺色面（調合的米色素材抽屜）：仍用朱紅
-  const LIGHT_INSET = '.drawer';
   let focusBox = null;
 
   function navScope() {
@@ -1493,7 +1486,7 @@
     focusBox.style.top = `${r.top - 5}px`;
     focusBox.style.width = `${r.width + 10}px`;
     focusBox.style.height = `${r.height + 10}px`;
-    focusBox.classList.toggle('dark', !!it.el.closest(DARK_SURFACE) && !it.el.closest(LIGHT_INSET));
+    focusBox.classList.toggle('dark', !!it.el.closest(DARK_SURFACE));
     focusBox.classList.add('on');
     focusBox.dataset.key = it.key;
   }
@@ -1732,7 +1725,7 @@
     screen = 'ending';
   }
   // 測試用：網址後面加 #演出 顯示事件選單，#演出=<事件> 直接播該事件的對話＋結果頁（不影響正常遊戲）。
-  // 走真的引擎（E.deliver／E.gift），只是先擺好對象狀態、用固定骰子，所以 S.result 與對話都跟正常遊玩一樣。
+  // 走真的引擎（E.deliver／E.visit），只是先擺好對象狀態、用固定骰子，所以 S.result 與對話都跟正常遊玩一樣。
   const fxHash = decodeURIComponent(location.hash);
   if (fxHash === '#演出' || fxHash.startsWith('#演出=')) {
     const NO_CATCH = 0.999; // 抓包骰 ≥ 機率 → 沒被抓；送禮骰 ≥ 收禮機率 → 拒收
@@ -1778,7 +1771,7 @@
       S.hand.push({ id: 'fxdemo', product, spike });
       let r;
       if (viaGift) {
-        r = E.gift(D, S, who, 'fxdemo', demoRand);
+        r = E.visit(D, S, who, 'fxdemo', demoRand);
       } else {
         S.orders.push({ id: 'fxdemo', who, product, due: S.day + 1 });
         r = E.deliver(D, S, 'fxdemo', 'fxdemo', demoRand);

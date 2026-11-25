@@ -996,7 +996,6 @@
     S.dayLog.push(`拜訪${charName(D, who)}，送了${itemName(D, item.product)}${res.caught ? '，被抓！' : res.label ? `，${res.label}` : ''}`);
     return S.result;
   }
-  const gift = visit; // 舊名（模擬器用，story 5 改掉）
 
   // 開日：重置 dayLog；tired→slot=1；逾期訂單移除＋lateFriend；chooseFlip＋消耗 empressBoost＋重置 bribe；
   // 生成新訂單（weightedPick＋隨機抽對象）。回報告，外殼 renderStartLines 據此組對話。
@@ -1052,7 +1051,7 @@
     predict, applySpike, settleNight,
     findRecipe, maskScore, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
     potTraits, rollBubbles, stirTraits, finishZone, applyFinish, finalTraits,
-    buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, gift, startDay, advanceDay,
+    buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof window !== 'undefined') window.GameEngine = API;
