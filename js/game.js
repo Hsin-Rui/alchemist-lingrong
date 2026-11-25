@@ -10,6 +10,8 @@
   let screen = 'title';
   let dlg = null; // { lines, i, done, bg }；播放中另記 lockUntil（防連按）、veilLine／veilAt（暗幕從哪一句、何時開始）
   let modal = null; // { title, body }
+  let endStep = 1; // 結局：1＝恩寵揭曉、2＝封號與戰績
+  let bookOpen = false; // 結局畫面二的封號冊展開
   let busy = false; // 動畫進行中，暫停輸入
   // 調合（四階段，§13.3）：流程本體在 js/craftflow.js；這裡只記從哪張訂單進來、目前第幾階段（鎖返回鍵用）
   const newCraftSel = (forOrder = null, forWho = null) => ({ stage: 1, forOrder, forWho });
@@ -437,6 +439,7 @@
     if (S.day >= R.days) {
       S.result = computeEnding();
       A.playBgm('ending');
+      endStep = 1; bookOpen = false;
       go('ending');
       return;
     }
@@ -920,6 +923,12 @@
     return r;
   }
 
+  // 分享到 FB：開 FB 的分享視窗，分享遊戲網址（預覽用 index.html 的 og:image）
+  const GAME_URL = 'https://hsin-rui.github.io/alchemist-lingrong/';
+  function shareFb() {
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(GAME_URL)}`, '_blank', 'noopener,width=600,height=560');
+  }
+
   async function share() {
     const e = S.result;
     const more = e.extra.length ? `，另外加封「${e.extra.map((t) => t.name).join('」「')}」` : '';
@@ -930,6 +939,70 @@
       await navigator.clipboard.writeText(`${text}${url}`);
       toast('已複製分享文字！');
     } catch { /* 使用者取消 */ }
+  }
+
+  // ───────── 結局兩畫面（§9 第二輪）─────────
+  const charImg = (who, expr) => `assets/characters/${D.CHARS[who].imgs[expr] || Object.values(D.CHARS[who].imgs)[0]}.webp`;
+  // 畫面一：太監宣旨、恩寵榜從第 4 名往第 1 名揭曉（CSS 延遲依揭曉順序）
+  function endingReveal() {
+    const e = S.result;
+    const n = e.board.length;
+    const max = Math.max(100, ...e.board.map((b) => b.favor));
+    const ling = e.top === 'lingrong';
+    const cut = D.END_TOP[e.top].indexOf('，');
+    const head = D.END_TOP[e.top].slice(0, cut);
+    const tail = D.END_TOP[e.top].slice(cut + 1);
+    const big = ling ? tail : head;
+    const small = ling ? `${head}。` : tail;
+    const who = ling ? D.END_CROWD : e.opening[1];
+    const doneAt = 0.4 + n * 0.7 + 0.3;
+    const rows = e.board.map((b, i) => {
+      const c = D.CHARS[b.who];
+      const img = charImg(b.who, b.who === 'lingrong' ? (ling ? 'evil' : 'shock') : 'happy');
+      return `<div class="rk${i === 0 ? ' first' : ''}" style="--c:${c.color};--d:${(0.4 + (n - 1 - i) * 0.7).toFixed(2)}s;--w:${Math.max(4, Math.round((b.favor / max) * 100))}%">
+        <span class="rk-no">${i + 1}</span>
+        <span class="rk-av"><img src="${img}" alt=""></span>
+        <span class="rk-body"><span class="rk-nm">${c.name}<b>${b.favor}</b></span><span class="rk-bar"><i></i></span></span>
+      </div>`;
+    }).join('');
+    return `<div class="screen ending end1 bg-yanxi" style="--done:${doneAt.toFixed(2)}s">
+      <div class="end-cap">— 十日期滿 —</div>
+      <div class="end-eunuch">聖旨到——</div>
+      <div class="rk-board">${rows}</div>
+      <div class="end-verdict${ling ? ' ling' : ''}"><div class="v-big">${big}</div><div class="v-small">${small}</div><div class="v-who">${who}</div></div>
+      <div class="end-hero"><img src="${charImg(e.top, ling ? 'evil' : 'happy')}" alt="${D.CHARS[e.top].name}"></div>
+      ${ling ? '' : `<div class="end-cower"><img src="${charImg('lingrong', 'shock')}" alt="零溶"></div>`}
+      <button class="btn ghost-gold end-next" data-a="endnext" data-def>看看零溶得了什麼封號 →</button>
+    </div>`;
+  }
+  // 畫面二：聖旨展開、主封號蓋章、加封跳出、十日戰績、分享與封號冊
+  function endingEdict() {
+    const e = S.result;
+    const got = D.TITLES.filter((t) => e.book.includes(t.id)).length;
+    const seal = (t, i) => {
+      const has = e.book.includes(t.id);
+      const cls = e.fresh.includes(t.id) ? 'new' : has ? 'got' : 'no';
+      return `<button class="seal-btn ${cls}" style="--i:${i}" data-a="seal" data-v="${t.id}">${has ? t.seal.replace('|', '<br>') : '？'}</button>`;
+    };
+    return `<div class="screen ending end2 bg-yanxi">
+      <div class="end-cap">— 十日期滿 —</div>
+      <div class="edict">
+        <div class="edict-hd">奉天承運　黃上詔曰</div>
+        <p class="edict-sub">茲賜${e.top === 'lingrong' ? '鈕祜祿氏零溶' : '炎洗宮安小主零溶'}封號——</p>
+        <div class="edict-stampwrap"><div class="edict-stamp">${e.main.seal.replace('|', '<br>')}</div></div>
+        <h1 class="sr-only">${e.main.name}</h1>
+        <p class="edict-comment">${e.main.comment}欽此。</p>
+        ${e.extra.length ? `<div class="edict-extra">另外加封<br>${e.extra.map((t, i) => `<span class="edict-chip" style="--i:${i}">${t.name}</span>`).join('')}</div>` : ''}
+      </div>
+      <section class="end-stats"><h2>十日戰績</h2>${e.stats.map((x) => `<div class="end-stat"><b>${x.n}</b><span>${x.text}</span></div>`).join('')}</section>
+      <div class="end-btns">
+        <button class="btn gold" data-a="sharefb">分享到 FB</button>
+        <button class="btn ghost-gold" data-a="share">其他分享</button>
+        <button class="btn ghost-gold" data-a="start" data-def>再玩一次</button>
+      </div>
+      <button class="book-toggle" data-a="book" aria-expanded="${bookOpen}">封號冊　已收集 ${got} / ${D.TITLES.length}　${bookOpen ? '︿' : '›'}</button>
+      ${bookOpen ? `<section class="title-book"><div class="book-h">封號冊 <small>點印章看說明</small></div><div class="seals">${D.TITLES.map(seal).join('')}</div></section>` : ''}
+    </div>`;
   }
 
   // ───────── 畫面元件 ─────────
@@ -1352,38 +1425,7 @@
     },
 
     ending() {
-      const e = S.result;
-      const st = S.stats;
-      const expr = ['baimang', 'wentaiyi', 'touming'].includes(e.main.id) ? 'shock' : ['guimi', 'bailian', 'miaoyin'].includes(e.main.id) ? 'smile' : 'evil';
-      const seal = (t, i) => {
-        const got = e.book.includes(t.id);
-        const cls = e.fresh.includes(t.id) ? 'new' : got ? 'got' : 'no';
-        return `<button class="seal-btn ${cls}" style="--i:${i}" data-a="seal" data-v="${t.id}">${got ? t.seal.replace('|', '<br>') : '？'}</button>`;
-      };
-      return `<div class="screen ending bg-yanxi">
-        <div class="end-cap">— 十日期滿 —</div>
-        ${portrait('lingrong', expr, 'end-portrait')}
-        <div class="edict">
-          <div class="edict-hd">奉天承運　黃上詔曰</div>
-          <p class="edict-open">${e.opening.join('')}</p>
-          <p>茲賜${e.top === 'lingrong' ? '鈕祜祿氏零溶' : '炎洗宮安小主零溶'}封號——</p>
-          <h1 class="edict-title">${e.main.name}</h1>
-          <p>${e.main.comment}欽此。</p>
-          ${e.extra.length ? `<div class="edict-extra">另外加封：${e.extra.map((t) => `<b>${t.name}</b>`).join('、')}</div>` : ''}
-          <div class="edict-seal">黃上<br>之寶</div>
-        </div>
-        <div class="end-low">
-          <div class="end-chips"><span>恩寵 <b>第 ${e.rank} 名</b></span><span>加料 <b>${st.spikesUsed}</b></span><span>得手 <b>${st.success}</b></span><span>被抓 <b>${st.caught}</b></span></div>
-          <section class="title-book">
-            <div class="book-h">封號冊 <small>已收集 ${D.TITLES.filter((t) => e.book.includes(t.id)).length} / ${D.TITLES.length}・點印章看說明</small></div>
-            <div class="seals">${D.TITLES.map(seal).join('')}</div>
-          </section>
-          <div class="row-btns">
-            <button class="btn gold" data-a="share">分享</button>
-            <button class="btn ghost-gold" data-a="start" data-def>再玩一次</button>
-          </div>
-        </div>
-      </div>`;
+      return endStep === 1 ? endingReveal() : endingEdict();
     },
   };
 
@@ -1850,6 +1892,9 @@
       case 'sing': modal = null; settleNight(v === '1'); break;
       case 'next': nextDay(); break;
       case 'share': share(); break;
+      case 'sharefb': shareFb(); break;
+      case 'endnext': endStep = 2; render(); setTimeout(() => { if (screen === 'ending' && endStep === 2) A.sfx('stamp'); }, 700); break;
+      case 'book': bookOpen = !bookOpen; render(); break;
       case 'seal': { const t = D.TITLES.find((x) => x.id === v); const got = S.result.book.includes(v); toast(got ? `${t.name}：${t.comment}` : `？？？：${t.hint}`, 3200); break; }
     }
   }
@@ -1880,6 +1925,7 @@
     });
     S.result = computeEnding(false);
     screen = 'ending';
+    if (/[?&]step=2/.test(location.search)) endStep = 2;
   }
   // 測試用：網址後面加 #演出 顯示事件選單，#演出=<事件> 直接播該事件的對話＋結果頁（不影響正常遊戲）。
   // 走真的引擎（E.deliver／E.visit），只是先擺好對象狀態、用固定骰子，所以 S.result 與對話都跟正常遊玩一樣。
@@ -1948,7 +1994,8 @@
     setTimeout(openSutra, 0);
   }
   if (location.hash === '#e2e') {
-    window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, sutra: () => sutra, render, go, openCraft, playDialog };
+    window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, sutra: () => sutra, render, go, openCraft, playDialog,
+      ending: (step = 1) => { S.result = computeEnding(false); endStep = step; bookOpen = false; go('ending'); } };
   }
   // 標題曲：一打開就試著播；瀏覽器擋下（還沒點過畫面）時，標題頁顯示「點一下畫面播放音樂」，
   // 第一次點擊或按鍵就開始播。assets/audio/bgm_title.lite.mp3 沒有就播主題曲

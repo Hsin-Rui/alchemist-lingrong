@@ -228,6 +228,20 @@
     touming: () => false,
   };
 
+  // 十日戰績：依 D.END_STATS 的順序挑有發生的前 max 條 → [{ n, text, chip }]；一次都沒下料時第一條是「清清白白」。
+  function endingStats(D, S, max = 4) {
+    const st = { ...S.stats };
+    const val = (k) => (k === 'ruined' ? (st.ruined || []).length : st[k] || 0);
+    const out = [];
+    if (!st.spikesUsed) out.push({ n: D.END_CLEAN[0], text: D.END_CLEAN[1], chip: '下料' });
+    D.END_STATS.forEach((x) => {
+      if (out.length >= max || !val(x.key)) return;
+      const [n, text] = x.text({ ...st, ruined: st.ruined || [] });
+      out.push({ n, text, chip: x.chip });
+    });
+    return out;
+  }
+
   // 純函式：before 是之前的封號冊（由外殼傳入）；不碰 localStorage、不存檔。
   function computeEnding(D, S, before) {
     before = before || [];
@@ -242,6 +256,8 @@
     const book = [...new Set([...before, ...titles.map((t) => t.id)])];
     return {
       rank, top, opening,
+      board: [...D.ALL].sort((a, b) => f[b] - f[a] || (a === 'lingrong') - (b === 'lingrong')).map((who) => ({ who, favor: f[who] })),
+      stats: endingStats(D, S),
       main: titles[0], extra: titles.slice(1), book,
       fresh: titles.map((t) => t.id).filter((id) => !before.includes(id)),
     };
@@ -1113,7 +1129,7 @@
   }
 
   const API = {
-    newState, TITLE_CHECK, computeEnding,
+    newState, TITLE_CHECK, computeEnding, endingStats,
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
     findRecipe, setupTutorial, sutraTiles, copySutra, maskScore, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,

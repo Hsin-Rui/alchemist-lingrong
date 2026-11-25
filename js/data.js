@@ -481,6 +481,25 @@ window.GAME_DATA = (() => {
     { id: 'touming', name: '炎洗宮小透明', seal: '炎洗宮|小透明', comment: '黃上到現在還是記不住妳叫什麼名字。', hint: '什麼特別的事都沒發生的話……' },
   ];
 
+  // 結局畫面一：零溶第一時，大字下面那一句（範例稿）
+  const END_CROWD = '炎洗宮上下跪接聖旨，包捐哭成淚人。';
+  // 結局畫面二：十日戰績（kuso 說法）。依序挑有發生的前 4 條；{n} 換數字。
+  // key：S.stats 的欄位（ruined 取人數）；chip：分享圖卡上的短標籤。
+  const END_STATS = [
+    { key: 'spikesUsed', chip: '下料', text: (s) => [s.spikesUsed, `次下料，被溫太醫抓了 ${s.caught} 次`] },
+    { key: 'loves', chip: '投其所好', text: (s) => [s.loves, '次投其所好，各宮都說安妹妹最懂她'] },
+    { key: 'proxyDeliver', chip: '包捐代交', text: (s) => [s.proxyDeliver, s.selfDeliver ? '張訂單交給包捐代送，包捐腿都跑細了' : '張訂單全由包捐代交，安小主本人查無此人'] },
+    { key: 'sings', chip: '金縷衣', text: (s) => [s.sings, '次高歌金縷衣，黃上現在閉眼就聽得到'] },
+    { key: 'perfect', chip: '完美成品', text: (s) => [s.perfect, '鍋完美成品，御膳房派人來偷師'] },
+    { key: 'sutras', chip: '抄經', text: (s) => [s.sutras, '本後宮心經，甘露寺禪房已預留'] },
+    { key: 'ruined', chip: '斷了香火', text: (s) => [s.ruined.length, '位娘娘從此生不出來'] },
+    { key: 'bribes', chip: '紅包', text: (s) => [s.bribes, '次給敬事房包大紅包'] },
+    { key: 'junk', chip: '黑暗料理', text: (s) => [s.junk, '鍋黑暗料理，炎洗宮的鍋子還在冒煙'] },
+    { key: 'births', chip: '皇嗣', text: (s) => [s.births, '位皇嗣誕生，零溶笑得比誰都燦爛'] },
+    { key: 'selfDeliver', chip: '親自交貨', text: (s) => [s.selfDeliver, '張訂單親自送到各宮，腳都走痠了'] },
+  ];
+  const END_CLEAN = [0, '次下料，清清白白'];
+
   // 主畫面零溶的閒聊台詞
   const IDLE = [
     '今天要對誰下手呢……',
@@ -492,6 +511,6 @@ window.GAME_DATA = (() => {
 
   return {
     TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
-    request, THANKS, REFUSE, FIRST_FLIP, FIRST_GROUNDED, SUTRA_LINES, SUTRA_START, SUTRA_DONE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, OPENING, NO_TUTORIAL, TUT_INTRO, TUT_ORDER, TUT_GATHER, TUT_DELIVER, TUT_NIGHT, TUT_END, END_TOP, END_LING, TITLES, IDLE,
+    request, THANKS, REFUSE, FIRST_FLIP, FIRST_GROUNDED, SUTRA_LINES, SUTRA_START, SUTRA_DONE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, OPENING, NO_TUTORIAL, TUT_INTRO, TUT_ORDER, TUT_GATHER, TUT_DELIVER, TUT_NIGHT, TUT_END, END_TOP, END_LING, END_CROWD, END_STATS, END_CLEAN, TITLES, IDLE,
   };
 })();

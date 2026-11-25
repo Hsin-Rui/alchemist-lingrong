@@ -650,6 +650,12 @@ function connect(url) {
     check('玩的過程中純鍵盤調合過一次', craftedOnDay > 0);
     f = await focus();
     if (!f) { await press('ArrowDown'); f = await focus(); }
+    check('結局畫面一預設＝看封號', f && f.key.startsWith('endnext'), JSON.stringify(f));
+    check('結局畫面一：恩寵榜四列', (await ev("document.querySelectorAll('.rk').length")) === 4);
+    await press('Enter', { wait: 120 });
+    check('Enter 進結局畫面二（聖旨與戰績）', await ev("!!document.querySelector('.end2 .edict-stamp') && document.querySelectorAll('.end-stat').length > 0"));
+    f = await focus();
+    if (!f) { await press('ArrowDown'); f = await focus(); }
     check('結局預設＝再玩一次', f && f.key === 'start|#1', JSON.stringify(f));
     check('結局（深色面）框為琥珀', f && f.color === AMBER, f && f.color);
     await shot('ending-amber');

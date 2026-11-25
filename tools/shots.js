@@ -45,6 +45,10 @@ const SCENES = {
   'craft-finish': [SETUP + "localStorage.setItem('lingrong-quickcraft', '0'); __e2e.openCraft(null);", click('[data-v=\"recipe:cake\"]'), click('[data-v=\"lot:0:0\"]'), click('[data-v=\"lot:1:0\"]'), click('[data-v=cook]'), 'WAIT10500', click('[data-v=\"spike:cassava\"]'), 'WAIT300', click('[data-v=go4]'), 'WAIT1500'],
   'tut-gather': [SETUP + "E.setupTutorial(D, S); S.inv.osmanthus = 0; __e2e.go('home');"],
   'tut-craft': [SETUP + "E.setupTutorial(D, S); S.inv.osmanthus = 1; __e2e.go('home');"],
+  'end1-ling': [SETUP + "S.favor.lingrong = 82; S.favor.zhenhuan = 66; S.favor.huafei = 52; S.favor.meizhuang = 41; Object.assign(S.stats, { spikesUsed: 3, caught: 1, success: 2, muskRuin: 1, yuanzhu: 1, perfect: 1, loves: 5, sings: 4, selfDeliver: 6 }); __e2e.ending(1);", 'WAIT4000'],
+  'end1-rival': [SETUP + "S.favor.zhenhuan = 88; S.favor.lingrong = 64; S.favor.huafei = 55; S.favor.meizhuang = 40; Object.assign(S.stats, { proxyDeliver: 6, sutras: 4, bribes: 2 }); __e2e.ending(1);", 'WAIT4000'],
+  'end2-ling': [SETUP + "S.favor.lingrong = 82; S.favor.zhenhuan = 66; S.favor.huafei = 52; S.favor.meizhuang = 41; Object.assign(S.stats, { spikesUsed: 3, caught: 1, success: 2, muskRuin: 1, yuanzhu: 1, perfect: 1, loves: 5, sings: 4, selfDeliver: 6 }); __e2e.ending(2);", 'WAIT2600'],
+  'end2-rival': [SETUP + "S.favor.zhenhuan = 88; S.favor.lingrong = 64; S.favor.huafei = 55; S.favor.meizhuang = 40; Object.assign(S.stats, { proxyDeliver: 6, sutras: 4, bribes: 2 }); __e2e.ending(2);", 'WAIT2600'],
   shop: [SETUP + "__e2e.go('shop');", "document.querySelector('.scroll').scrollTop = 99999;"],
 };
 
