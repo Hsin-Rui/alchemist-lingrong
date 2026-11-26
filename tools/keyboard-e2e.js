@@ -214,7 +214,11 @@ function connect(url) {
     await press('Enter'); await press('Enter');
     const line2 = await ev("document.querySelector('.dlg-text')?.dataset.full");
     check('Space、Enter 推進對話', line1 !== line0 && line2 !== line1, `${line0} / ${line1} / ${line2}`);
-    for (let i = 0; i < 400 && await hasDlg(); i++) await press('Space', { wait: 15 });
+    for (let i = 0; i < 400 && await hasDlg(); i++) {
+      // 開場選項：這一輪選「不用了」（教學模式另有一段專門測）
+      if (await ev("!!document.querySelector('[data-a=dlgchoice]') && document.querySelector('.dlg-choice.on')?.dataset.v !== 'skip'")) await press('ArrowRight');
+      await press('Space', { wait: 15 });
+    }
     check('連按 Space 跑完開場對話進主畫面', !(await hasDlg()) && (await scr()) === 'home');
 
     // ── 主畫面：首次方向鍵出現在第一張訂單卡主要按鈕，不移動 ──
@@ -387,7 +391,51 @@ function connect(url) {
     await G(`__e2e.openCraft(null);`);
     await ev("document.querySelector('[data-v=quick]').click()"); // 關掉快速調合（記憶體裡的開關也要關）
     check('快速調合可以關掉', await ev("!document.querySelector('[data-v=quick]').classList.contains('on')"));
+    // 起鍋：點畫面任何地方（這裡點頁首）都能停珠珠；升降區每次浮動
+    await G(`S.inv = { lotus: 1, osmanthus: 1 }; S.slot = 0; __e2e.openCraft(null);`);
+    await ev("document.querySelector('[data-v=\"recipe:cake\"]').click()");
+    await ev("document.querySelector('[data-v=cook]').click()");
+    await waitFor("document.querySelector('.cf-steps li.on')?.textContent.includes('加料')", 14000);
+    await ev("document.querySelector('[data-v=go4]').click()");
+    await waitFor("!!document.querySelector('.cf-bead')", 2000);
+    const zw1 = await ev("[...document.querySelectorAll('.cf-bar span')].map((x) => x.style.width).join(',')");
+    const hp = await ev("__t.center('.subhead')");
+    await click(hp[0], hp[1]);
+    check('起鍋：點頁首也能停珠珠', /升一級|維持|降一級/.test(await ev("document.querySelector('.cf-verdict')?.textContent || ''")));
+    await waitFor("!!document.querySelector('[data-a=craftdone]')", 4000);
+    await ev("document.querySelector('[data-a=craftdone]').click()");
+    check('起鍋分區寬度存在（每次浮動，五段加總 100%）', zw1.split(',').reduce((a, w) => a + parseFloat(w), 0) === 100, zw1);
+    await G('__e2e.go("home");');
     await G(`S.inv = window.__inv2; S.lots = window.__lots2; S.slot = window.__slot2; S.hand = window.__hand2; __e2e.go("home");`);
+
+    // ── 禁足抄經（§15.5）：只有禁足時有按鈕；←→＋Enter 點字塊；點錯多一滴墨；抄完手上多一本心經 ──
+    await hideByMouse();
+    check('沒禁足：主畫面沒有抄經', await G('S.groundUntil = 0; __e2e.go("home"); return !document.querySelector("[data-a=sutra]");'));
+    await G('window.__sg = { slot: S.slot, hand: S.hand.slice(), stats: S.stats.sutras || 0 }; S.slot = 0; S.groundUntil = S.day + 1; __e2e.go("home");');
+    await ev("document.querySelector('[data-a=sutra]').click()");
+    check('禁足：按抄經 → 抄經畫面', (await scr()) === 'sutra');
+    await press('ArrowDown');
+    f = await focus();
+    check('抄經預設＝第一個字塊', f && f.key.startsWith('tile|'), JSON.stringify(f));
+    // 用鍵盤點一個錯的字：把游標移到不是下一個字的字塊
+    const wrongK = await ev("(() => { const s = __e2e.sutra(); return s.tiles.findIndex((t) => t.i !== s.next); })()");
+    for (let m = 0; m < 20 && (await focus())?.key !== `tile|${wrongK}#1`; m++) await press('ArrowRight');
+    await press('Enter');
+    check('鍵盤點錯 → 墨漬 +1、進度不變', await ev("__e2e.sutra().blots === 1 && __e2e.sutra().next === 0 && document.querySelectorAll('.sp-blot').length === 1"));
+    // 其餘照順序點完
+    await ev("(() => { const s = __e2e.sutra(); for (let n = 0; n < s.tiles.length; n++) { const k = s.tiles.findIndex((t) => t.i === n); document.querySelector(`[data-a=tile][data-v=\"${k}\"]`).click(); } })()");
+    check('抄完 → 播 J2–J4', await waitFor("!!document.querySelector('.dialog-layer')", 3000));
+    await press('Escape');
+    check('抄完回主畫面、手上多一本心經、時辰 +1', await waitFor("document.getElementById('app').dataset.screen === 'home'", 3000) && await G('return S.hand.some((h) => h.product === "sutra") && S.slot === 1 && S.stats.sutras === window.__sg.stats + 1;'));
+    // 重複的字：「個個」兩塊，先點後面那塊也算對
+    await G('S.slot = 0; S.groundUntil = S.day + 1; __e2e.go("home");');
+    await ev("document.querySelector('[data-a=sutra]').click()");
+    await ev("(() => { const s = __e2e.sutra(); s.line = '他們個個都要害本宮。'; s.tiles = window.GameEngine.sutraTiles(s.line, Math.random); __e2e.render(); })()");
+    await ev("(() => { const s = __e2e.sutra(); const order = [0, 1, 3, 2, 4, 5, 6, 7, 8]; for (const n of order) { const k = s.tiles.findIndex((t) => t.i === n); document.querySelector(`[data-a=tile][data-v=\"${k}\"]`).click(); } })()");
+    check('重複的字：「個個」順序對調也算對、沒有墨漬', await ev("(() => { const s = __e2e.sutra(); return !s || s.blots === 0; })()") && await waitFor("!!document.querySelector('.dialog-layer')", 3000));
+    await press('Escape');
+    await waitFor("document.getElementById('app').dataset.screen === 'home'", 3000);
+    await G('S.groundUntil = 0; S.slot = window.__sg.slot; S.hand = window.__sg.hand; __e2e.go("home");');
 
     // ── 採集地下城：方向鍵只有地下城走路；收工後結果單預設 ──
     await hideByMouse();
@@ -602,9 +650,76 @@ function connect(url) {
     check('玩的過程中純鍵盤調合過一次', craftedOnDay > 0);
     f = await focus();
     if (!f) { await press('ArrowDown'); f = await focus(); }
+    check('結局畫面一預設＝看封號', f && f.key.startsWith('endnext'), JSON.stringify(f));
+    check('結局畫面一：恩寵榜四列', (await ev("document.querySelectorAll('.rk').length")) === 4);
+    await press('Enter', { wait: 120 });
+    check('Enter 進結局畫面二（聖旨與戰績）', await ev("!!document.querySelector('.end2 .edict-stamp') && document.querySelectorAll('.end-stat').length > 0"));
+    f = await focus();
+    if (!f) { await press('ArrowDown'); f = await focus(); }
     check('結局預設＝再玩一次', f && f.key === 'start|#1', JSON.stringify(f));
+    check('分享按鈕跟瀏覽器能力一致（能分享檔案＝其他分享，否則＝存下圖卡）', await ev("(() => { let ok = false; try { ok = !!(navigator.canShare && navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] })); } catch {} return document.querySelector('[data-a=share]').textContent.trim() === (ok ? '其他分享' : '存下圖卡'); })()"));
+    const card = await ev("__e2e.card().then((u) => new Promise((r) => { const im = new Image(); im.onload = () => r([u.length, im.width, im.height]); im.src = u; }))");
+    check('分享圖卡畫得出來（1200×630）', card && card[0] > 50000 && card[1] === 1200 && card[2] === 630, JSON.stringify(card));
+    check('封號冊預設收合、點了會展開', await ev("(() => { if (document.querySelector('.title-book')) return false; document.querySelector('[data-a=book]').click(); return document.querySelectorAll('.seal-btn').length === window.GAME_DATA.TITLES.length; })()"));
     check('結局（深色面）框為琥珀', f && f.color === AMBER, f && f.color);
     await shot('ending-amber');
+
+    // ── 開場選項（§15.1）：Esc 不能跳過選項；←→ 換選項；Enter 確定 ──
+    await load({ width: 480, height: 900, deviceScaleFactor: 1, mobile: false });
+    await ev("document.querySelector('[data-a=start]').click()");
+    await press('Escape'); // 略過開場 → 停在選項那一句
+    check('開場 Esc 略過 → 停在教學選項', await waitFor("!!document.querySelector('[data-a=dlgchoice]')", 3000));
+    await press('Escape');
+    check('選項那一句 Esc 無效', await ev("!!document.querySelector('[data-a=dlgchoice]')"));
+    await press('ArrowRight');
+    check('→ 換到「不用了」', await ev("document.querySelector('.dlg-choice.on')?.dataset.v === 'skip'"));
+    await press('Enter'); // 字還在打 → 先打完
+    await press('Enter');
+    check('Enter 選「不用了」→ A7', await waitFor("(document.querySelector('.dlg-text')?.dataset.full || '').includes('恩寵目前墊底')", 3000));
+
+    // ── 教學模式第一天（§15.2）：發光圈依序指向採集→調合→交貨，各步驟的包捐台詞，晚上 A29、隔天 A30 ──
+    await load({ width: 480, height: 900, deviceScaleFactor: 1, mobile: false });
+    await ev("document.querySelector('[data-a=start]').click()");
+    await press('Escape');
+    await waitFor("!!document.querySelector('[data-a=dlgchoice]')", 3000);
+    await ev("document.querySelector('[data-a=dlgchoice][data-v=tut]').click()");
+    const dlgSeen = [];
+    const drain = async () => { for (let i = 0; i < 80 && await hasDlg(); i++) { const t = await ev("document.querySelector('.dlg-text')?.dataset.full || ''"); if (t && dlgSeen[dlgSeen.length - 1] !== t) dlgSeen.push(t); await ev("document.querySelector('.dialog-layer').click()"); await sleep(60); } };
+    await drain();
+    check('教學：開局 A10 恩寵榜、A18 吹緊吸', dlgSeen.some((t) => t.includes('後宮的恩寵榜')) && dlgSeen.some((t) => t.includes('睡慾軒的吹緊吸')));
+    check('教學：主畫面發光圈在「採集」', await ev("!!document.querySelector('.bottomnav .tut-spot[data-v=gather]')"));
+    await ev("document.querySelector('[data-a=go][data-v=gather]').click()");
+    check('教學：採集畫面發光圈在御花園', await ev("!!document.querySelector('.tut-spot[data-v=garden]')"));
+    await ev("document.querySelector('[data-a=enter][data-v=garden]').click()");
+    check('教學：第一次進御花園先說明侍衛（A22）', await waitFor("(document.querySelector('.dlg-text')?.dataset.full || '').includes('侍衛也走一步')", 3000));
+    await press('Escape');
+    await waitFor("!!document.querySelector('.dg.on')", 4000);
+    await sleep(900);
+    await G('S.inv.osmanthus = 1;'); // 當作採到桂花
+    await press('Escape'); await press('Enter'); // 收工
+    await waitFor("!!document.querySelector('#app .sheet-layer')", 4000);
+    await ev("document.querySelector('[data-a=gatherdone][data-v=home]').click()");
+    check('教學：有桂花後發光圈移到「調合」', await waitFor("!!document.querySelector('.tut-spot[data-a=craftfor]')", 2000));
+    await ev("document.querySelector('.tut-spot[data-a=craftfor]').click()");
+    check('教學：調合第一步用 A24', await waitFor("(document.querySelector('.cf-say')?.textContent || '').includes('採集來的會帶特性')", 3000));
+    await ev("document.querySelector('[data-v=quick]').classList.contains('on') || document.querySelector('[data-v=quick]').click()");
+    await ev("document.querySelector('[data-v=cook]').click()");
+    await ev("document.querySelector('[data-v=go4]').click()");
+    await waitFor("!!document.querySelector('[data-a=craftdone]')", 4000);
+    await ev("document.querySelector('[data-v=quick]')?.click()");
+    await ev("document.querySelector('[data-a=craftdone][data-v=home]').click()");
+    check('教學：做好後 A28', await waitFor("(document.querySelector('.dlg-text')?.dataset.full || '').includes('要是奴婢代送')", 3000));
+    await drain();
+    check('教學：發光圈移到「親自送去」', await ev("!!document.querySelector('.tut-spot[data-a=deliver]')"));
+    await ev("document.querySelector('.tut-spot[data-a=deliver]').click()");
+    await drain();
+    for (let i = 0; i < 6 && (await scr()) !== 'night'; i++) { await ev("(document.querySelector('[data-a=resultdone]') || document.querySelector('[data-a=sleepyes]') || document.querySelector('[data-a=sleep]') || document.querySelector('[data-a=sing][data-v=\"0\"]'))?.click()"); await sleep(200); await drain(); }
+    check('教學：第一天晚上 A29', dlgSeen.some((t) => t.includes('今晚侍寢的娘娘，恩寵會漲')));
+    await ev("document.querySelector('[data-a=next]')?.click()");
+    await sleep(300);
+    await drain();
+    check('教學：第二天早上 A30、教學結束', dlgSeen.some((t) => t.includes('明天起，就看小主自己拿主意了')) && await G('return !S.tutorial;'));
+    check('教學結束後沒有發光圈', await ev("!document.querySelector('.tut-spot')"));
 
     // ── 手機寬度＋觸控：整輪看不到焦點框 ──
     await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
@@ -627,7 +742,8 @@ function connect(url) {
       if (s === 'ending' && !(await hasDlg())) break;
       if (await focus()) touchBox = true;
       taps++;
-      if (await hasDlg()) await tap('.skip-btn');
+      if (await ev("!!document.querySelector('[data-a=dlgchoice]')")) await tap('[data-a=dlgchoice][data-v=skip]'); // 開場選項：不用了
+      else if (await hasDlg()) await tap('.skip-btn');
       else if (await hasModal('sing')) await tap('[data-a=sing][data-v="0"]');
       else if (await hasModal('sleepyes')) await tap('[data-a=sleepyes]');
       else if (s === 'title') await tap('[data-a=start]');
@@ -801,7 +917,9 @@ function connect(url) {
     const fc = await focus();
     check('被抓結果頁：鍵盤游標落在按鈕上', !!fc && /^resultdone/.test(fc.key), JSON.stringify(fc));
     await press('Enter');
-    check('被抓結果頁：Enter 回炎洗宮', await waitScr('home'));
+    check('被抓結果頁：Enter → 第一次禁足，包捐說明（G6）', await waitFor("(document.querySelector('.dlg-text')?.dataset.full || '').includes('禁足這幾天')", 3000));
+    await press('Escape');
+    check('被抓結果頁：說明完回炎洗宮', await waitScr('home'));
     // 略過：被抓對話「且慢！」鎖句中按 Esc → 直接結果頁，演出照常
     await loadFx('caught');
     await press('Escape');
@@ -813,7 +931,9 @@ function connect(url) {
     await ev(HELPERS);
     const btn = await ev("__t.center('.footer-cta .btn')");
     await click(btn[0], btn[1]);
-    check('被抓結果頁：按鈕可用滑鼠點（暗幕不擋）', await waitScr('home'));
+    check('被抓結果頁：按鈕可用滑鼠點（暗幕不擋）', await waitFor("!!document.querySelector('.dialog-layer')", 3000));
+    await press('Escape');
+    await waitScr('home');
     // 減少動態：不晃，其他照常
     await loadFx('caught', true);
     check('被抓＋減少動態：溫太醫衝入照常', await ev("document.querySelector('.dlg-portrait.fx-enter').getAnimations().length > 0"));

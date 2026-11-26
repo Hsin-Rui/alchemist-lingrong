@@ -200,7 +200,7 @@ window.CraftFlow = (() => {
             <div class="cf-grid">${owned.map((id) => `<button type="button" class="cf-mat-btn" ${B(`mat:${id}`)}${avail(id) <= 0 || st.freeMats.length >= 3 ? ' disabled' : st.freeMats.length < 2 ? def() : ''}>${tok(id)}<span>${esc(D.ITEMS[id].name)}</span><small>×${avail(id)}</small></button>`).join('')}</div>`;
         }
         if (mats().length) {
-          panel += `<h3>每樣挑一份</h3>${mats().map((m, i) => {
+          panel += `<div class="cf-row"><h3>每樣挑一份</h3>${st.free ? '' : quickToggle()}</div>${mats().map((m, i) => {
             const opts = options(i);
             return `<div class="cf-mat"><div class="cf-mat-h">${tok(m)}<b>${esc(D.ITEMS[m].name)}</b></div><div class="cf-lots">${opts.map((l) => {
               const on = st.lots[i] === l.uid;
@@ -238,11 +238,14 @@ window.CraftFlow = (() => {
       const tr = E.finalTraits(D, mats().map((_, i) => lotTr(i)), st.stirs);
       const list = (o.spikes || []).filter((s) => D.ITEMS[s.id]);
       const next = st.quick ? '完成' : '準備起鍋';
+      // 料排成格子（原本一列一列很長）；說明只顯示選到的那個
+      const sel = list.find((x) => x.id === st.spike);
       frame(stage(`<div class="cf-window"><i></i></div>${st.spike ? '<div class="cf-hehe">嘿嘿……</div>' : ''}`, `lookout${st.spike ? ' armed' : ''}`),
-        `<h3>要加料嗎？</h3><div class="cf-book">
-          <button type="button" class="cf-recipe${!st.spike ? ' on' : ''}" ${B('spike:')}><span class="cf-tok none"><b>無</b></span><span class="cf-main"><b>不加料</b><small>正正經經，童叟無欺</small></span></button>
-          ${list.map((s) => `<button type="button" class="cf-recipe${st.spike === s.id ? ' on' : ''}" ${B(`spike:${s.id}`)}${s.n ? '' : ' disabled'}>${tok(s.id)}<span class="cf-main"><b>${esc(D.ITEMS[s.id].name)}${s.n != null ? ` <small class="cf-n">×${s.n}</small>` : ''}</b><small>${esc(s.sub || D.ITEMS[s.id].desc || '')}</small></span>${s.note ? `<span class="cf-pill ${esc(s.cls || '')}">${esc(s.note)}</span>` : ''}</button>`).join('')}
-        </div><p class="cf-note">目前的特性：${chips(tr, '（沒有特性）')}</p>`,
+        `<h3>要加料嗎？</h3><div class="cf-sgrid">
+          <button type="button" class="cf-scell${!st.spike ? ' on' : ''}" ${B('spike:')}><span class="cf-tok none"><b>無</b></span><b>不加料</b><small>正正經經</small></button>
+          ${list.map((x) => `<button type="button" class="cf-scell${st.spike === x.id ? ' on' : ''}" ${B(`spike:${x.id}`)}${x.n ? '' : ' disabled'}>${tok(x.id)}<b>${esc(D.ITEMS[x.id].name)}${x.n != null ? `<small class="cf-n"> ×${x.n}</small>` : ''}</b>${x.note ? `<small class="cf-snote ${esc(x.cls || '')}">${esc(x.note)}</small>` : ''}</button>`).join('')}
+        </div>
+        <p class="cf-note cf-sdesc">${sel ? esc(sel.sub || D.ITEMS[sel.id].desc || '') : '目前的特性：'}${sel ? '' : chips(tr, '（沒有特性）')}</p>`,
         `<button type="button" class="cf-btn" ${B('go4')} data-def>${st.spike ? `偷偷撒進去，${next}` : `就這樣，${next}`}</button>`);
       if (enter) say(o.tutorial ? 'tutSpike' : 'spikeAsk');
     }
@@ -255,11 +258,12 @@ window.CraftFlow = (() => {
       const order = Object.keys(D.TRAITS);
       const top = Object.keys(tr).sort((a, b) => tr[b] - tr[a] || order.indexOf(a) - order.indexOf(b))[0];
       st.lastSay = null;
+      st.zones = E.jitterZones ? E.jitterZones(rand) : R.zones; // 升降區每次浮動
       frame(stage('<div class="cf-bowl"></div>', 'bowl'),
         `<h3>起鍋</h3><p class="cf-note">${top ? `停在金色，<b>${esc(trName(top))}</b>升一級；停在紅色，降一級。` : '鍋裡沒有特性，隨便收火就好。'}</p>
-         <div class="cf-bar" ${B('stop')}>${R.zones.map(([w, z]) => `<span class="${z}" style="width:${w}%">${z === 'up' ? '升' : z === 'down' ? '降' : ''}</span>`).join('')}<i class="cf-bead"></i></div>
+         <div class="cf-bar" ${B('stop')}>${st.zones.map(([w, z]) => `<span class="${z}" style="width:${w}%">${z === 'up' ? '升' : z === 'down' ? '降' : ''}</span>`).join('')}<i class="cf-bead"></i></div>
          <div class="cf-verdict"></div>`,
-        `<button type="button" class="cf-btn" ${B('stop')} data-def>收火！（空白鍵）</button>`);
+        `<button type="button" class="cf-btn" ${B('stop')} data-def>收火！（點畫面任何地方或空白鍵）</button>`);
       say(o.tutorial ? 'tutFinish' : 'finish');
       st.beadT0 = performance.now();
       const loop = (now) => {
@@ -275,7 +279,7 @@ window.CraftFlow = (() => {
       if (st.step !== 4 || st.zone) return;
       cancelAnimationFrame(st.raf);
       const pos = beadPos(performance.now());
-      st.zone = E.finishZone(D, pos);
+      st.zone = E.finishZone(D, pos, st.zones);
       const bead = el.querySelector('.cf-bead');
       if (bead) { bead.style.left = `${pos}%`; bead.classList.add('hit'); }
       const v = el.querySelector('.cf-verdict');
@@ -372,18 +376,26 @@ window.CraftFlow = (() => {
         default: break;
       }
     }
+    // 起鍋：點畫面任何地方都能停珠珠
+    function onTapAnywhere(e) {
+      if (st.step !== 4 || st.zone || st.destroyed) return;
+      if (e.button != null && e.button !== 0) return;
+      e.preventDefault();
+      stopBead();
+    }
     function onKey(e) {
       if (st.step === 4 && !st.zone && (e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); e.stopPropagation(); stopBead(); }
     }
     el.addEventListener('click', onClick);
     document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onTapAnywhere, true);
 
     // 開場：從訂單進來就直接翻到那道配方
     if (o.forProduct && D.PRODUCTS[o.forProduct] && !need(o.forProduct).length) {
       st.product = o.forProduct;
       autoFill();
       step1();
-      say('order', { w: o.forWho || '', p: D.PRODUCTS[o.forProduct].name });
+      if (o.tutorial) say('tutBook'); else say('order', { w: o.forWho || '', p: D.PRODUCTS[o.forProduct].name });
     } else {
       step1();
       say(o.tutorial ? 'tutBook' : 'book');
@@ -397,6 +409,7 @@ window.CraftFlow = (() => {
         cancelAnimationFrame(st.raf);
         if (st.bubble) st.bubble.destroy();
         document.removeEventListener('keydown', onKey, true);
+        document.removeEventListener('pointerdown', onTapAnywhere, true);
         el.removeEventListener('click', onClick);
         el.innerHTML = '';
       },

@@ -95,7 +95,8 @@ function autoplay() {
     const has = (a) => btns.find((b) => b.a === a);
     const dlgActive = /data-a="(skip|adv)"/.test(g.app._html);
     let pick = null;
-    if (has('skip')) pick = has('skip');
+    if (has('dlgchoice')) pick = btns.filter((b) => b.a === 'dlgchoice')[i % 2]; // 開場選項：教學／不用了輪著選
+    else if (has('skip')) pick = has('skip');
     else if (has('adv')) pick = has('adv');
     else if (has('start') && !dlgActive && (screen === 'title' || screen === 'result')) pick = has('start');
     else if (has('sing')) pick = { a: 'sing', v: '0' };
@@ -235,4 +236,56 @@ test('調合：遊戲把素材、料的預測交給調合模組；cook 扣素材
   S.inv.pine = 2;
   const bad = g.win.__cf.cook({ mats: ['pine', 'pine'], lots: [null, null], stirs: [], spike: null, finish: null });
   assert.strictEqual(bad.product, 'junk');
+});
+
+test('開場：先播 A2–A6，最後一句有兩個選項；不用了 → A7–A8、第一天照常；好 → 教學局面', () => {
+  const run = (v) => {
+    const g = bootGame({ hash: '#e2e' });
+    let t = 0;
+    g.win.performance.now = () => (t += 1000); // 快轉時鐘：鎖句（防連按）不會擋住測試
+    g.click('start');
+    assert.ok(/好苦。我不是吃了苦杏仁嗎/.test(g.app._html), '第一句是 A2');
+    for (let i = 0; i < 10 && !/data-a="dlgchoice"/.test(g.app._html); i++) g.click('adv');
+    assert.ok(/好，妳說吧/.test(g.app._html) && /不用了/.test(g.app._html), '選項出現');
+    g.click('skip');
+    assert.ok(/data-a="dlgchoice"/.test(g.app._html), '略過不會跳過選項');
+    g.click('dlgchoice', v);
+    const texts = [];
+    for (let i = 0; i < 60 && /data-a="(skip|adv)"/.test(g.app._html); i++) { const m = g.app._html.match(/data-full="([^"]*)"/); if (m) texts.push(m[1]); g.click('adv'); }
+    return { g, S: g.win.__e2e.state(), texts };
+  };
+  const a = run('skip');
+  assert.ok(a.texts.some((t) => t.includes('您的恩寵目前墊底')), 'A7');
+  assert.ok(!a.S.tutorial, '不用了：沒有教學狀態');
+  const b = run('tut');
+  assert.ok(b.texts.some((t) => t.includes('後宮的恩寵榜')), 'A10');
+  assert.ok(b.texts.some((t) => t.includes('奴婢是睡慾軒的吹緊吸')), 'A18');
+  assert.ok(b.S.tutorial, '好：進教學');
+  assert.strictEqual(b.S.inv.osmanthus, 0);
+  assert.strictEqual(b.S.orders.length, 1);
+  assert.strictEqual(b.S.orders[0].product, 'cake');
+  assert.strictEqual(b.S.orders[0].who, 'zhenhuan');
+});
+
+test('第一次被翻牌子：包捐說明金縷衣（G4–G5），第二次不再說', () => {
+  const g = bootGame({ hash: '#e2e' });
+  let t = 0;
+  g.win.performance.now = () => (t += 1000);
+  const E = g.win.GameEngine;
+  const orig = E.startDay;
+  E.startDay = (...args) => { const r = orig(...args); r.flip = 'lingrong'; args[1].flip = 'lingrong'; return r; };
+  const texts = () => { const out = []; for (let i = 0; i < 80 && /data-a="(skip|adv)"/.test(g.app._html); i++) { const m = g.app._html.match(/data-full="([^"]*)"/); if (m && out[out.length - 1] !== m[1]) out.push(m[1]); g.click('adv'); } return out; };
+  g.click('start');
+  for (let i = 0; i < 10 && !/data-a="dlgchoice"/.test(g.app._html); i++) g.click('adv');
+  g.click('dlgchoice', 'skip');
+  const day1 = texts();
+  assert.ok(day1.some((x) => x.includes('唱一曲金縷衣')), '第一次：G4');
+  assert.ok(day1.some((x) => x.includes('少一個時辰')), '第一次：G5');
+  g.click('sleep'); g.click('sleepyes');
+  if (/data-a="sing"/.test(g.app._html)) g.click('sing', '0');
+  texts();
+  g.click('next');
+  const day2 = texts();
+  assert.ok(day2.some((x) => x.includes('翻的是您的牌子')), '第二天也被翻');
+  assert.ok(!day2.some((x) => x.includes('唱一曲金縷衣')), '第二次不再說明');
 });

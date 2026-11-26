@@ -46,6 +46,7 @@ window.GAME_DATA = (() => {
     tonic: { name: '安胎藥', ch: '藥', recipe: ['angelica', 'jujube'], reward: 34, gift: 6 },
     safflower: { name: '紅花', ch: '紅', recipe: ['petal', 'liquor'], out: 'inv' },
     junk: { name: '一坨黑黑的東西', ch: '黑', recipe: null },
+    sutra: { name: '後宮心經', ch: '經', recipe: null, gift: 5, fixedGift: true }, // 禁足抄經的成品（§15.5）：送誰都 +5、一定收下
   };
   const NORMAL_ORDERS = ['yunv', 'cake', 'suihan', 'incense', 'shuhen'];
 
@@ -253,10 +254,25 @@ window.GAME_DATA = (() => {
   const DEBUFF_WASTED = ['lingrong', 'shock', '（……今晚又不是她侍寢。白下了。）'];
   // 貓薄荷：夜晚貓咪鬧場
   const CATS_LINE = ['cats', '_', '喵——！喵喵喵——！喵嗚——！', { sfx: 'meow' }];
+  // 禁足抄經（§15.5）：每次從 6 句挑一句
+  const SUTRA_LINES = ['賤人就是矯情。', '逆風如解意，容易莫摧殘。', '勸君莫惜金縷衣，勸君惜取少年時。', '他們個個都要害本宮。', '庭前芍藥妖無格，池上芙蕖淨少情。', '舊夢依稀，往事迷離，春花秋月裡。'];
+  const SUTRA_START = ['baojuan', '_', '小主，紙墨都備好了。']; // J1
+  const SUTRA_DONE = [['narr', '', '零溶抄好了一本《後宮心經》。'], ['baojuan', '_', '小主……這好像不是佛經吧？'], ['lingrong', 'smile', '心誠則靈。']]; // J2–J4
   // 包捐代交（D7 出發、D8 回來）
   const PROXY_LINES = [
     ['baojuan', '_', '奴婢這就替小主跑一趟！'],
     ['baojuan', '_', '送到了！賞銀在這兒……不過娘娘問，小主怎麼沒親自來？'],
+  ];
+  // 第一次被翻牌子（G4–G5）
+  const FIRST_FLIP = [
+    ['baojuan', '_', '侍寢的時候，小主可以唱一曲金縷衣。黃上最愛聽了，恩寵會漲更多……就是唱完會累，隔天得睡到中午。'],
+    ['lingrong', 'smile', '少一個時辰，換多一點恩寵。值得。'],
+  ];
+  // 第一次禁足（G6–G8）
+  const FIRST_GROUNDED = [
+    ['baojuan', '_', '小主別難過……禁足這幾天出不了門，也不能侍寢。'],
+    ['baojuan', '_', '訂單的東西，奴婢替小主跑腿送去，賞銀照拿。小主就在宮裡調合，或是……抄抄經，修身養性？'],
+    ['lingrong', 'smile', '抄經……好啊。'],
   ];
   // 拜訪各宮：進門（E1–E3）、空手（E4–E6）
   const VISIT_ENTER = {
@@ -284,6 +300,7 @@ window.GAME_DATA = (() => {
       hate: [['huafei', 'meh', '這麼寡淡的東西，也好意思拿來？']],
       hateP: { tonic: [['huafei', 'meh', '安胎藥？安妹妹這是在笑本宮？']] },
       mixed: [['huafei', 'meh', '東西是好東西……可惜味道寡淡了些。']],
+      fixed: [['huafei', 'meh', '抄這些東西給本宮……算了，放著吧。']],
     },
     meizhuang: {
       plain: [['meizhuang', 'happy', '妹妹有心了。']],
@@ -291,6 +308,7 @@ window.GAME_DATA = (() => {
       hate: [['meizhuang', 'meh', '這……太花俏了些，不太合我的性子。']],
       hateP: {},
       mixed: [['meizhuang', 'meh', '我很喜歡，只是……下回別弄得這麼花俏。']],
+      fixed: [['meizhuang', 'happy', '妹妹禁足還不忘修身養性，難得。……咦，這抄的是什麼？']],
     },
     zhenhuan: {
       plain: [['zhenhuan', 'happy', '謝謝妹妹，我收下了。']],
@@ -298,6 +316,7 @@ window.GAME_DATA = (() => {
       hate: [['zhenhuan', 'meh', '這味道太重了……我聞著不太舒服。']],
       hateP: { zuotai: [['zhenhuan', 'meh', '坐胎藥？……妹妹的好意，我心領了。']] },
       mixed: [['zhenhuan', 'meh', '妹妹有心了。只是這味道……稍微重了點。']],
+      fixed: [['zhenhuan', 'happy', '這抄的……怎麼好像在哪聽過？']],
     },
   };
 
@@ -387,15 +406,43 @@ window.GAME_DATA = (() => {
     ['narr', '', '黃上震怒：安小主禁足炎洗宮 {days} 天，好好反省！'],
   ];
 
-  const TUTORIAL = [
-    ['baojuan', '_', '小主！小主您醒啦！'],
-    ['lingrong', 'smile', '包捐，我在這後宮……是不是最不受寵的那一個？'],
-    ['baojuan', '_', '呃……小主恩寵確實是墊底的。但小主會煉金啊！'],
-    ['baojuan', '_', '每天早上，敬事房會傳話今晚黃上翻誰的牌子。只有侍寢，恩寵才會漲。小主有銀子的話，也可以給敬事房包個大紅包……'],
-    ['baojuan', '_', '各宮娘娘會來下訂單。替她們做東西，交情就會變好；交情好的娘娘侍寢時，可能會在黃上耳邊替小主美言幾句。'],
-    ['lingrong', 'evil', '……交情不好的，就在她侍寢前送點「加了料」的禮。'],
-    ['baojuan', '_', '小主英明！不過太醫溫十粗眼睛很利，被抓到可是要禁足的。跟娘娘交情越好，她越不會懷疑小主。'],
-    ['baojuan', '_', '十天後，就看小主能不能在這後宮裡……逆襲了！'],
+  // ───────── 開場與教學（§15，台詞總表 A 組）─────────
+  // A1（淡入，炎洗宮）是舞台指示，用對話層淡入表現
+  const OPENING = [
+    ['lingrong', 'shock', '……好苦。我不是吃了苦杏仁嗎？'],
+    ['baojuan', '_', '小主！小主您醒啦！什麼杏仁？您這是睡糊塗了。'],
+    ['baojuan', '_', '今兒個可得打起精神，十天後黃上要下旨晉封六宮呢！'],
+    ['lingrong', 'smile', '晉封……'],
+    ['baojuan', '_', '要不要奴婢跟小主說說，每天該怎麼過？（第一天是否進入教學模式？）', { choice: [['tut', '好，妳說吧'], ['skip', '不用了']] }],
+  ];
+  const NO_TUTORIAL = [
+    ['baojuan', '_', '是。……不過小主，您的恩寵目前墊底。'],
+    ['lingrong', 'smile', '我知道。所以我要煉金。'],
+  ];
+  const TUT_INTRO = [
+    ['baojuan', '_', '每天早上，敬事房會傳話今晚黃上翻誰的牌子。'],
+    ['baojuan', '_', '只有侍寢，恩寵才會漲。小主您看，這是後宮的恩寵榜……', { panel: 'rank' }],
+    ['lingrong', 'shock', '……包捐，我在這後宮，是不是最不受寵的那一個？', { panel: 'rank' }],
+    ['baojuan', '_', '呃……小主的恩寵確實是墊底的。'],
+    ['baojuan', '_', '但小主會煉金啊！'],
+    ['lingrong', 'smile', '……煉金？'],
+    ['baojuan', '_', '是呀！娘娘們會派人來下訂單，小主親自把東西送過去，交情就會變好。'],
+    ['baojuan', '_', '交情好的娘娘侍寢時，說不定會在黃上耳邊替小主美言幾句。', { panel: 'rankup' }],
+    ['lingrong', 'evil', '（壞笑）……是啊。我會煉金。'],
+  ];
+  // 教學第一天的引導（A22–A23 第一次進御花園、A28 做好、A29 第一天晚上、A30 結束）；A24–A27 在調合模組裡
+  const TUT_GATHER = [
+    ['baojuan', '_', '御花園有侍衛巡邏。小主走一步，侍衛也走一步，被看見就得回宮。'],
+    ['baojuan', '_', '不過別怕，被請回宮也不會怎樣，撿到的東西都算小主的。'],
+  ];
+  const TUT_DELIVER = ['baojuan', '_', '做好了！小主親自送去，娘娘會更歡喜。要是奴婢代送，就只拿得到賞銀喔。'];
+  const TUT_NIGHT = ['baojuan', '_', '今晚侍寢的娘娘，恩寵會漲。跟小主交情好的，還可能替小主說好話。'];
+  const TUT_END = ['baojuan', '_', '明天起，就看小主自己拿主意了！'];
+  const TUT_ORDER = [
+    ['chuijinxi', '_', '安小主安好。奴婢是睡慾軒的吹緊吸。'],
+    ['chuijinxi', '_', '我家真環娘娘想吃藕粉桂花糖糕，不知能否勞煩小主？'],
+    ['baojuan', '_', '小主，藕粉桂花糖糕要藕粉和桂花。藕粉咱們有，桂花得去御花園摘。'],
+    ['baojuan', '_', '咱們走吧！'],
   ];
 
   // ───────── 結局 ─────────
@@ -414,13 +461,17 @@ window.GAME_DATA = (() => {
     4: '安小主零溶恩寵墊底，炎洗宮依舊門可羅雀。',
   };
   // 第二層：封號。依序排列＝越前面越稀有，拿到多個時，第一個是主封號，其餘「另外加封」。
-  // 判定條件寫在 game.js 的 TITLE_CHECK。
+  // 判定條件寫在 engine.js 的 TITLE_CHECK；戰績要的次數記在 S.stats。
   const TITLES = [
     { id: 'shexiang', name: '麝香代言人', seal: '麝香|代言人', comment: '一劑一劑，耐心是美德。歡宜香的配方，從此由炎洗宮獨家監製。', hint: '據說有一種香，聞久了就……' },
+    { id: 'yuanzhu', name: '原著重現', seal: '原著|重現', comment: '劇本拿來，演得一字不差。', hint: '原作裡，有一盒去疤的膏……' },
     { id: 'shuangmian', name: '雙面零溶', seal: '雙面|零溶', comment: '姐姐們都說安妹妹最貼心了。三位都中了招，卻沒有一個人懷疑妳。', hint: '表面姐妹情深，背地裡……而且一次都不能失手。' },
     { id: 'duanzi', name: '斷子絕孫專賣店', seal: '斷子絕孫|專賣店', comment: '炎洗宮出品，必屬佳品。後宮出生率創下歷史新低。', hint: '審沒裝和真環，好像都還生得出來……' },
+    { id: 'michelin', name: '炎洗宮米其林', seal: '炎洗宮|米其林', comment: '御膳房派人來偷師，被包捐擋在門外。', hint: '要是能做出完美的一鍋……' },
     { id: 'wentaiyi', name: '溫太醫不要', seal: '溫太醫|不要', comment: '溫十粗太醫在炎洗宮門口擺了張桌子。妳一出門，他就搖頭。', hint: '被太醫抓到不只一次的話……' },
+    { id: 'ganlu', name: '甘露寺預備役', seal: '甘露寺|預備役', comment: '經抄得比字寫得還多。甘露寺的師太說，禪房已經幫妳留好了。', hint: '禁足的時候，好像也不是只能發呆……' },
     { id: 'guimi', name: '後宮好閨蜜', seal: '後宮|好閨蜜', comment: '大家都好喜歡安妹妹！……雖然黃上還是不太記得妳。', hint: '三位姐姐都跟妳很要好的話……' },
+    { id: 'baojuan', name: '包捐才是本體', seal: '包捐|才是本體', comment: '十天來各宮只見過包捐。有人懷疑安小主根本不存在。', hint: '要是什麼事都交給包捐……' },
     { id: 'baimang', name: '白忙一場', seal: '白忙|一場', comment: '料加了，錢花了，人一個都沒害到。', hint: '加了料，卻一次都沒得逞……' },
     { id: 'jingshi', name: '敬事房大金主', seal: '敬事房|大金主', comment: '敬事房的公公們逢年過節都送點心來，感謝妳養活了整個部門。', hint: '常給敬事房包紅包的話……' },
     { id: 'bailian', name: '白蓮花', seal: '白蓮花', comment: '十天來安分守己，什麼都沒加。……妳是來玩什麼遊戲的？', hint: '從頭到尾都乖乖的話……' },
@@ -429,6 +480,25 @@ window.GAME_DATA = (() => {
     { id: 'miaoyin', name: '真・妙音娘子', seal: '真・妙音|娘子', comment: '一曲金縷衣，餘音繞樑十日不絕。黃上現在一閉上眼睛就會聽到。', hint: '據說多唱幾次歌會有好事……' },
     { id: 'touming', name: '炎洗宮小透明', seal: '炎洗宮|小透明', comment: '黃上到現在還是記不住妳叫什麼名字。', hint: '什麼特別的事都沒發生的話……' },
   ];
+
+  // 結局畫面一：零溶第一時，大字下面那一句（範例稿）
+  const END_CROWD = '炎洗宮上下跪接聖旨，包捐哭成淚人。';
+  // 結局畫面二：十日戰績（kuso 說法）。依序挑有發生的前 4 條；數字＝S.stats[key]（ruined 取人數）。
+  // text 裡的 {欄位} 換成 S.stats 的值；solo：一次都沒親自交貨時改用這句。chip：分享圖卡上的短標籤。
+  const END_STATS = [
+    { key: 'spikesUsed', chip: '下料', text: '次下料，被溫太醫抓了 {caught} 次' },
+    { key: 'loves', chip: '投其所好', text: '次投其所好，各宮都說安妹妹最懂她' },
+    { key: 'proxyDeliver', chip: '包捐代交', text: '張訂單交給包捐代送，包捐腿都跑細了', solo: '張訂單全由包捐代交，安小主本人查無此人' },
+    { key: 'sings', chip: '金縷衣', text: '次高歌金縷衣，黃上現在閉眼就聽得到' },
+    { key: 'perfect', chip: '完美成品', text: '鍋完美成品，御膳房派人來偷師' },
+    { key: 'sutras', chip: '抄經', text: '本後宮心經，甘露寺禪房已預留' },
+    { key: 'ruined', chip: '斷了香火', text: '位娘娘從此生不出來' },
+    { key: 'bribes', chip: '紅包', text: '次給敬事房包大紅包' },
+    { key: 'junk', chip: '黑暗料理', text: '鍋黑暗料理，炎洗宮的鍋子還在冒煙' },
+    { key: 'births', chip: '皇嗣', text: '位皇嗣誕生，零溶笑得比誰都燦爛' },
+    { key: 'selfDeliver', chip: '親自交貨', text: '張訂單親自送到各宮，腳都走痠了' },
+  ];
+  const END_CLEAN = [0, '次下料，清清白白'];
 
   // 主畫面零溶的閒聊台詞
   const IDLE = [
@@ -441,6 +511,6 @@ window.GAME_DATA = (() => {
 
   return {
     TRAITS, ITEMS, PRODUCTS, NORMAL_ORDERS, SHOP, GATHER, CHARS, TARGETS, PREFS, ALL, RULES,
-    request, THANKS, REFUSE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, TUTORIAL, END_TOP, END_LING, TITLES, IDLE,
+    request, THANKS, REFUSE, FIRST_FLIP, FIRST_GROUNDED, SUTRA_LINES, SUTRA_START, SUTRA_DONE, PROXY_LINES, DEBUFF_WASTED, CATS_LINE, VISIT_ENTER, VISIT_EMPTY, VISIT_REACT, EMPRESS, SING, OUTCOME_LINES, DEBUFF_LINES, SERVE_FAIL, SERVE_FAIL_HS, CAUGHT, OPENING, NO_TUTORIAL, TUT_INTRO, TUT_ORDER, TUT_GATHER, TUT_DELIVER, TUT_NIGHT, TUT_END, END_TOP, END_LING, END_CROWD, END_STATS, END_CLEAN, TITLES, IDLE,
   };
 })();

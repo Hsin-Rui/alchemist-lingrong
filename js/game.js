@@ -10,6 +10,8 @@
   let screen = 'title';
   let dlg = null; // { lines, i, done, bg }；播放中另記 lockUntil（防連按）、veilLine／veilAt（暗幕從哪一句、何時開始）
   let modal = null; // { title, body }
+  let endStep = 1; // 結局：1＝恩寵揭曉、2＝封號與戰績
+  let bookOpen = false; // 結局畫面二的封號冊展開
   let busy = false; // 動畫進行中，暫停輸入
   // 調合（四階段，§13.3）：流程本體在 js/craftflow.js；這裡只記從哪張訂單進來、目前第幾階段（鎖返回鍵用）
   const newCraftSel = (forOrder = null, forWho = null) => ({ stage: 1, forOrder, forWho });
@@ -60,6 +62,13 @@
   const have = (id) => S.inv[id] || 0;
   const isTarget = (who) => D.TARGETS.includes(who);
   const grounded = () => S.day <= S.groundUntil;
+  // 教學第一天走到哪一步：gather → craft → deliver → night → end（第二天早上結束）；不是教學局＝null
+  const tutStep = () => {
+    if (!S || !S.tutorial) return null;
+    if (S.tutorial.step === 'gather' && (S.inv.osmanthus || 0) > 0) S.tutorial.step = 'craft'; // 桂花到手（採的或買的）就往下一步
+    return S.tutorial.step;
+  };
+  const SPOT = (on) => (on ? ' tut-spot' : ''); // 教學的發光圈
   const pct = (x) => `${Math.round(x * 100)}%`;
 
   const rarity = (w) => (w >= 3 ? '常見' : w >= 1.5 ? '偶爾' : '稀有');
@@ -176,11 +185,17 @@
   const daysLeft = (o) => o.due - S.day + 1;
 
   // ───────── 對話（逐字顯示） ─────────
-  function playDialog(lines, done, bg = 'yanxi') {
-    dlg = { lines, i: 0, done, bg };
+  // onChoice：最後一句帶選項（opt.choice）時，玩家選完呼叫 onChoice(值)
+  function playDialog(lines, done, bg = 'yanxi', onChoice = null) {
+    dlg = { lines, i: 0, done, bg, onChoice, pick: 0 };
     render();
   }
+  const choiceAt = (d) => d.lines.findIndex((l) => l[3] && l[3].choice);
   function finishDialog() {
+    // 略過整段時，有選項的那一句不能跳過：直接跳到那一句
+    const ci = choiceAt(dlg);
+    if (ci >= 0 && dlg.i < ci) { dlg.i = ci; stopTyper(); render(); return; }
+    if (ci >= 0) return;
     const done = dlg.done;
     dlg = null;
     stopTyper();
@@ -190,6 +205,7 @@
     if (!dlg) return;
     if (dlg.lockUntil && performance.now() < dlg.lockUntil) return; // 防連按
     if (typer) { completeTyper(); return; }
+    if (dlg.lines[dlg.i][3] && dlg.lines[dlg.i][3].choice) return; // 選項那一句要選了才走
     dlg.i++;
     if (dlg.i >= dlg.lines.length) finishDialog();
     else render();
@@ -255,15 +271,37 @@
   // ───────── 流程 ─────────
   function startGame() {
     A.unlock();
-    A.playBgm('main');
+    A.playBgm('title', 'main'); // 開場對話繼續播標題曲，第一天開始才換主題曲
     S = E.newState(D);
-    screen = 'title'; // 再玩一次時，教學對話要疊在標題頁上（結局頁需要上一局的結果）
-    playDialog(D.TUTORIAL, startDay);
+    screen = 'title'; // 再玩一次時，開場對話要疊在標題頁上（結局頁需要上一局的結果）
+    // §15.1：開場 → 問要不要教學
+    playDialog(D.OPENING, null, 'yanxi', (v) => {
+      if (v === 'tut') playDialog(D.TUT_INTRO, () => startDay(true));
+      else playDialog(D.NO_TUTORIAL, () => startDay());
+    });
+    if (dlg) dlg.fadeIn = true; // A1（淡入，炎洗宮）
   }
 
-  function startDay() {
+  // tut：教學模式的第一天——擺成教學局面，早上的新訂單換成吹緊吸那段（A18–A21）
+  function startDay(tut = false) {
+    A.playBgm('main');
     A.sfx('gong');
-    playDialog(renderStartLines(E.startDay(D, S, rand)), () => go('home'));
+    const report = E.startDay(D, S, rand);
+    if (tut) { E.setupTutorial(D, S); report.newOrders = []; report.noOrders = false; }
+    const lines = [...renderStartLines(report), ...(tut ? D.TUT_ORDER : [])];
+    if (!tut && S.tutorial) { // 教學第二天早上：結束教學（A30）
+      if (tutStep() === 'end') lines.push(D.TUT_END);
+      S.tutorial = null;
+    }
+    playDialog(lines, () => go('home'));
+  }
+  function pickChoice(v) {
+    if (!dlg || !dlg.onChoice) return;
+    const cb = dlg.onChoice;
+    dlg = null;
+    stopTyper();
+    A.sfx('click');
+    cb(v);
   }
 
   // 依引擎回傳的開日報告組對話 lines（引擎變更狀態、不碰對話；比照 renderNightLines）
@@ -275,6 +313,8 @@
     if (report.boosted) lines.push(...D.EMPRESS);
     if (report.flip === 'lingrong') {
       lines.push(['baojuan', '_', '小主！小主！敬事房傳話——今晚黃上翻的是您的牌子！', { lock: true }], ['lingrong', 'evil', '終於……輪到我了。']);
+      // 第一次被翻（沒禁足）：包捐說明金縷衣（G4–G5，不分模式、只有一次）
+      if (!report.grounded && !S.seenFlip) { S.seenFlip = true; lines.push(...D.FIRST_FLIP); }
     } else if (report.flip) {
       lines.push(['baojuan', '_', `小主，敬事房傳話，今晚黃上翻了${charName(report.flip)}的牌子。`]);
       lines.push(report.flipFriend >= 50
@@ -289,8 +329,44 @@
   }
 
   function go(s) {
+    if (screen === 'sutra' && s !== 'sutra') { sutra = null; A.playBgm('main'); }
     screen = s;
     render();
+  }
+
+  // ───────── 禁足抄經（§15.5）─────────
+  let sutra = null; // { line, tiles, used:Set, next, blots, shake }
+  let shopTab = 'mat'; // 小舖分頁：mat／spike／sell
+  function openSutra() {
+    if (!grounded() || S.slot >= R.slotsPerDay) return;
+    const line = D.SUTRA_LINES[Math.floor(rand() * D.SUTRA_LINES.length)];
+    sutra = { line, tiles: E.sutraTiles(line, rand), used: new Set(), next: 0, blots: 0, shake: -1 };
+    A.playBgm('sutra');
+    go('sutra');
+  }
+  function pickTile(k) {
+    if (!sutra || sutra.used.has(k)) return;
+    const t = sutra.tiles[k];
+    // 同一個字出現兩次（例如「個個」）時，點哪一塊都算對：比的是字，不是字塊的編號
+    const want = sutra.tiles.find((x) => x.i === sutra.next).ch;
+    if (t.ch !== want) {
+      // 點錯：字塊抖一下、經書多一滴墨（不卡關）
+      sutra.blots++;
+      sutra.shake = k;
+      A.sfx('fail');
+      render();
+      return;
+    }
+    sutra.used.add(k);
+    sutra.next++;
+    sutra.shake = -1;
+    A.sfx('pop');
+    if (sutra.next < sutra.tiles.length) { render(); return; }
+    E.copySutra(D, S);
+    A.sfx('ding');
+    render();
+    busy = true;
+    setTimeout(() => { busy = false; playDialog(D.SUTRA_DONE, () => finishAction(() => go('home')), 'study'); }, 700);
   }
 
   function finishAction(next) {
@@ -355,6 +431,7 @@
     report.births.forEach((b) => {
       lines.push(['narr', '', `${charName(b.who)}平安誕下皇嗣！黃上龍心大悅，恩寵 +${b.favDelta}`], ['lingrong', 'shock', '（讓她生下來了……）']);
     });
+    if (tutStep() === 'night') { lines.push(D.TUT_NIGHT); S.tutorial.step = 'end'; } // A29
     return lines;
   }
 
@@ -362,6 +439,7 @@
     if (S.day >= R.days) {
       S.result = computeEnding();
       A.playBgm('ending');
+      endStep = 1; bookOpen = false;
       go('ending');
       return;
     }
@@ -428,6 +506,7 @@
   // 監聽與 rAF 只在進場時註冊、離場時移除（headless 回歸網不會進場）。
   function enterGather(loc) {
     if (needOut()) return;
+    if (tutStep() === 'gather' && !S.tutorial.seenDungeon) { S.tutorial.seenDungeon = true; playDialog(D.TUT_GATHER, () => enterGather(loc)); return; } // A22–A23
     if (!window.PIXEL_ART || !DV) { gather(loc); return; } // 像素資料或繪圖模組沒載到就退回快速採集
     gatherResult = null;
     gatherScene = {
@@ -735,10 +814,12 @@
       quick: quickCraft,
       onQuick: (on) => { quickCraft = on; try { localStorage.setItem('lingrong-quickcraft', on ? '1' : '0'); } catch { /* 忽略 */ } },
       firstSpike: !S.seenSpike,
+      tutorial: tutStep() === 'craft',
       onSeen: (k) => { if (k === 'spike') S.seenSpike = true; },
       cook: (sel) => {
         craftResult = E.craft(D, S, { ...sel, forOrder: craftSel.forOrder, forWho: craftSel.forWho });
         const r = craftResult;
+        if (tutStep() === 'craft' && r.order && r.product === r.order.product) { S.tutorial.step = 'deliver'; S.tutorial.sayDeliver = true; }
         return { product: r.product, traits: r.tr, spike: r.spike, toInv: r.toInv, lostSpike: r.lostSpike };
       },
       actions: () => {
@@ -771,6 +852,7 @@
     if (how === 'self' && needOut()) return;
     const r = E.deliver(D, S, orderId, itemId, rand, how);
     if (r.noItem) { go('home'); return; }
+    if (tutStep() === 'deliver' && !r.proxy) S.tutorial.step = 'night';
     A.sfx('pop');
     if (r.proxy) {
       // 包捐跑腿：出發、（加了料就接加料的結果）、回來
@@ -841,16 +923,113 @@
     return r;
   }
 
+  // 分享到 FB：開 FB 的分享視窗，分享遊戲網址（預覽用 index.html 的 og:image）
+  const GAME_URL = 'https://hsin-rui.github.io/alchemist-lingrong/';
+  function shareFb() {
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(GAME_URL)}`, '_blank', 'noopener,width=600,height=560');
+  }
+
+  // 分享圖卡（js/sharecard.js 畫 1200×630）：手機有系統分享（可帶圖檔）就用，否則下載 PNG
+  const canShareFiles = (() => {
+    try { return !!(navigator.canShare && navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] })); } catch { return false; }
+  })();
+  function cardData(e = S.result) {
+    const ling = e.top === 'lingrong';
+    return {
+      title: e.main.name,
+      comment: e.main.comment,
+      chips: [['恩寵', `第 ${e.rank} 名`], ...e.stats.slice(0, 3).map((x) => [x.chip, x.n])],
+      rank: ling ? '改姓鈕祜祿！' : `恩寵第 ${e.rank} 名`,
+      portrait: `assets/characters/${D.CHARS.lingrong.imgs[ling ? 'evil' : 'shock']}.webp`,
+      url: GAME_URL.replace(/^https:\/\//, '').replace(/\/$/, ''),
+    };
+  }
   async function share() {
     const e = S.result;
     const more = e.extra.length ? `，另外加封「${e.extra.map((t) => t.name).join('」「')}」` : '';
     const text = `我在《煉金術士零溶——逆襲a零溶》獲封「${e.main.name}」${more}！你也來試試：`;
-    const url = location.href;
+    let blob = null;
+    try { blob = await window.ShareCard.toBlob(await window.ShareCard.draw(cardData(e))); } catch { /* 畫不出來就只分享文字 */ }
+    const file = blob && new File([blob], 'lingrong-ending.png', { type: 'image/png' });
     try {
-      if (navigator.share) { await navigator.share({ title: '煉金術士零溶', text, url }); return; }
-      await navigator.clipboard.writeText(`${text}${url}`);
+      if (file && canShareFiles) { await navigator.share({ files: [file], title: '煉金術士零溶', text: `${text}${GAME_URL}` }); return; }
+      if (blob) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'lingrong-ending.png';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        toast('圖卡存好了！可以貼到 FB、IG 或 LINE', 2600);
+        return;
+      }
+      if (navigator.share) { await navigator.share({ title: '煉金術士零溶', text, url: GAME_URL }); return; }
+      await navigator.clipboard.writeText(`${text}${GAME_URL}`);
       toast('已複製分享文字！');
     } catch { /* 使用者取消 */ }
+  }
+
+  // ───────── 結局兩畫面（§9 第二輪）─────────
+  const charImg = (who, expr) => `assets/characters/${D.CHARS[who].imgs[expr] || Object.values(D.CHARS[who].imgs)[0]}.webp`;
+  // 畫面一：太監宣旨、恩寵榜從第 4 名往第 1 名揭曉（CSS 延遲依揭曉順序）
+  function endingReveal() {
+    const e = S.result;
+    const n = e.board.length;
+    const max = Math.max(100, ...e.board.map((b) => b.favor));
+    const ling = e.top === 'lingrong';
+    const cut = D.END_TOP[e.top].indexOf('，');
+    const head = D.END_TOP[e.top].slice(0, cut);
+    const tail = D.END_TOP[e.top].slice(cut + 1);
+    const big = ling ? tail : head;
+    const small = ling ? `${head}。` : tail;
+    const who = ling ? D.END_CROWD : e.opening[1];
+    const doneAt = 0.4 + n * 0.7 + 0.3;
+    const rows = e.board.map((b, i) => {
+      const c = D.CHARS[b.who];
+      const img = charImg(b.who, b.who === 'lingrong' ? (ling ? 'evil' : 'shock') : 'happy');
+      return `<div class="rk${i === 0 ? ' first' : ''}" style="--c:${c.color};--d:${(0.4 + (n - 1 - i) * 0.7).toFixed(2)}s;--w:${Math.max(4, Math.round((b.favor / max) * 100))}%">
+        <span class="rk-no">${i + 1}</span>
+        <span class="rk-av"><img src="${img}" alt=""></span>
+        <span class="rk-body"><span class="rk-nm">${c.name}<b>${b.favor}</b></span><span class="rk-bar"><i></i></span></span>
+      </div>`;
+    }).join('');
+    return `<div class="screen ending end1 bg-yanxi" style="--done:${doneAt.toFixed(2)}s">
+      <div class="end-cap">— 十日期滿 —</div>
+      <div class="end-eunuch">聖旨到——</div>
+      <div class="rk-board">${rows}</div>
+      <div class="end-verdict${ling ? ' ling' : ''}"><div class="v-big">${big}</div><div class="v-small">${small}</div><div class="v-who">${who}</div></div>
+      <div class="end-hero"><img src="${charImg(e.top, ling ? 'evil' : 'happy')}" alt="${D.CHARS[e.top].name}"></div>
+      ${ling ? '' : `<div class="end-cower"><img src="${charImg('lingrong', 'shock')}" alt="零溶"></div>`}
+      <button class="btn ghost-gold end-next" data-a="endnext" data-def>看看零溶得了什麼封號 →</button>
+    </div>`;
+  }
+  // 畫面二：聖旨展開、主封號蓋章、加封跳出、十日戰績、分享與封號冊
+  function endingEdict() {
+    const e = S.result;
+    const got = D.TITLES.filter((t) => e.book.includes(t.id)).length;
+    const seal = (t, i) => {
+      const has = e.book.includes(t.id);
+      const cls = e.fresh.includes(t.id) ? 'new' : has ? 'got' : 'no';
+      return `<button class="seal-btn ${cls}" style="--i:${i}" data-a="seal" data-v="${t.id}">${has ? t.seal.replace('|', '<br>') : '？'}</button>`;
+    };
+    return `<div class="screen ending end2 bg-yanxi">
+      <div class="end-cap">— 十日期滿 —</div>
+      <div class="edict">
+        <div class="edict-hd">奉天承運　黃上詔曰</div>
+        <p class="edict-sub">茲賜${e.top === 'lingrong' ? '鈕祜祿氏零溶' : '炎洗宮安小主零溶'}封號——</p>
+        <div class="edict-stampwrap"><div class="edict-stamp">${e.main.seal.replace('|', '<br>')}</div></div>
+        <h1 class="sr-only">${e.main.name}</h1>
+        <p class="edict-comment">${e.main.comment}欽此。</p>
+        ${e.extra.length ? `<div class="edict-extra">另外加封<br>${e.extra.map((t, i) => `<span class="edict-chip" style="--i:${i}">${t.name}</span>`).join('')}</div>` : ''}
+      </div>
+      <section class="end-stats"><h2>十日戰績</h2>${e.stats.map((x) => `<div class="end-stat"><b>${x.n}</b><span>${x.text}</span></div>`).join('')}</section>
+      <div class="end-btns">
+        <button class="btn gold" data-a="sharefb">分享到 FB</button>
+        <button class="btn ghost-gold" data-a="share">${canShareFiles ? '其他分享' : '存下圖卡'}</button>
+        <button class="btn ghost-gold" data-a="start" data-def>再玩一次</button>
+      </div>
+      <button class="book-toggle" data-a="book" aria-expanded="${bookOpen}">封號冊　已收集 ${got} / ${D.TITLES.length}　${bookOpen ? '︿' : '›'}</button>
+      ${bookOpen ? `<section class="title-book"><div class="book-h">封號冊 <small>點印章看說明</small></div><div class="seals">${D.TITLES.map(seal).join('')}</div></section>` : ''}
+    </div>`;
   }
 
   // ───────── 畫面元件 ─────────
@@ -886,9 +1065,13 @@
 
   // 包捐每天一句（台詞總表 H 組）：由上往下，符合第一個條件就說那一句
   function hintLine() {
+    // 教學第一天：包捐指向下一步（A20、H6、A28）
+    if (tutStep() === 'gather') return '小主，藕粉桂花糖糕要藕粉和桂花。藕粉咱們有，桂花得去御花園摘。';
+    if (tutStep() === 'craft') return '材料都齊了，來調合吧！';
+    if (tutStep() === 'deliver') return D.TUT_DELIVER[2];
     const ready = S.orders.find((o) => readyItem(o));
     if (grounded() && ready) return '小主禁足中，東西做好了就交給奴婢跑腿吧。'; // H1
-    if (grounded()) return `禁足中……只能在宮裡煉東西了。（到第 ${S.groundUntil} 天）`; // H2 待抄經（epic 4）上線再換
+    if (grounded()) return `禁足中……小主可以調合，或抄抄經。（到第 ${S.groundUntil} 天）`; // H2
     const f = S.flip;
     if (isTarget(f) && !S.conc[f].debuff && S.hand.some((h) => h.spike)) return `今晚是${charName(f)}侍寢……手上這份「心意」，該送過去了。`; // H3
     if (ready) return `東西做好了，親自送去給${charName(ready.who)}，交情會更好。`; // H4
@@ -938,7 +1121,7 @@
       body = `<div class="ready">${item.spike ? tok(item.spike) : tok(item.product)}
           <span>成品已備好・${item.spike ? `偷加了${itemName(item.spike)}` : '正正經經'}</span></div>
         <div class="row-btns deliver-btns">
-          <button class="btn primary" data-a="deliver" data-v="${o.id}"${DEF(isDef && !grounded())} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中，不能出門' : `親自送去${c.palace}`}</button>
+          <button class="btn primary${SPOT(tutStep() === 'deliver')}" data-a="deliver" data-v="${o.id}"${DEF(isDef && !grounded())} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中，不能出門' : `親自送去${c.palace}`}</button>
           <button class="btn ghost" data-a="proxy" data-v="${o.id}"${DEF(isDef && grounded())}>包捐代交<small>只拿賞銀</small></button>
         </div>`;
     } else {
@@ -950,7 +1133,7 @@
       }).join('');
       const ok = recipeOk(o.product);
       body = `<div class="needs">${rows}</div>
-        <button class="btn ${ok ? 'primary' : ''} wide" data-a="craftfor" data-v="${o.id}"${DEF(isDef)} ${ok ? '' : 'disabled'}>${ok ? '調合' : '材料還不夠'}</button>`;
+        <button class="btn ${ok ? 'primary' : ''} wide${SPOT(ok && tutStep() === 'craft')}" data-a="craftfor" data-v="${o.id}"${DEF(isDef && tutStep() !== 'gather')} ${ok ? '' : 'disabled'}>${ok ? '調合' : '材料還不夠'}</button>`;
     }
     return `<article class="ocard ${left === 1 ? 'urgent' : ''}" style="--c:${c.color}">
       <div class="ocard-head">${avatar(o.who)}
@@ -994,7 +1177,8 @@
       return `<div class="screen theme-light">
         ${topBar()}
         <div class="scroll">
-          ${grounded() ? `<div class="grounded">禁足中（到第 ${S.groundUntil} 天）：不能出門採集、交貨、拜訪，也不能侍寢</div>` : ''}
+          ${grounded() ? `<div class="grounded">禁足中（到第 ${S.groundUntil} 天）：不能出門採集、交貨、拜訪，也不能侍寢
+            <button class="btn small gold" data-a="sutra"${S.slot >= R.slotsPerDay ? ' disabled' : ''}>抄經（1 時辰）</button></div>` : ''}
           <div class="stage bg-yanxi">
             ${portrait('lingrong', grounded() ? 'shock' : 'smile', 'stage-portrait')}
             <div class="bubble">${esc(hintLine())}</div>
@@ -1009,7 +1193,7 @@
         ${spikeBar()}
         <nav class="bottomnav">
           <button data-a="go" data-v="shop"><b>商</b><span>小舖</span></button>
-          <button data-a="go" data-v="gather"${DEF(!(S.orders.length && orderMainOk(S.orders[0])))}><b>採</b><span>採集</span></button>
+          <button class="${SPOT(tutStep() === 'gather')}" data-a="go" data-v="gather"${DEF(tutStep() === 'gather' || (!tutStep() && !(S.orders.length && orderMainOk(S.orders[0]))))}><b>採</b><span>採集</span></button>
           <button data-a="craftfor" data-v=""><b>煉</b><span>調合</span></button>
           <button data-a="giftto" data-v=""><b>訪</b><span>拜訪</span></button>
           <button data-a="go" data-v="status"><b>宮</b><span>後宮</span></button>
@@ -1018,38 +1202,66 @@
       </div>`;
     },
 
+    sutra() {
+      if (!sutra) return views.home();
+      const done = sutra.next >= sutra.tiles.length;
+      let n = 0;
+      const paper = [...sutra.line].map((c) => {
+        if (/[，。、！？；：]/.test(c)) return `<span class="sp-punct">${c}</span>`;
+        const k = n++;
+        return k < sutra.next ? `<span class="sp-ch">${c}</span>` : '<span class="sp-ch blank"></span>';
+      }).join('');
+      // 墨漬：位置由序號決定（重畫不會跳）
+      const blots = Array.from({ length: sutra.blots }, (_, i) => `<i class="sp-blot" style="left:${(i * 37 + 12) % 86}%;top:${(i * 53 + 20) % 70}%;--s:${0.7 + ((i * 7) % 5) / 10}"></i>`).join('');
+      const firstFree = sutra.tiles.findIndex((_, k) => !sutra.used.has(k));
+      return `<div class="screen theme-dark sutra-screen bg-study">
+        ${subHeader('禁足抄經', '依照句子的順序點字・點錯會多一滴墨', true, false, !done)}
+        <div class="scroll pad">
+          <div class="sp-say">${portrait('baojuan', '_', 'sp-face')}<p>${esc(done ? '抄好了！' : D.SUTRA_START[2])}</p></div>
+          <div class="sp-paper${done ? ' done' : ''}"><div class="sp-line">${paper}</div>${blots}</div>
+          <div class="sp-tiles">${sutra.tiles.map((t, k) => (sutra.used.has(k)
+            ? '<span class="sp-tile gone"></span>'
+            : `<button class="sp-tile${sutra.shake === k ? ' shake' : ''}" data-a="tile" data-v="${k}"${DEF(k === firstFree)}>${t.ch}</button>`)).join('')}</div>
+        </div>
+      </div>`;
+    },
+
     shop() {
-      const buyRow = (id) => {
+      // 分頁＋格子（原本是一條很長的清單）：素材／料／賣東西
+      const tab = shopTab;
+      const buyCell = (id) => {
         const it = D.ITEMS[id];
-        const isDef = id === D.SHOP.find((x) => S.silver >= D.ITEMS[x].price);
-        const desc = it.type === 'spike' ? it.desc : id === 'liquor' ? '加紅花瓣可以煉出紅花' : '';
-        return `<div class="row">${tok(id)}<div class="row-main"><b>${it.name}</b>${it.type === 'spike' ? '<span class="tag">料</span>' : ''}<small>${desc ? `${desc}・` : ''}持有 ${have(id)}</small></div>
-          <button class="btn small ${S.silver >= it.price ? 'primary' : ''}" data-a="buy" data-v="${id}"${DEF(isDef)} ${S.silver < it.price ? 'disabled' : ''}>${coin(it.price)}</button></div>`;
+        const ok = S.silver >= it.price;
+        const note = it.type === 'spike' ? it.desc : id === 'liquor' ? '加紅花瓣煉紅花' : '';
+        return `<button class="scell${ok ? '' : ' poor'}" data-a="buy" data-v="${id}"${DEF(id === firstBuy)} ${ok ? '' : 'disabled'}>
+          ${tok(id, 'lg')}<b>${it.name}</b>${note ? `<small class="scell-note">${note}</small>` : ''}
+          <span class="scell-foot">${coin(it.price)}<em>持有 ${have(id)}</em></span></button>`;
       };
-      // 賣：一般份一列（一次賣一份），帶特性的每份各一列
-      const sellable = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat' && D.ITEMS[id].price);
-      const sellRows = sellable.flatMap((id) => {
-        const plain = have(id) - lotCount(id);
-        const rows = S.lots.filter((l) => l.id === id).map((l) => `<div class="row">${tok(id)}<div class="row-main"><b>${itemName(id)}</b>${trChips(l.tr, 'sm')}</div>
-          <button class="btn small" data-a="sell" data-v="${id}:${l.uid}">賣 ${coin(E.sellPrice(D, id, l.tr))}</button></div>`);
-        if (plain > 0) rows.unshift(`<div class="row">${tok(id)}<div class="row-main"><b>${itemName(id)}</b><small>一般・持有 ${plain}</small></div>
-          <button class="btn small" data-a="sell" data-v="${id}">賣 ${coin(E.sellPrice(D, id, {}))}</button></div>`);
-        return rows;
-      });
       const mats = D.SHOP.filter((id) => D.ITEMS[id].type === 'mat');
       const spikes = D.SHOP.filter((id) => D.ITEMS[id].type === 'spike');
+      const list = tab === 'spike' ? spikes : mats;
+      const firstBuy = list.find((x) => S.silver >= D.ITEMS[x].price);
+      // 賣：一般份一格（一次賣一份），帶特性的每份各一格
+      const sellable = Object.keys(S.inv).filter((id) => D.ITEMS[id].type === 'mat' && D.ITEMS[id].price && have(id) > 0);
+      const sellCells = sellable.flatMap((id) => {
+        const plain = have(id) - lotCount(id);
+        const cells = S.lots.filter((l) => l.id === id).map((l) => `<button class="scell" data-a="sell" data-v="${id}:${l.uid}">
+          ${tok(id, 'lg')}<b>${itemName(id)}</b>${trChips(l.tr, 'sm')}<span class="scell-foot">賣 ${coin(E.sellPrice(D, id, l.tr))}</span></button>`);
+        if (plain > 0) cells.unshift(`<button class="scell" data-a="sell" data-v="${id}">
+          ${tok(id, 'lg')}<b>${itemName(id)}</b><small class="scell-note">一般・持有 ${plain}</small><span class="scell-foot">賣 ${coin(E.sellPrice(D, id, {}))}</span></button>`);
+        return cells;
+      });
+      const TABS = [['mat', '素材'], ['spike', '料'], ['sell', '賣東西']];
+      const body = tab === 'sell'
+        ? (sellCells.length ? `<p class="muted shop-tip">售價一半，每級特性多 1 兩</p><div class="sgrid">${sellCells.join('')}</div>` : '<p class="muted">沒有能賣的素材。</p>')
+        : `<p class="muted shop-tip">${tab === 'spike' ? '紅花瓣只有太醫院採得到喔。' : '小舖買的沒有特性，採集來的才有'}</p><div class="sgrid">${list.map(buyCell).join('')}</div>`;
       return `<div class="screen theme-light">
         ${subHeader('包捐的跑腿小舖', '買賣都不花時辰，禁足中也能買賣')}
         <div class="scroll">
-          <div class="stage bg-shop">${portrait('baojuan', '_', 'stage-portrait')}<div class="bubble">小主要買什麼？多的東西，奴婢也能拿去換銀子。</div></div>
+          <div class="shop-head">${portrait('baojuan', '_', 'shop-face')}<div class="bubble">小主要買什麼？多的東西，奴婢也能拿去換銀子。</div></div>
           <div class="pad">
-          <h3>素材 <small>小舖買的沒有特性，採集來的才有</small></h3>
-          ${mats.map(buyRow).join('')}
-          <h3>料</h3>
-          ${spikes.map(buyRow).join('')}
-          <p class="muted">紅花瓣只有太醫院採得到喔。</p>
-          <h3>賣東西 <small>售價一半，每級特性多 1 兩</small></h3>
-          ${sellRows.length ? sellRows.join('') : '<p class="muted">沒有能賣的素材。</p>'}
+          <div class="seg" role="tablist">${TABS.map(([k, t]) => `<button class="seg-btn${tab === k ? ' on' : ''}" data-a="shoptab" data-v="${k}" role="tab" aria-selected="${tab === k}">${t}</button>`).join('')}</div>
+          ${body}
         </div></div>
       </div>`;
     },
@@ -1064,7 +1276,7 @@
           <div class="loc-banner bg-${g.bg}"><span>${g.name}</span>${hits.length ? `<em>有你缺的${hits.join('、')}</em>` : ''}</div>
           <div class="loc-body">
             <div class="drops">${g.table.map(([id, w]) => `<span class="drop ${D.ITEMS[id].type === 'spike' || id === 'petal' ? 'spike' : ''} ${needed.has(id) ? 'need' : ''} ${w < 1.5 ? 'rare' : ''}">${D.ITEMS[id].type === 'spike' ? '料：' : ''}${itemName(id)}・${rarity(w)}</span>`).join('')}</div>
-            <button class="btn ${hits.length ? 'primary' : ''} wide" data-a="${hasDungeon(loc) ? 'enter' : 'gather'}" data-v="${loc}"${DEF(i === 0)} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中' : loc === 'taiyi' ? '偷溜進太醫院' : '潛入御花園偷採'}</button>
+            <button class="btn ${hits.length ? 'primary' : ''} wide${SPOT(tutStep() === 'gather' && loc === 'garden')}" data-a="${hasDungeon(loc) ? 'enter' : 'gather'}" data-v="${loc}"${DEF(i === 0)} ${grounded() ? 'disabled' : ''}>${grounded() ? '禁足中' : loc === 'taiyi' ? '偷溜進太醫院' : '潛入御花園偷採'}</button>
           </div></article>`;
       };
       let sheet = '';
@@ -1240,38 +1452,7 @@
     },
 
     ending() {
-      const e = S.result;
-      const st = S.stats;
-      const expr = ['baimang', 'wentaiyi', 'touming'].includes(e.main.id) ? 'shock' : ['guimi', 'bailian', 'miaoyin'].includes(e.main.id) ? 'smile' : 'evil';
-      const seal = (t, i) => {
-        const got = e.book.includes(t.id);
-        const cls = e.fresh.includes(t.id) ? 'new' : got ? 'got' : 'no';
-        return `<button class="seal-btn ${cls}" style="--i:${i}" data-a="seal" data-v="${t.id}">${got ? t.seal.replace('|', '<br>') : '？'}</button>`;
-      };
-      return `<div class="screen ending bg-yanxi">
-        <div class="end-cap">— 十日期滿 —</div>
-        ${portrait('lingrong', expr, 'end-portrait')}
-        <div class="edict">
-          <div class="edict-hd">奉天承運　黃上詔曰</div>
-          <p class="edict-open">${e.opening.join('')}</p>
-          <p>茲賜${e.top === 'lingrong' ? '鈕祜祿氏零溶' : '炎洗宮安小主零溶'}封號——</p>
-          <h1 class="edict-title">${e.main.name}</h1>
-          <p>${e.main.comment}欽此。</p>
-          ${e.extra.length ? `<div class="edict-extra">另外加封：${e.extra.map((t) => `<b>${t.name}</b>`).join('、')}</div>` : ''}
-          <div class="edict-seal">黃上<br>之寶</div>
-        </div>
-        <div class="end-low">
-          <div class="end-chips"><span>恩寵 <b>第 ${e.rank} 名</b></span><span>加料 <b>${st.spikesUsed}</b></span><span>得手 <b>${st.success}</b></span><span>被抓 <b>${st.caught}</b></span></div>
-          <section class="title-book">
-            <div class="book-h">封號冊 <small>已收集 ${D.TITLES.filter((t) => e.book.includes(t.id)).length} / ${D.TITLES.length}・點印章看說明</small></div>
-            <div class="seals">${D.TITLES.map(seal).join('')}</div>
-          </section>
-          <div class="row-btns">
-            <button class="btn gold" data-a="share">分享</button>
-            <button class="btn ghost-gold" data-a="start" data-def>再玩一次</button>
-          </div>
-        </div>
-      </div>`;
+      return endStep === 1 ? endingReveal() : endingEdict();
     },
   };
 
@@ -1350,19 +1531,30 @@
     if (dlgSpeed === 'instant') completeTyper();
   }
 
+  // 教學的小恩寵榜（A10、A16）：up＝零溶往上跳一格（只是演出，不改數值）
+  function rankPanel(up) {
+    const ids = ['lingrong', ...D.TARGETS].sort((a, b) => S.favor[b] - S.favor[a]);
+    const li = ids.indexOf('lingrong');
+    return `<div class="rank-pop${up ? ' up' : ''}"><b>後宮恩寵榜</b>${ids.map((id, k) => {
+      const to = up && k === li ? k - 1 : up && k === li - 1 ? k + 1 : k;
+      return `<div class="rk-row${id === 'lingrong' ? ' me' : ''}" style="--from:${k};--to:${to};--c:${D.CHARS[id].color}"><span>${D.CHARS[id].name}</span><i style="width:${S.favor[id]}%"></i><em>${S.favor[id]}</em></div>`;
+    }).join('')}</div>`;
+  }
+
   function dialogView() {
     const [who, expr, text, opt] = dlg.lines[dlg.i];
     const isNarr = who === 'narr';
     const color = isNarr ? '#6b5a80' : D.CHARS[who].color;
     const fx = opt && opt.fx ? ` fx-${opt.fx}` : ''; // 演出標記（e2e 也看這個 class）
-    return `<div class="dialog-layer bg-${dlg.bg}" data-a="adv">
+    return `<div class="dialog-layer bg-${dlg.bg}${dlg.fadeIn && dlg.i === 0 ? ' fade-in' : ''}" data-a="adv">
       ${opt && opt.fx === 'dim' ? '<div class="fx-veil"></div>' : ''}
       <div class="dlg-ctrls"><button class="speed-btn" data-a="speed">${speedLabel()}</button><button class="skip-btn" data-a="skip">略過 ≫</button></div>
       ${isNarr ? '' : portrait(who, expr, `dlg-portrait${fx}`)}
-      <div class="dialog-box ${isNarr ? `narr${fx}` : ''}" style="--c:${color}">
+      ${opt && opt.panel ? rankPanel(opt.panel === 'rankup') : ''}
+      <div class="dialog-box ${isNarr ? `narr${fx}` : ''}${opt && opt.choice ? ' has-choice' : ''}" style="--c:${color}">
         ${isNarr ? '' : `<div class="speaker">${D.CHARS[who].name}</div>`}
         <div class="dlg-text" data-full="${esc(text)}"></div>
-        <div class="dlg-next">▼</div>
+        ${opt && opt.choice ? `<div class="dlg-choices">${opt.choice.map(([v, label], k) => `<button class="dlg-choice${dlg.pick === k ? ' on' : ''}" data-a="dlgchoice" data-v="${v}">▸ ${esc(label)}</button>`).join('')}</div>` : '<div class="dlg-next">▼</div>'}
       </div>
     </div>`;
   }
@@ -1557,7 +1749,7 @@
   // 數字鍵 1～6 → 導覽列六個動作；只在主畫面與子畫面、沒有彈出視窗時有效
   const HOTKEYS = { 1: ['go', 'shop'], 2: ['go', 'gather'], 3: ['craftfor', ''], 4: ['giftto', ''], 5: ['go', 'status'], 6: ['sleep'] };
   const HOTKEY_TARGET = { 1: 'shop', 2: 'gather', 3: 'craft', 4: 'gift', 5: 'status' }; // 已在該畫面就不重開（免得清掉調合／送禮的選擇）
-  const SUB_SCREENS = new Set(['shop', 'gather', 'craft', 'gift', 'status']);
+  const SUB_SCREENS = new Set(['shop', 'gather', 'craft', 'gift', 'status', 'sutra']);
   const HOTKEY_SCREENS = new Set(['home', ...SUB_SCREENS]);
 
   // Esc（非對話）：關彈出視窗（鎖定視窗如金縷衣無效）；結果單與交貨／送禮結果頁＝回炎洗宮；子畫面＝回主畫面
@@ -1579,6 +1771,18 @@
       e.preventDefault();
       if (dlg) A.toggleMute(); else act('mute'); // 對話中不重繪，免得目前這句重新打字
       return;
+    }
+    if (dlg && dlg.lines[dlg.i][3] && dlg.lines[dlg.i][3].choice) {
+      // 選項那一句：方向鍵換、Enter／空白鍵確定（字還在打就先打完）；Esc 無效（不能跳過選擇）
+      const ch = dlg.lines[dlg.i][3].choice;
+      if (NAV_DIRS[k]) {
+        e.preventDefault();
+        dlg.pick = (dlg.pick + (k === 'ArrowLeft' || k === 'ArrowUp' ? ch.length - 1 : 1)) % ch.length;
+        app.querySelectorAll('.dlg-choice').forEach((b, j) => b.classList.toggle('on', j === dlg.pick)); // 只換高亮，不重打字
+        return;
+      }
+      if ((k === ' ' || k === 'Enter') && !e.repeat) { e.preventDefault(); if (typer) completeTyper(); else pickChoice(ch[dlg.pick][0]); return; }
+      if (k === 'Escape') { e.preventDefault(); return; }
     }
     if (dlg) {
       if (k === ' ' || k === 'Enter') {
@@ -1633,7 +1837,7 @@
   window.addEventListener('resize', () => { if (cursor.on) syncCursor(); });
 
   // ───────── 事件 ─────────
-  const QUIET = new Set(['adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'dgquit', 'dgstay', 'cf', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
+  const QUIET = new Set(['tile', 'adv', 'buy', 'gather', 'regather', 'enter', 'leavegather', 'dgquit', 'dgstay', 'cf', 'deliver', 'gift', 'noop', 'mute', 'bribe']);
   app.addEventListener('click', (e) => {
     const el = e.target.closest('[data-a]');
     if (!el || el.disabled || busy) return;
@@ -1678,23 +1882,46 @@
         if (!r) { go('home'); break; }
         craftResult = null;
         closeCraft();
+        if (S.tutorial && S.tutorial.sayDeliver) { // 教學：做好了 → A28 再往下
+          S.tutorial.sayDeliver = false;
+          playDialog([D.TUT_DELIVER], () => act('craftdone2', v + '|' + (r.order ? r.order.id : '') + '|' + (r.itemId || '')));
+          break;
+        }
         if (v === 'proxy' && r.order) { doDeliver(r.order.id, r.itemId, 'proxy'); break; } // 代交不花時辰，不用先檢查天黑
         finishAction(() => (v === 'deliver' && r.order ? doDeliver(r.order.id, r.itemId) : go('home')));
         break;
       }
       case 'deliver': doDeliver(Number(v)); break;
+      case 'craftdone2': { // 教學 A28 播完之後接回原本的「回宮／直接送去／代交」
+        const [how, oid, iid] = v.split('|');
+        if (how === 'proxy' && oid) { doDeliver(Number(oid), Number(iid) || null, 'proxy'); break; }
+        finishAction(() => (how === 'deliver' && oid ? doDeliver(Number(oid), Number(iid) || null) : go('home')));
+        break;
+      }
       case 'proxy': doDeliver(Number(v), null, 'proxy'); break;
       case 'giftto': giftWho = v || (isTarget(S.flip) ? S.flip : null); go('gift'); break;
       case 'giftwho': giftWho = v; render(); break;
       case 'gift': doVisit(giftWho, v ? Number(v) : null); break;
-      case 'resultdone': finishAction(() => go('home')); break;
+      case 'resultdone': {
+        // 第一次被禁足：回宮時包捐說明禁足能做什麼（G6–G8）
+        if (grounded() && !S.seenGrounded) { S.seenGrounded = true; playDialog(D.FIRST_GROUNDED, () => finishAction(() => go('home'))); break; }
+        finishAction(() => go('home'));
+        break;
+      }
       case 'spikeinfo': spikeInfo(v); break;
       case 'closemodal': modal = null; render(); break;
       case 'sleep': sleepEarly(); break;
+      case 'sutra': openSutra(); break;
+      case 'dlgchoice': pickChoice(v); break;
+      case 'shoptab': shopTab = v; render(); break;
+      case 'tile': pickTile(Number(v)); break;
       case 'sleepyes': modal = null; S.slot = R.slotsPerDay; endDay(); break;
       case 'sing': modal = null; settleNight(v === '1'); break;
       case 'next': nextDay(); break;
       case 'share': share(); break;
+      case 'sharefb': shareFb(); break;
+      case 'endnext': endStep = 2; render(); setTimeout(() => { if (screen === 'ending' && endStep === 2) A.sfx('stamp'); }, 700); break;
+      case 'book': bookOpen = !bookOpen; render(); break;
       case 'seal': { const t = D.TITLES.find((x) => x.id === v); const got = S.result.book.includes(v); toast(got ? `${t.name}：${t.comment}` : `？？？：${t.hint}`, 3200); break; }
     }
   }
@@ -1705,7 +1932,7 @@
       ...Object.values(D.CHARS).flatMap((c) => Object.values(c.imgs).map((f) => `characters/${f}`)),
       'characters/guard',
       ...[...Object.keys(D.ITEMS), ...Object.keys(D.PRODUCTS), 'silver'].map((id) => `items/${id}`),
-      ...['yanxi', 'garden', 'taiyi', 'shop', 'yikun', 'xianfu', 'suiyu', 'night'].map((b) => `backgrounds/${b}`),
+      ...['yanxi', 'garden', 'taiyi', 'shop', 'yikun', 'xianfu', 'suiyu', 'night', 'study', 'workshop'].map((b) => `backgrounds/${b}`),
     ];
     [...new Set(files)].forEach((f) => { new Image().src = `assets/${f}.webp`; });
   }
@@ -1720,9 +1947,12 @@
       spikesUsed: pick([0, 3, 6]), success: pick([0, 2, 4]), caught: pick([0, 1, 2]),
       victims: pick([[], ['huafei'], [...D.TARGETS]]), ruined: pick([[], ['meizhuang'], ['meizhuang', 'zhenhuan']]),
       sings: pick([0, 2]), bribes: pick([0, 1, 2]), junk: pick([0, 1]), births: pick([0, 1]), muskRuin: pick([0, 1]),
+      sutras: pick([0, 3]), loves: pick([0, 2, 5]), perfect: pick([0, 1]), yuanzhu: pick([0, 0, 1]),
+      ...pick([{ selfDeliver: 6, proxyDeliver: 2 }, { selfDeliver: 0, proxyDeliver: 4 }]),
     });
     S.result = computeEnding(false);
     screen = 'ending';
+    if (/[?&]step=2/.test(location.search)) endStep = 2;
   }
   // 測試用：網址後面加 #演出 顯示事件選單，#演出=<事件> 直接播該事件的對話＋結果頁（不影響正常遊戲）。
   // 走真的引擎（E.deliver／E.visit），只是先擺好對象狀態、用固定骰子，所以 S.result 與對話都跟正常遊玩一樣。
@@ -1783,13 +2013,32 @@
     }
   }
   // 測試用：網址後面加 #e2e 時開放狀態給 tools/keyboard-e2e.js 造情境（不影響正常遊戲）
-  if (location.hash === '#e2e') {
-    window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, render, go, openCraft, playDialog };
+  // 試玩用：網址後面加 #抄經，直接開一局、禁足中、進抄經小遊戲（不用等被抓）
+  if (decodeURIComponent(location.hash) === '#抄經') {
+    S = E.newState(D);
+    S.groundUntil = S.day + 1;
+    screen = 'home';
+    setTimeout(openSutra, 0);
   }
-  // 標題曲：瀏覽器要等玩家第一次點擊／按鍵才准出聲。assets/audio/bgm_title.lite.mp3 沒有就播主題曲
-  const titleBgm = () => { if (screen === 'title' && !dlg) { A.unlock(); A.playBgm('title', 'main'); } };
-  document.addEventListener('pointerdown', titleBgm, { once: true });
-  document.addEventListener('keydown', titleBgm, { once: true });
+  if (location.hash === '#e2e') {
+    window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, sutra: () => sutra, render, go, openCraft, playDialog,
+      card: async () => (await window.ShareCard.draw(cardData())).toDataURL('image/png'),
+      ending: (step = 1) => { S.result = computeEnding(false); endStep = step; bookOpen = false; go('ending'); } };
+  }
+  // 標題曲：一打開就試著播；瀏覽器擋下（還沒點過畫面）時，標題頁顯示「點一下畫面播放音樂」，
+  // 第一次點擊或按鍵就開始播。assets/audio/bgm_title.lite.mp3 沒有就播主題曲
+  const titleBgm = () => {
+    if (screen !== 'title' || dlg) return;
+    A.unlock();
+    A.playBgm('title', 'main');
+    app.querySelector('.music-hint')?.remove();
+  };
+  if (screen === 'title' && !A.isMuted()) {
+    A.playBgm('title', 'main');
+    setTimeout(() => { if (screen === 'title' && !A.isPlaying() && !A.isMuted()) { const t = app.querySelector('.title-screen'); if (t && !t.querySelector('.music-hint')) t.insertAdjacentHTML('beforeend', '<div class="music-hint">♪ 點一下畫面播放音樂</div>'); } }, 600);
+  }
+  document.addEventListener('pointerdown', titleBgm, { once: true, capture: true });
+  document.addEventListener('keydown', titleBgm, { once: true, capture: true });
   render();
   preloadImages();
 })();

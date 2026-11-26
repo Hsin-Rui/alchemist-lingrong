@@ -1,0 +1,44 @@
+# epic-ending-share 的 story，表格順序＝建造順序。
+[[entry]]
+id = 1
+type = "story"
+title = "新封號與十日戰績計數"
+description = "S.stats 加投其所好、親自交貨、包捐代交、完美成品、原著重現的次數；TITLE_CHECK 加 4 個新封號；TITLES 排成 16 個、順位依模擬結果；#結局 測試頁的隨機戰績跟著補。"
+verify = "單元測試每個新封號的達成／差一點不達成；node tools/simulate.js 跑出 16 個封號的拿到比例，TITLES 依稀有度排序。"
+covers = ["R2"]
+after = ["3.3"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "結局畫面一：恩寵揭曉"
+description = "第 10 天夜晚之後先進恩寵揭曉：太監宣旨、恩寵榜從第 4 名往第 1 名一條條長出來；零溶第一→「即日起改姓鈕祜祿！」大字＋壞笑立繪；對手第一→她得意立繪、零溶縮在旁邊、補零溶處境一句；按鈕「看看零溶得了什麼封號 →」。"
+verify = "截圖零溶第一與對手第一兩種（400px 寬）；鍵盤 e2e 能從畫面一按 Enter 進畫面二。"
+covers = ["R1", "R4"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "結局畫面二：封號蓋章與 kuso 戰績"
+description = "聖旨展開、主封號蓋章、加封一個個跳出；十日戰績用 kuso 說法列出最有梗的 3–4 條；按鈕分享到 FB／其他分享／再玩一次；封號冊收合在下方，點印章看說明。"
+verify = "單元測試戰績句的挑選；截圖兩種情境；鍵盤 e2e 走到再玩一次。"
+covers = ["R1", "R4"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "分享圖卡與分享按鈕"
+description = "canvas 畫 1200×630 圖卡；手機系統分享帶圖檔、不支援就下載 PNG；「分享到 FB」開 FB 分享網址視窗；index.html 加 og:title／og:description／og:image（固定圖卡）。"
+verify = "headless Chrome 產出圖卡 PNG 檢查內容；按鈕在不支援 navigator.share 時會下載圖檔。"
+covers = ["R3"]
+after = [3]
+hitl = false
+risk = "medium"

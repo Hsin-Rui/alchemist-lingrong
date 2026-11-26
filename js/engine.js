@@ -86,10 +86,22 @@
     return out;
   };
   // 珠珠停在 pos（0～100，橫條的百分比位置）屬於哪一區：'down'|'keep'|'up'
-  function finishZone(D, pos) {
+  // zones 可省略（預設 RULES.craft.zones）；起鍋每次用 jitterZones 浮動過的分區
+  function finishZone(D, pos, zones) {
+    const Z = zones || D.RULES.craft.zones;
     let x = 0;
-    for (const [w, z] of D.RULES.craft.zones) { x += w; if (pos < x) return z; }
-    return D.RULES.craft.zones[D.RULES.craft.zones.length - 1][1];
+    for (const [w, z] of Z) { x += w; if (pos < x) return z; }
+    return Z[Z.length - 1][1];
+  }
+  // 起鍋分區每次浮動：兩端降級區各 8～18%、升級區 9～17% 且位置在 30～70% 之間，其餘是維持（每段至少 8%）
+  function jitterZones(rand) {
+    const r = (a, b) => a + rand() * (b - a);
+    const d1 = Math.round(r(8, 18)), d2 = Math.round(r(8, 18)), u = Math.round(r(9, 17));
+    let c = r(30, 70);
+    c = Math.min(Math.max(c, d1 + 8 + u / 2), 100 - d2 - 8 - u / 2);
+    const k1 = Math.round(c - u / 2 - d1);
+    const k2 = 100 - d1 - k1 - u - d2;
+    return [[d1, 'down'], [k1, 'keep'], [u, 'up'], [k2, 'keep'], [d2, 'down']];
   }
   // 起鍋：只作用在最強的那種特性（平手依 D.TRAITS 順序）；升到最高 3 級、降到 0 就消失。沒有特性 → 不變
   function applyFinish(D, tr, zone) {
@@ -190,7 +202,7 @@
       orders: [], hand: [], seq: 0,
       flip: null, bribe: 0, bribedToday: false, groundUntil: 0,
       noFlipNights: 0, empressBoost: false, tired: false,
-      stats: { spikesUsed: 0, success: 0, caught: 0, groundedDays: 0, victims: [], ruined: [], sings: 0, bribes: 0, junk: 0, births: 0, muskRuin: 0 },
+      stats: { spikesUsed: 0, success: 0, caught: 0, groundedDays: 0, victims: [], ruined: [], sings: 0, bribes: 0, junk: 0, births: 0, muskRuin: 0, sutras: 0, loves: 0, selfDeliver: 0, proxyDeliver: 0, perfect: 0, yuanzhu: 0 },
       log: [], dayLog: [], result: null,
     };
   }
@@ -207,10 +219,28 @@
     jingshi: (S) => S.stats.bribes >= 2,
     miaoyin: (S) => S.stats.sings >= 2,
     bailian: (S) => S.stats.spikesUsed === 0,
+    yuanzhu: (S) => (S.stats.yuanzhu || 0) >= 1,
+    michelin: (S) => (S.stats.perfect || 0) >= 1,
+    ganlu: (S) => (S.stats.sutras || 0) >= 3,
+    baojuan: (S) => (S.stats.selfDeliver || 0) === 0 && (S.stats.proxyDeliver || 0) >= 3,
     heian: (S) => S.stats.junk >= 1,
     zhongsi: (S) => S.stats.births >= 1,
     touming: () => false,
   };
+
+  // 十日戰績：依 D.END_STATS 的順序挑有發生的前 max 條 → [{ n, text, chip }]；一次都沒下料時第一條是「清清白白」。
+  function endingStats(D, S, max = 4) {
+    const st = { ...S.stats };
+    const val = (k) => (k === 'ruined' ? (st.ruined || []).length : st[k] || 0);
+    const out = [];
+    if (!st.spikesUsed) out.push({ n: D.END_CLEAN[0], text: D.END_CLEAN[1], chip: '下料' });
+    D.END_STATS.forEach((x) => {
+      if (out.length >= max || !val(x.key)) return;
+      const tpl = x.solo && !st.selfDeliver ? x.solo : x.text;
+      out.push({ n: val(x.key), text: tpl.replace(/\{(\w+)\}/g, (_, k) => st[k] || 0), chip: x.chip });
+    });
+    return out;
+  }
 
   // 純函式：before 是之前的封號冊（由外殼傳入）；不碰 localStorage、不存檔。
   function computeEnding(D, S, before) {
@@ -226,6 +256,8 @@
     const book = [...new Set([...before, ...titles.map((t) => t.id)])];
     return {
       rank, top, opening,
+      board: [...D.ALL].sort((a, b) => f[b] - f[a] || (a === 'lingrong') - (b === 'lingrong')).map((who) => ({ who, favor: f[who] })),
+      stats: endingStats(D, S),
       main: titles[0], extra: titles.slice(1), book,
       fresh: titles.map((t) => t.id).filter((id) => !before.includes(id)),
     };
@@ -291,6 +323,14 @@
       return { ...out, txt: `不孕 ${R.fx.infertile}`, cls: 'good' };
     }
     return { ...out, txt: S.flip === who ? `${it.debuff} ${R.fx[spike]}・今晚出包` : it.debuff, cls: 'good', it }; // 不是今晚侍寢的人：不提醒會白費
+  }
+
+  const bump = (S, k, n = 1) => { S.stats[k] = (S.stats[k] || 0) + n; };
+  // 完美成品：3 種特性都 3 級（炎洗宮米其林）
+  const isPerfect = (tr) => Object.values(tr || {}).filter((lv) => lv >= 3).length >= 3;
+  // 原著重現：舒痕膠加麝香送到真環手上，而且麝香有發揮（沒被抓、不是無效）
+  function markYuanzhu(S, who, item, res) {
+    if (who === 'zhenhuan' && item.product === 'shuhen' && item.spike === 'musk' && !res.caught && !res.useless) bump(S, 'yuanzhu');
   }
 
   // 真正下料（擲骰、改狀態、推 S.log/S.stats）。rand 注入。
@@ -929,6 +969,7 @@
     if (spike) invAdd(S, spike, -1);
     if (toInv) invAdd(S, product);
     const tr = product === 'junk' ? {} : finalTraits(D, trs, craftSel.stirs, craftSel.finish);
+    if (isPerfect(tr)) bump(S, 'perfect');
     const item = toInv ? null : { id: ++S.seq, product, spike: product === 'junk' ? null : spike, forOrder: null, tr };
     // 從訂單進來的就送那張訂單；否則先找調合時預測的對象（forWho）要這個成品、還沒備好的訂單，
     // 再找任何還沒備好的同品項訂單。找到就把成品綁在那張訂單上。
@@ -956,6 +997,8 @@
     S.hand = S.hand.filter((h) => h !== item);
     const who = order.who;
     const res = applySpike(D, S, who, item.spike, 'deliver', rand, item.tr);
+    bump(S, proxy ? 'proxyDeliver' : 'selfDeliver');
+    markYuanzhu(S, who, item, res);
     let reward = 0;
     let friendDelta = res.friendDelta || 0;
     if (!res.caught) {
@@ -967,6 +1010,36 @@
     S.result = { kind: 'deliver', who, product: item.product, spike: item.spike, reward, friendDelta, proxy, ...res };
     S.dayLog.push(`${proxy ? '包捐代交' : '交貨'}給${charName(D, who)}：${res.caught ? '被抓！' : `賞銀 +${reward}`}${res.label ? `，${res.label}` : ''}`);
     return S.result;
+  }
+
+  // ───────── 教學模式（§15.2）─────────
+  // 第一天擺成教學局面：沒有桂花（得去御花園採）、訂單只有真環的藕粉桂花糖糕。在 startDay 之後呼叫。
+  function setupTutorial(D, S) {
+    S.tutorial = { step: 'gather' };
+    S.inv.osmanthus = 0;
+    S.lots = S.lots.filter((l) => l.id !== 'osmanthus');
+    if (!(S.inv.lotus > 0)) S.inv.lotus = 1;
+    S.orders = [{ id: ++S.seq, who: 'zhenhuan', product: 'cake', due: S.day + D.RULES.orderDays - 1 }];
+    return S.orders[0];
+  }
+
+  // ───────── 禁足抄經（§15.5）─────────
+  const SUTRA_PUNCT = /[，。、！？；：「」]/;
+  // 一句拆成字塊：去掉標點、打亂（rand 注入）。回 [{ ch, i }]，i＝這個字在句中（不含標點）的順序
+  function sutraTiles(line, rand) {
+    const tiles = [...line].filter((c) => !SUTRA_PUNCT.test(c)).map((ch, i) => ({ ch, i }));
+    for (let k = tiles.length - 1; k > 0; k--) { const j = Math.floor(rand() * (k + 1)); [tiles[k], tiles[j]] = [tiles[j], tiles[k]]; }
+    return tiles;
+  }
+  // 抄完一句：只有禁足能抄；花 1 時辰、抄經次數 +1、手上多一本《後宮心經》
+  function copySutra(D, S) {
+    if (!(S.day <= S.groundUntil)) return { blocked: true };
+    S.slot++;
+    S.stats.sutras = (S.stats.sutras || 0) + 1;
+    const item = { id: ++S.seq, product: 'sutra', spike: null, forOrder: null, tr: {} };
+    S.hand.push(item);
+    S.dayLog.push('抄了一本《後宮心經》');
+    return { ok: true, itemId: item.id };
   }
 
   // 拜訪各宮：花 1 時辰。handId 空＝空手（友好 +1，不擲骰）；帶禮：rand>=收禮機率 → 拒收（禮物退回）；
@@ -982,6 +1055,14 @@
     const item = S.hand.find((h) => h.id === handId);
     if (!item || item.product === 'junk') return { noItem: true };
     S.slot++;
+    if (D.PRODUCTS[item.product].fixedGift) {
+      // 《後宮心經》：品質固定，送誰都 +gift、一定收下（不擲骰、不看喜好）
+      S.hand = S.hand.filter((h) => h !== item);
+      const friendDelta = addFriend(S, who, D.PRODUCTS[item.product].gift);
+      S.result = { kind: 'gift', who, product: item.product, spike: null, reaction: 'fixed', friendDelta, reward: 0, outcome: 'plain' };
+      S.dayLog.push(`拜訪${charName(D, who)}，送了${itemName(D, item.product)}`);
+      return S.result;
+    }
     const reaction = giftReaction(D, who, item.product, item.tr).kind;
     if (rand() >= acceptChance(D, S, who, reaction)) {
       S.result = { kind: 'gift', who, product: item.product, spike: item.spike, refused: true, reaction, friendDelta: 0 };
@@ -990,8 +1071,10 @@
     }
     S.hand = S.hand.filter((h) => h !== item);
     const res = applySpike(D, S, who, item.spike, 'gift', rand, item.tr);
+    markYuanzhu(S, who, item, res);
     let friendDelta = res.friendDelta || 0;
     if (!res.caught && !res.useless) friendDelta = addFriend(S, who, giftFriend(D, who, item.product, item.tr));
+    if (!res.caught && reaction === 'love') bump(S, 'loves');
     S.result = { kind: 'gift', who, product: item.product, spike: item.spike, reaction, friendDelta, reward: 0, ...res };
     S.dayLog.push(`拜訪${charName(D, who)}，送了${itemName(D, item.product)}${res.caught ? '，被抓！' : res.label ? `，${res.label}` : ''}`);
     return S.result;
@@ -1046,11 +1129,11 @@
   }
 
   const API = {
-    newState, TITLE_CHECK, computeEnding,
+    newState, TITLE_CHECK, computeEnding, endingStats,
     catchChance, riskLevel, pillowChance, flipWeights, flipOdds, chooseFlip,
     predict, applySpike, settleNight,
-    findRecipe, maskScore, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
-    potTraits, rollBubbles, stirTraits, finishZone, applyFinish, finalTraits,
+    findRecipe, setupTutorial, sutraTiles, copySutra, maskScore, acceptChance, giftReaction, giftFriend, visit, traitSum, bestLot, addUnit, takeUnit, mergeTraits, rollTraits,
+    potTraits, rollBubbles, stirTraits, finishZone, jitterZones, applyFinish, finalTraits,
     buy, sell, sellPrice, bribe, rejectOrder, readyItem, gather, buildGatherDungeon, gatherStep, gatherFov, gatherCanStep, gatherDist, GATHER_DIRS: G_DIRS, applyGatherHaul, craft, deliver, startDay, advanceDay,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
