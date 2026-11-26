@@ -28,10 +28,10 @@ window.GAME_DATA = (() => {
     liquor: { name: '烈酒', ch: '酒', type: 'mat', price: 20 },
     petal: { name: '紅花瓣', ch: '瓣', type: 'mat' },
     // 料（§7）
-    musk: { name: '麝香', ch: '麝', type: 'spike', price: 50, desc: '慢性毒。下滿 3 劑才不孕；有喜時 50% 小產', catch: 0.12, ground: 2 },
+    musk: { name: '麝香', ch: '麝', type: 'spike', price: 50, desc: '慢性毒。下滿 3 劑才不孕；有喜時 50% 小產', catch: 0.15, ground: 2 },
     safflower: { name: '紅花', ch: '紅', type: 'spike', desc: '猛藥。一次就不孕；有喜時小產並且不孕', catch: 0.45, ground: 4 },
-    cassava: { name: '木薯粉', ch: '薯', type: 'spike', price: 15, desc: '上吐下瀉一天，當晚侍寢必出包', catch: 0.18, ground: 1, debuff: '上吐下瀉' },
-    catnip: { name: '貓薄荷', ch: '貓', type: 'spike', price: 20, desc: '晚上招來一群貓咪，當晚侍寢必出包', catch: 0.18, ground: 1, debuff: '貓咪鬧場' },
+    cassava: { name: '木薯粉', ch: '薯', type: 'spike', price: 15, desc: '上吐下瀉一天，當晚侍寢必出包', catch: 0.22, ground: 1, debuff: '上吐下瀉' },
+    catnip: { name: '貓薄荷', ch: '貓', type: 'spike', price: 20, desc: '晚上招來一群貓咪，當晚侍寢必出包', catch: 0.22, ground: 1, debuff: '貓咪鬧場' },
   };
 
   // out: 'hand' 成品拿在手上（交貨、送禮）；'inv' 放回道具欄（例如煉出來的料）
@@ -151,13 +151,13 @@ window.GAME_DATA = (() => {
     // 滑妃開局就不孕（歡你香梗）
     status: { huafei: 'infertile', meizhuang: 'normal', zhenhuan: 'normal' },
     startInv: { pine: 1, bamboo: 1, lotus: 1, osmanthus: 1, pear: 1, jasmine: 1, plum: 1, jujube: 1, motherwort: 1, angelica: 1, pearl: 1, agarwood: 1 },
-    orderCountWeights: [[0, 25], [1, 45], [2, 30]],
+    orderCountWeights: [[0, 15], [1, 45], [2, 40]],
     maxOpenOrdersPerChar: 2,
     orderDays: 3, // 期限：當天＋之後 2 天
     // 恩寵
     serveFavor: 10,
     serveFailFavor: -10,
-    pillowFavor: 15, // 2026-11-25 模擬器調整：8→15，交情才划算
+    pillowFavor: 17, // 2026-11-25 模擬器調整：8→15，交情才划算
     singExtraFavor: 5, // 侍寢時演唱金縷衣：恩寵額外 +5（共 +15），隔天早上要休息
     birthFavor: 20,
     pregnancyChance: 0.3,
@@ -166,7 +166,7 @@ window.GAME_DATA = (() => {
     pillowBase: 20,
     pillowMax: 80, // 2026-11-25：60→80
     // 友好
-    deliverFriend: 5,
+    deliverFriend: 6,
     deliverTraitStep: 3, // 親自交：成品特性總和每 3 級，友好再 +1（§14.4）
     zuotaiChance: 0.25, // 滑妃的普通訂單換成坐胎藥的機率（她以為自己還能生）
     rejectFriend: -1,
@@ -174,7 +174,7 @@ window.GAME_DATA = (() => {
     caughtFriend: -30,
     giftAcceptBonus: 30, // 收禮機率 = 友好 + 30
     // 拜訪各宮（§14.1、§14.3）：伴手禮友好 =（成品 gift ＋喜歡特性每級 −討厭特性每級）× 係數；嫌棄時收禮機率再扣
-    giftCoef: { like: 1.2, plain: 1, hate: 0.8 },
+    giftCoef: { like: 1.5, plain: 1.2, hate: 0.9 },
     hateAcceptPenalty: 20,
     visitEmptyFriend: 1,
     // 敬事房
@@ -190,11 +190,11 @@ window.GAME_DATA = (() => {
     // 被抓機率 = 遮掩後的機率 × max(下限, 1 − 友好 ÷ 除數) × (交貨時再 × deliverCatchFactor)
     // 遮掩（§14.5）：遮掩分＝濃郁×2＋香氣＋甜蜜，每分 −6%，最低壓到 8%
     maskWeights: { nong: 2, xiang: 1, tian: 1 },
-    maskStep: 0.06,
-    maskFloor: 0.08,
+    maskStep: 0.05,
+    maskFloor: 0.1,
     friendCatchDivisor: 100,
-    friendCatchFloor: 0.2,
-    deliverCatchFactor: 0.5,
+    friendCatchFloor: 0.3,
+    deliverCatchFactor: 0.6,
     muskDoses: 3,
     muskMiscarryChance: 0.5,
     fx: {

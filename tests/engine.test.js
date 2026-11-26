@@ -434,7 +434,7 @@ test('visit：帶禮收下 → 友好照喜好公式；拒收 → refused、不�
   assert.strictEqual(r.kind, 'gift');
   assert.strictEqual(r.refused, undefined);
   assert.strictEqual(r.reaction, 'hate', '審沒裝不喜歡神仙玉女粉');
-  assert.strictEqual(S.friend.meizhuang, 40 + Math.round(D.PRODUCTS.yunv.gift * 0.8));
+  assert.strictEqual(S.friend.meizhuang, 40 + Math.round(D.PRODUCTS.yunv.gift * D.RULES.giftCoef.hate));
   assert.strictEqual(S.hand.length, 0);
   assert.strictEqual(S.slot, 1);
   const S2 = fresh();
@@ -459,11 +459,15 @@ test('visit：空手 → 花 1 時辰、友好 +1、不擲骰；黑暗料理不�
 });
 
 test('giftFriend：§14.3 表格四個例子與最低 0', () => {
-  assert.strictEqual(E.giftFriend(D, 'huafei', 'yunv', { hua: 3 }), 13);
-  assert.strictEqual(E.giftFriend(D, 'meizhuang', 'cake', { tian: 2, qing: 1 }), 10);
-  assert.strictEqual(E.giftFriend(D, 'zhenhuan', 'incense', { nong: 2 }), 6);
-  assert.strictEqual(E.giftFriend(D, 'huafei', 'tonic', {}), 5);
-  assert.strictEqual(E.giftFriend(D, 'huafei', 'cake', { qing: 3 }), 2, '(5−3)×0.8＝1.6 → 2');
+  // 伴手禮友好＝（成品 gift＋喜歡特性級數−討厭特性級數）× 係數（喜歡的成品／普通／不喜歡的成品），四捨五入、最低 0
+  const C = D.RULES.giftCoef;
+  const g = (p) => D.PRODUCTS[p].gift;
+  const f = (raw, coef) => Math.max(0, Math.round(raw * coef));
+  assert.strictEqual(E.giftFriend(D, 'huafei', 'yunv', { hua: 3 }), f(g('yunv') + 3, C.like));
+  assert.strictEqual(E.giftFriend(D, 'meizhuang', 'cake', { tian: 2, qing: 1 }), f(g('cake') + 3, C.like));
+  assert.strictEqual(E.giftFriend(D, 'zhenhuan', 'incense', { nong: 2 }), f(g('incense') - 2, C.plain));
+  assert.strictEqual(E.giftFriend(D, 'huafei', 'tonic', {}), f(g('tonic'), C.hate));
+  assert.strictEqual(E.giftFriend(D, 'huafei', 'cake', { qing: 3 }), f(g('cake') - 3, C.hate), '不喜歡的成品＋討厭的特性');
   const D2 = { ...D, PRODUCTS: { ...D.PRODUCTS, cake: { ...D.PRODUCTS.cake, gift: 1 } } };
   assert.strictEqual(E.giftFriend(D2, 'huafei', 'cake', { qing: 3 }), 0, '算出負數 → 0');
 });
@@ -475,7 +479,7 @@ test('giftReaction：投其所好／嫌棄／又愛又嫌／普通', () => {
   assert.strictEqual(E.giftReaction(D, 'huafei', 'tonic', {}).kind, 'hate', '不喜歡的成品');
   assert.strictEqual(E.giftReaction(D, 'meizhuang', 'zuotai', { hua: 1 }).kind, 'mixed', '喜歡的成品＋討厭的特性抵銷');
   assert.strictEqual(E.giftReaction(D, 'huafei', 'shuhen', {}).kind, 'plain');
-  assert.strictEqual(E.giftFriend(D, 'huafei', 'shuhen', {}), D.PRODUCTS.shuhen.gift, '普通＝基本值');
+  assert.strictEqual(E.giftFriend(D, 'huafei', 'shuhen', {}), Math.round(D.PRODUCTS.shuhen.gift * D.RULES.giftCoef.plain), '普通＝基本值 × 普通係數');
 });
 
 test('acceptChance：友好＋30%，嫌棄再 −20%，又愛又嫌不扣', () => {
@@ -524,13 +528,14 @@ test('startDay：滑妃的普通訂單有機會換成坐胎藥；有喜時照舊
 
 test('deliver：親自交友好＝5＋特性總和每 3 級 +1；包捐代交只拿賞銀、不加友好、不花時辰', () => {
   const mk = (tr) => { const S = fresh(); S.orders = [{ id: 1, who: 'meizhuang', product: 'cake', due: 3 }]; S.hand = [{ id: 1, product: 'cake', spike: null, forOrder: 1, tr }]; return S; };
+  const R = D.RULES;
   let S = mk({});
-  assert.strictEqual(E.deliver(D, S, 1, null, ONE).friendDelta, 5);
+  assert.strictEqual(E.deliver(D, S, 1, null, ONE).friendDelta, R.deliverFriend);
   assert.strictEqual(S.slot, 1);
   S = mk({ tian: 3, qing: 3, xiang: 3 });
-  assert.strictEqual(E.deliver(D, S, 1, null, ONE).friendDelta, 8);
+  assert.strictEqual(E.deliver(D, S, 1, null, ONE).friendDelta, R.deliverFriend + Math.floor(9 / R.deliverTraitStep));
   S = mk({ tian: 3, qing: 2 });
-  assert.strictEqual(E.deliver(D, S, 1, null, ONE).friendDelta, 6);
+  assert.strictEqual(E.deliver(D, S, 1, null, ONE).friendDelta, R.deliverFriend + Math.floor(5 / R.deliverTraitStep));
   S = mk({ tian: 3, qing: 3, xiang: 3 });
   const silver0 = S.silver;
   const r = E.deliver(D, S, 1, null, ONE, 'proxy');
@@ -1266,13 +1271,18 @@ test('拜訪台詞：三位妃嬪都有四種反應與拒收；嫌棄專屬句�
 test('catchChance：§14.5 遮掩分壓低（最低 8%）、再乘友好與交貨倍率', () => {
   const S = fresh();
   const near = (a, b) => Math.abs(a - b) < 1e-9;
+  const R = D.RULES;
+  const I = D.ITEMS;
+  const mask = (base, score) => Math.min(base, Math.max(R.maskFloor, base * (1 - R.maskStep * score)));
+  const fr = (v) => Math.max(R.friendCatchFloor, 1 - v / R.friendCatchDivisor);
   S.friend.meizhuang = 80;
-  assert.ok(near(E.catchChance(D, S, 'meizhuang', 'safflower', 'gift', { nong: 3, xiang: 3, tian: 3 }), 0.45 * 0.28 * 0.2), '紅花遮掩分 12 → 12.6%，友好 80 → ×0.2');
+  assert.ok(near(E.catchChance(D, S, 'meizhuang', 'safflower', 'gift', { nong: 3, xiang: 3, tian: 3 }), mask(I.safflower.catch, 12) * fr(80)), '紅花遮掩分 12、友好 80');
   S.friend.huafei = 10;
-  assert.ok(near(E.catchChance(D, S, 'huafei', 'musk', 'gift', { nong: 2, xiang: 1 }), 0.12 * 0.7 * 0.9), '麝香遮掩分 5 → 8.4%，友好 10 → ×0.9');
+  assert.ok(near(E.catchChance(D, S, 'huafei', 'musk', 'gift', { nong: 2, xiang: 1 }), mask(I.musk.catch, 5) * fr(10)), '麝香遮掩分 5、友好 10');
   S.friend.huafei = 0;
-  assert.ok(near(E.catchChance(D, S, 'huafei', 'cassava', 'gift', { nong: 3, xiang: 3, tian: 3 }), 0.08), '木薯粉遮掩到底 → 8%');
-  assert.ok(near(E.catchChance(D, S, 'huafei', 'cassava', 'deliver', {}), 0.18 * 0.5), '交貨再 ×0.5、沒特性不遮掩');
+  assert.ok(near(E.catchChance(D, S, 'huafei', 'cassava', 'gift', { nong: 3, xiang: 3, tian: 3 }), R.maskFloor), '木薯粉遮掩到底 → 下限');
+  assert.ok(near(E.catchChance(D, S, 'huafei', 'cassava', 'deliver', {}), I.cassava.catch * R.deliverCatchFactor), '交貨再乘交貨倍率、沒特性不遮掩');
+  assert.ok(E.catchChance(D, S, 'huafei', 'cassava', 'gift', { nong: 3, xiang: 3, tian: 3 }) < I.cassava.catch, '遮掩有效');
   assert.strictEqual(E.maskScore(D, { nong: 2, xiang: 1, tian: 1, hua: 3 }), 6);
 });
 
