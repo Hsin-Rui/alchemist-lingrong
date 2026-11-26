@@ -929,14 +929,41 @@
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(GAME_URL)}`, '_blank', 'noopener,width=600,height=560');
   }
 
+  // 分享圖卡（js/sharecard.js 畫 1200×630）：手機有系統分享（可帶圖檔）就用，否則下載 PNG
+  const canShareFiles = (() => {
+    try { return !!(navigator.canShare && navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] })); } catch { return false; }
+  })();
+  function cardData(e = S.result) {
+    const ling = e.top === 'lingrong';
+    return {
+      title: e.main.name,
+      comment: e.main.comment,
+      chips: [['恩寵', `第 ${e.rank} 名`], ...e.stats.slice(0, 3).map((x) => [x.chip, x.n])],
+      rank: ling ? '改姓鈕祜祿！' : `恩寵第 ${e.rank} 名`,
+      portrait: `assets/characters/${D.CHARS.lingrong.imgs[ling ? 'evil' : 'shock']}.webp`,
+      url: GAME_URL.replace(/^https:\/\//, '').replace(/\/$/, ''),
+    };
+  }
   async function share() {
     const e = S.result;
     const more = e.extra.length ? `，另外加封「${e.extra.map((t) => t.name).join('」「')}」` : '';
     const text = `我在《煉金術士零溶——逆襲a零溶》獲封「${e.main.name}」${more}！你也來試試：`;
-    const url = location.href;
+    let blob = null;
+    try { blob = await window.ShareCard.toBlob(await window.ShareCard.draw(cardData(e))); } catch { /* 畫不出來就只分享文字 */ }
+    const file = blob && new File([blob], 'lingrong-ending.png', { type: 'image/png' });
     try {
-      if (navigator.share) { await navigator.share({ title: '煉金術士零溶', text, url }); return; }
-      await navigator.clipboard.writeText(`${text}${url}`);
+      if (file && canShareFiles) { await navigator.share({ files: [file], title: '煉金術士零溶', text: `${text}${GAME_URL}` }); return; }
+      if (blob) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'lingrong-ending.png';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+        toast('圖卡存好了！可以貼到 FB、IG 或 LINE', 2600);
+        return;
+      }
+      if (navigator.share) { await navigator.share({ title: '煉金術士零溶', text, url: GAME_URL }); return; }
+      await navigator.clipboard.writeText(`${text}${GAME_URL}`);
       toast('已複製分享文字！');
     } catch { /* 使用者取消 */ }
   }
@@ -997,7 +1024,7 @@
       <section class="end-stats"><h2>十日戰績</h2>${e.stats.map((x) => `<div class="end-stat"><b>${x.n}</b><span>${x.text}</span></div>`).join('')}</section>
       <div class="end-btns">
         <button class="btn gold" data-a="sharefb">分享到 FB</button>
-        <button class="btn ghost-gold" data-a="share">其他分享</button>
+        <button class="btn ghost-gold" data-a="share">${canShareFiles ? '其他分享' : '存下圖卡'}</button>
         <button class="btn ghost-gold" data-a="start" data-def>再玩一次</button>
       </div>
       <button class="book-toggle" data-a="book" aria-expanded="${bookOpen}">封號冊　已收集 ${got} / ${D.TITLES.length}　${bookOpen ? '︿' : '›'}</button>
@@ -1995,6 +2022,7 @@
   }
   if (location.hash === '#e2e') {
     window.__e2e = { state: () => S, screen: () => screen, gather: () => gatherScene, sutra: () => sutra, render, go, openCraft, playDialog,
+      card: async () => (await window.ShareCard.draw(cardData())).toDataURL('image/png'),
       ending: (step = 1) => { S.result = computeEnding(false); endStep = step; bookOpen = false; go('ending'); } };
   }
   // 標題曲：一打開就試著播；瀏覽器擋下（還沒點過畫面）時，標題頁顯示「點一下畫面播放音樂」，

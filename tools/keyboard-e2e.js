@@ -657,6 +657,10 @@ function connect(url) {
     f = await focus();
     if (!f) { await press('ArrowDown'); f = await focus(); }
     check('結局預設＝再玩一次', f && f.key === 'start|#1', JSON.stringify(f));
+    check('分享按鈕跟瀏覽器能力一致（能分享檔案＝其他分享，否則＝存下圖卡）', await ev("(() => { let ok = false; try { ok = !!(navigator.canShare && navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] })); } catch {} return document.querySelector('[data-a=share]').textContent.trim() === (ok ? '其他分享' : '存下圖卡'); })()"));
+    const card = await ev("__e2e.card().then((u) => new Promise((r) => { const im = new Image(); im.onload = () => r([u.length, im.width, im.height]); im.src = u; }))");
+    check('分享圖卡畫得出來（1200×630）', card && card[0] > 50000 && card[1] === 1200 && card[2] === 630, JSON.stringify(card));
+    check('封號冊預設收合、點了會展開', await ev("(() => { if (document.querySelector('.title-book')) return false; document.querySelector('[data-a=book]').click(); return document.querySelectorAll('.seal-btn').length === window.GAME_DATA.TITLES.length; })()"));
     check('結局（深色面）框為琥珀', f && f.color === AMBER, f && f.color);
     await shot('ending-amber');
 

@@ -483,20 +483,20 @@ window.GAME_DATA = (() => {
 
   // 結局畫面一：零溶第一時，大字下面那一句（範例稿）
   const END_CROWD = '炎洗宮上下跪接聖旨，包捐哭成淚人。';
-  // 結局畫面二：十日戰績（kuso 說法）。依序挑有發生的前 4 條；{n} 換數字。
-  // key：S.stats 的欄位（ruined 取人數）；chip：分享圖卡上的短標籤。
+  // 結局畫面二：十日戰績（kuso 說法）。依序挑有發生的前 4 條；數字＝S.stats[key]（ruined 取人數）。
+  // text 裡的 {欄位} 換成 S.stats 的值；solo：一次都沒親自交貨時改用這句。chip：分享圖卡上的短標籤。
   const END_STATS = [
-    { key: 'spikesUsed', chip: '下料', text: (s) => [s.spikesUsed, `次下料，被溫太醫抓了 ${s.caught} 次`] },
-    { key: 'loves', chip: '投其所好', text: (s) => [s.loves, '次投其所好，各宮都說安妹妹最懂她'] },
-    { key: 'proxyDeliver', chip: '包捐代交', text: (s) => [s.proxyDeliver, s.selfDeliver ? '張訂單交給包捐代送，包捐腿都跑細了' : '張訂單全由包捐代交，安小主本人查無此人'] },
-    { key: 'sings', chip: '金縷衣', text: (s) => [s.sings, '次高歌金縷衣，黃上現在閉眼就聽得到'] },
-    { key: 'perfect', chip: '完美成品', text: (s) => [s.perfect, '鍋完美成品，御膳房派人來偷師'] },
-    { key: 'sutras', chip: '抄經', text: (s) => [s.sutras, '本後宮心經，甘露寺禪房已預留'] },
-    { key: 'ruined', chip: '斷了香火', text: (s) => [s.ruined.length, '位娘娘從此生不出來'] },
-    { key: 'bribes', chip: '紅包', text: (s) => [s.bribes, '次給敬事房包大紅包'] },
-    { key: 'junk', chip: '黑暗料理', text: (s) => [s.junk, '鍋黑暗料理，炎洗宮的鍋子還在冒煙'] },
-    { key: 'births', chip: '皇嗣', text: (s) => [s.births, '位皇嗣誕生，零溶笑得比誰都燦爛'] },
-    { key: 'selfDeliver', chip: '親自交貨', text: (s) => [s.selfDeliver, '張訂單親自送到各宮，腳都走痠了'] },
+    { key: 'spikesUsed', chip: '下料', text: '次下料，被溫太醫抓了 {caught} 次' },
+    { key: 'loves', chip: '投其所好', text: '次投其所好，各宮都說安妹妹最懂她' },
+    { key: 'proxyDeliver', chip: '包捐代交', text: '張訂單交給包捐代送，包捐腿都跑細了', solo: '張訂單全由包捐代交，安小主本人查無此人' },
+    { key: 'sings', chip: '金縷衣', text: '次高歌金縷衣，黃上現在閉眼就聽得到' },
+    { key: 'perfect', chip: '完美成品', text: '鍋完美成品，御膳房派人來偷師' },
+    { key: 'sutras', chip: '抄經', text: '本後宮心經，甘露寺禪房已預留' },
+    { key: 'ruined', chip: '斷了香火', text: '位娘娘從此生不出來' },
+    { key: 'bribes', chip: '紅包', text: '次給敬事房包大紅包' },
+    { key: 'junk', chip: '黑暗料理', text: '鍋黑暗料理，炎洗宮的鍋子還在冒煙' },
+    { key: 'births', chip: '皇嗣', text: '位皇嗣誕生，零溶笑得比誰都燦爛' },
+    { key: 'selfDeliver', chip: '親自交貨', text: '張訂單親自送到各宮，腳都走痠了' },
   ];
   const END_CLEAN = [0, '次下料，清清白白'];
 

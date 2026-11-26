@@ -67,7 +67,7 @@ context:
 - 主 session 直接實作與自審。
 - 原著重現的「得手」＝麝香沒被抓、也不是無效；親自交、代交、拜訪送禮都算。
 - 模擬器（quick）：原著重現精算／高手約 2%，與麝香代言人同級；米其林、甘露寺、包捐本體機器人不會刻意做，順位照 §9 暫定。
-- 驗證：node --test 110/110、simulate --quick。
+- 驗證：node --test 111/111、simulate --quick。
 
 ## Plan Change Log
 

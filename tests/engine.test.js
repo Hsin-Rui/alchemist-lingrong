@@ -1450,3 +1450,16 @@ test('TITLES 共 16 個，順位照 §9 第二輪，每個都有判定', () => {
   D.TITLES.forEach((t) => assert.strictEqual(typeof E.TITLE_CHECK[t.id], 'function', t.id));
   D.TITLES.forEach((t) => assert.ok(!/[A-Za-z]/.test((t.name + t.comment + t.hint).replace(/零溶a/g, '')), `${t.id} 不能有英文`));
 });
+
+test('十日戰績：依序挑有發生的前 4 條；沒下料先說清清白白；全由包捐代交換句', () => {
+  let S = fresh();
+  Object.assign(S.stats, { spikesUsed: 3, caught: 1, loves: 5, sings: 4, perfect: 1, bribes: 2, selfDeliver: 6 });
+  let st = E.endingStats(D, S);
+  assert.strictEqual(JSON.stringify(st.map((x) => [x.n, x.text])), JSON.stringify([[3, '次下料，被溫太醫抓了 1 次'], [5, '次投其所好，各宮都說安妹妹最懂她'], [4, '次高歌金縷衣，黃上現在閉眼就聽得到'], [1, '鍋完美成品，御膳房派人來偷師']]));
+  S = fresh();
+  Object.assign(S.stats, { proxyDeliver: 6, sutras: 4 });
+  st = E.endingStats(D, S);
+  assert.strictEqual(st[0].text, '次下料，清清白白');
+  assert.strictEqual(st[1].text, '張訂單全由包捐代交，安小主本人查無此人');
+  assert.strictEqual(st.length, 3);
+});

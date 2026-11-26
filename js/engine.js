@@ -236,8 +236,8 @@
     if (!st.spikesUsed) out.push({ n: D.END_CLEAN[0], text: D.END_CLEAN[1], chip: '下料' });
     D.END_STATS.forEach((x) => {
       if (out.length >= max || !val(x.key)) return;
-      const [n, text] = x.text({ ...st, ruined: st.ruined || [] });
-      out.push({ n, text, chip: x.chip });
+      const tpl = x.solo && !st.selfDeliver ? x.solo : x.text;
+      out.push({ n: val(x.key), text: tpl.replace(/\{(\w+)\}/g, (_, k) => st[k] || 0), chip: x.chip });
     });
     return out;
   }

@@ -1,5 +1,6 @@
 // 情境截圖：用 headless Chrome 開遊戲（#e2e），照劇本擺好狀態，存成 PNG，給人眼檢查畫面。
 // 用法：node tools/shots.js <輸出資料夾> [劇本名…]（不給劇本名＝全部）；SHOT_W=360 可改畫面寬度（模擬手機）
+// og：SHOT_W=1200 node tools/shots.js <dir> og，裁成 1200×630 存成 assets/og.jpg（index.html 的 og:image）
 // 需要：Node ≥ 22（內建 WebSocket）、Google Chrome（或環境變數 CHROME 指定路徑）
 const http = require('http');
 const fs = require('fs');
@@ -49,6 +50,9 @@ const SCENES = {
   'end1-rival': [SETUP + "S.favor.zhenhuan = 88; S.favor.lingrong = 64; S.favor.huafei = 55; S.favor.meizhuang = 40; Object.assign(S.stats, { proxyDeliver: 6, sutras: 4, bribes: 2 }); __e2e.ending(1);", 'WAIT4000'],
   'end2-ling': [SETUP + "S.favor.lingrong = 82; S.favor.zhenhuan = 66; S.favor.huafei = 52; S.favor.meizhuang = 41; Object.assign(S.stats, { spikesUsed: 3, caught: 1, success: 2, muskRuin: 1, yuanzhu: 1, perfect: 1, loves: 5, sings: 4, selfDeliver: 6 }); __e2e.ending(2);", 'WAIT2600'],
   'end2-rival': [SETUP + "S.favor.zhenhuan = 88; S.favor.lingrong = 64; S.favor.huafei = 55; S.favor.meizhuang = 40; Object.assign(S.stats, { proxyDeliver: 6, sutras: 4, bribes: 2 }); __e2e.ending(2);", 'WAIT2600'],
+  'card-ling': [SETUP + "S.favor.lingrong = 82; S.favor.zhenhuan = 66; S.favor.huafei = 52; S.favor.meizhuang = 41; Object.assign(S.stats, { spikesUsed: 3, caught: 1, success: 2, muskRuin: 1, yuanzhu: 1, perfect: 1, loves: 5, sings: 4, selfDeliver: 6 }); __e2e.ending(2); __e2e.card().then((u) => { document.body.innerHTML = '<img src=\"' + u + '\" style=\"display:block\">'; document.body.style.margin = '0'; });", 'WAIT1500'],
+  'card-rival': [SETUP + "S.favor.zhenhuan = 88; S.favor.lingrong = 64; S.favor.huafei = 55; S.favor.meizhuang = 40; Object.assign(S.stats, { proxyDeliver: 6, sutras: 4, bribes: 2 }); __e2e.ending(2); __e2e.card().then((u) => { document.body.innerHTML = '<img src=\"' + u + '\" style=\"display:block\">'; document.body.style.margin = '0'; });", 'WAIT1500'],
+  og: ["window.ShareCard.draw({ title: '改姓鈕祜祿？', comment: '十天內接訂單、調合、偷偷加料，安小主零溶能不能逆襲後宮？', chips: [['封號', '16 個'], ['期限', '10 天']], rank: '', portrait: 'assets/characters/lingrong_evil.webp', url: 'hsin-rui.github.io/alchemist-lingrong' }).then((c) => c.toDataURL('image/png')).then((u) => { document.body.innerHTML = '<img src=\"' + u + '\" style=\"display:block\">'; document.body.style.margin = '0'; });", 'WAIT1500'],
   shop: [SETUP + "__e2e.go('shop');", "document.querySelector('.scroll').scrollTop = 99999;"],
 };
 
