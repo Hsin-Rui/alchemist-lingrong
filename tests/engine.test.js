@@ -1389,14 +1389,15 @@ test('setupTutorial：沒有桂花（含帶特性的份）、訂單只有真環�
 });
 
 // ───────── 第二輪新封號（§9 第二輪）─────────
-test('炎洗宮米其林：做出 3 種特性都 3 級的成品 → stats.perfect++；差一級不算', () => {
+test('炎洗宮米其林：做出特性總和 ≥ 7 級的成品 → stats.perfect++；6 級不算', () => {
   const mk = () => { const S = fresh(); S.inv.lotus = 2; S.inv.osmanthus = 2; return S; };
   let S = mk();
-  E.craft(D, S, { mats: ['lotus', 'osmanthus'], stirs: [{ t: 'tian', v: 3 }, { t: 'xiang', v: 3 }, { t: 'qing', v: 3 }] });
+  E.craft(D, S, { mats: ['lotus', 'osmanthus'], stirs: [{ t: 'tian', v: 3 }, { t: 'xiang', v: 3 }, { t: 'qing', v: 1 }] });
+  assert.strictEqual(D.RULES.michelinSum, 7);
   assert.strictEqual(S.stats.perfect, 1);
   assert.strictEqual(E.TITLE_CHECK.michelin(S), true);
   S = mk();
-  E.craft(D, S, { mats: ['lotus', 'osmanthus'], stirs: [{ t: 'tian', v: 3 }, { t: 'xiang', v: 3 }, { t: 'qing', v: 2 }] });
+  E.craft(D, S, { mats: ['lotus', 'osmanthus'], stirs: [{ t: 'tian', v: 3 }, { t: 'xiang', v: 2 }, { t: 'qing', v: 1 }] });
   assert.strictEqual(S.stats.perfect, 0);
   assert.strictEqual(E.TITLE_CHECK.michelin(S), false);
 });
@@ -1428,7 +1429,7 @@ test('甘露寺預備役：抄經 3 次以上', () => {
   assert.strictEqual(E.TITLE_CHECK.ganlu(S), true);
 });
 
-test('包捐才是本體：訂單全由包捐代交且至少 3 張；親自交過一次就不算', () => {
+test('包捐才是本體：包捐代交 ≥ 5 次就拿到（親自交過也算）', () => {
   const run = (hows) => {
     const S = fresh();
     hows.forEach((how, i) => {
@@ -1438,12 +1439,14 @@ test('包捐才是本體：訂單全由包捐代交且至少 3 張；親自交�
     });
     return S;
   };
-  assert.strictEqual(E.TITLE_CHECK.baojuan(run(['proxy', 'proxy', 'proxy'])), true);
-  assert.strictEqual(E.TITLE_CHECK.baojuan(run(['proxy', 'proxy'])), false, '只有 2 張');
-  const S = run(['proxy', 'proxy', 'proxy', 'self']);
-  assert.strictEqual(S.stats.selfDeliver, 1);
-  assert.strictEqual(S.stats.proxyDeliver, 3);
-  assert.strictEqual(E.TITLE_CHECK.baojuan(S), false);
+  const P = (n) => Array(n).fill('proxy');
+  assert.strictEqual(D.RULES.baojuanProxy, 5);
+  assert.strictEqual(E.TITLE_CHECK.baojuan(run(P(5)), D), true);
+  assert.strictEqual(E.TITLE_CHECK.baojuan(run(P(4)), D), false, '只有 4 次');
+  const S = run([...P(5), 'self', 'self']);
+  assert.strictEqual(S.stats.selfDeliver, 2);
+  assert.strictEqual(S.stats.proxyDeliver, 5);
+  assert.strictEqual(E.TITLE_CHECK.baojuan(S, D), true, '親自交過也算');
 });
 
 test('投其所好次數：收下且反應 love 才算；拒收不算', () => {
@@ -1465,7 +1468,7 @@ test('十日戰績：依序挑有發生的前 4 條；沒下料先說清清白�
   let S = fresh();
   Object.assign(S.stats, { spikesUsed: 3, caught: 1, loves: 5, sings: 4, perfect: 1, bribes: 2, selfDeliver: 6 });
   let st = E.endingStats(D, S);
-  assert.strictEqual(JSON.stringify(st.map((x) => [x.n, x.text])), JSON.stringify([[3, '次下料，被溫太醫抓了 1 次'], [5, '次投其所好，各宮都說安妹妹最懂她'], [4, '次高歌金縷衣，黃上現在閉眼就聽得到'], [1, '鍋完美成品，御膳房派人來偷師']]));
+  assert.strictEqual(JSON.stringify(st.map((x) => [x.n, x.text])), JSON.stringify([[3, '次下料，被溫太醫抓了 1 次'], [5, '次投其所好，各宮都說安妹妹最懂她'], [4, '次高歌金縷衣，黃上現在閉眼就聽得到'], [1, '鍋極品成品，御膳房派人來偷師']]));
   S = fresh();
   Object.assign(S.stats, { proxyDeliver: 6, sutras: 4 });
   st = E.endingStats(D, S);

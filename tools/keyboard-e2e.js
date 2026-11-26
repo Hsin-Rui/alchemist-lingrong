@@ -714,6 +714,7 @@ function connect(url) {
     await ev("document.querySelector('.tut-spot[data-a=deliver]').click()");
     await drain();
     for (let i = 0; i < 6 && (await scr()) !== 'night'; i++) { await ev("(document.querySelector('[data-a=resultdone]') || document.querySelector('[data-a=sleepyes]') || document.querySelector('[data-a=sleep]') || document.querySelector('[data-a=sing][data-v=\"0\"]'))?.click()"); await sleep(200); await drain(); }
+    await sleep(300); await drain(); // 夜晚對話可能在畫面切到夜晚之後才開始播
     check('教學：第一天晚上 A29', dlgSeen.some((t) => t.includes('今晚侍寢的娘娘，恩寵會漲')));
     await ev("document.querySelector('[data-a=next]')?.click()");
     await sleep(300);
