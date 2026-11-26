@@ -28,10 +28,10 @@ window.GAME_DATA = (() => {
     liquor: { name: '烈酒', ch: '酒', type: 'mat', price: 20 },
     petal: { name: '紅花瓣', ch: '瓣', type: 'mat' },
     // 料（§7）
-    musk: { name: '麝香', ch: '麝', type: 'spike', price: 50, desc: '慢性毒。下滿 3 劑才不孕；有喜時 50% 小產', catch: 0.15, ground: 2 },
+    musk: { name: '麝香', ch: '麝', type: 'spike', price: 50, desc: '慢性毒。下滿 3 劑才不孕；有喜時 50% 小產', catch: 0.18, ground: 2 },
     safflower: { name: '紅花', ch: '紅', type: 'spike', desc: '猛藥。一次就不孕；有喜時小產並且不孕', catch: 0.45, ground: 4 },
-    cassava: { name: '木薯粉', ch: '薯', type: 'spike', price: 15, desc: '上吐下瀉一天，當晚侍寢必出包', catch: 0.22, ground: 1, debuff: '上吐下瀉' },
-    catnip: { name: '貓薄荷', ch: '貓', type: 'spike', price: 20, desc: '晚上招來一群貓咪，當晚侍寢必出包', catch: 0.22, ground: 1, debuff: '貓咪鬧場' },
+    cassava: { name: '木薯粉', ch: '薯', type: 'spike', price: 15, desc: '上吐下瀉一天，當晚侍寢必出包', catch: 0.25, ground: 1, debuff: '上吐下瀉' },
+    catnip: { name: '貓薄荷', ch: '貓', type: 'spike', price: 20, desc: '晚上招來一群貓咪，當晚侍寢必出包', catch: 0.25, ground: 1, debuff: '貓咪鬧場' },
   };
 
   // out: 'hand' 成品拿在手上（交貨、送禮）；'inv' 放回道具欄（例如煉出來的料）
@@ -157,7 +157,7 @@ window.GAME_DATA = (() => {
     // 恩寵
     serveFavor: 10,
     serveFailFavor: -10,
-    pillowFavor: 17, // 2026-11-25 模擬器調整：8→15，交情才划算
+    pillowFavor: 10, // 2026-11-26 數值報告（docs/round2/sim-report.html）：+15 太好贏，降到 +10 // 2026-11-25 模擬器調整：8→15，交情才划算
     singExtraFavor: 5, // 侍寢時演唱金縷衣：恩寵額外 +5（共 +15），隔天早上要休息
     birthFavor: 20,
     pregnancyChance: 0.3,
@@ -167,6 +167,9 @@ window.GAME_DATA = (() => {
     pillowMax: 80, // 2026-11-25：60→80
     // 友好
     deliverFriend: 6,
+    // 封號門檻（2026-11-26 放寬）：米其林＝一份成品特性總和 ≥ 7 級；包捐才是本體＝包捐代交 ≥ 5 次
+    michelinSum: 7,
+    baojuanProxy: 5,
     deliverTraitStep: 3, // 親自交：成品特性總和每 3 級，友好再 +1（§14.4）
     zuotaiChance: 0.25, // 滑妃的普通訂單換成坐胎藥的機率（她以為自己還能生）
     rejectFriend: -1,
@@ -174,7 +177,7 @@ window.GAME_DATA = (() => {
     caughtFriend: -30,
     giftAcceptBonus: 30, // 收禮機率 = 友好 + 30
     // 拜訪各宮（§14.1、§14.3）：伴手禮友好 =（成品 gift ＋喜歡特性每級 −討厭特性每級）× 係數；嫌棄時收禮機率再扣
-    giftCoef: { like: 1.5, plain: 1.2, hate: 0.9 },
+    giftCoef: { like: 1.3, plain: 1.1, hate: 0.85 },
     hateAcceptPenalty: 20,
     visitEmptyFriend: 1,
     // 敬事房
@@ -190,11 +193,11 @@ window.GAME_DATA = (() => {
     // 被抓機率 = 遮掩後的機率 × max(下限, 1 − 友好 ÷ 除數) × (交貨時再 × deliverCatchFactor)
     // 遮掩（§14.5）：遮掩分＝濃郁×2＋香氣＋甜蜜，每分 −6%，最低壓到 8%
     maskWeights: { nong: 2, xiang: 1, tian: 1 },
-    maskStep: 0.05,
-    maskFloor: 0.1,
+    maskStep: 0.045,
+    maskFloor: 0.12,
     friendCatchDivisor: 100,
-    friendCatchFloor: 0.3,
-    deliverCatchFactor: 0.6,
+    friendCatchFloor: 0.35,
+    deliverCatchFactor: 0.65,
     muskDoses: 3,
     muskMiscarryChance: 0.5,
     fx: {
@@ -490,7 +493,7 @@ window.GAME_DATA = (() => {
     { key: 'loves', chip: '投其所好', text: '次投其所好，各宮都說安妹妹最懂她' },
     { key: 'proxyDeliver', chip: '包捐代交', text: '張訂單交給包捐代送，包捐腿都跑細了', solo: '張訂單全由包捐代交，安小主本人查無此人' },
     { key: 'sings', chip: '金縷衣', text: '次高歌金縷衣，黃上現在閉眼就聽得到' },
-    { key: 'perfect', chip: '完美成品', text: '鍋完美成品，御膳房派人來偷師' },
+    { key: 'perfect', chip: '極品成品', text: '鍋極品成品，御膳房派人來偷師' },
     { key: 'sutras', chip: '抄經', text: '本後宮心經，甘露寺禪房已預留' },
     { key: 'ruined', chip: '斷了香火', text: '位娘娘從此生不出來' },
     { key: 'bribes', chip: '紅包', text: '次給敬事房包大紅包' },

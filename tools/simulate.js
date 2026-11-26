@@ -1,5 +1,5 @@
 // 平衡模擬器：用機器人玩很多局，統計結果。
-// 用法：node tools/simulate.js [局數] [--quick]
+// 用法：node tools/simulate.js [局數] [--quick]；數值掃描見 tools/sweep.js，七種機器人的 HTML 報告見 tools/sim-report.js
 //   預設採集走地下城：先用 tools/gather-bot.js 的「會躲」機器人每張地圖玩 POOL 趟，
 //   整局模擬時每次採集從中抽一趟的收穫（地下城很慢，這樣才跑得動）。--quick＝舊的一鍵採集（2～3 個）。
 // 規則一律走遊戲引擎（js/engine.js）；模擬器只提供 bot 決策、mulberry32 種子、variant 覆蓋、
@@ -20,6 +20,18 @@ function loadData() {
 // buy/bribe/flipWeights/catchChance/acceptChance/computeEnding。此處只保留 bot 介面的薄膠水：
 // 前置守衛（禁足、材料是否足夠）、把引擎結構化回傳翻成 S.m 統計。擲骰一律走注入的 rand，
 // 與引擎同序，故固定種子下輸出與重構前一致。
+// 撈泡泡（§13.4 第二階段的簡化）：撈 stirs 次，每次從 3 顆泡泡挑 1 顆。焦泡 20%、大泡泡（+2）15%。
+// skill 'random'＝隨手撈；'mask'＝挑遮掩特性（濃郁×2、香氣、甜蜜）和收禮人喜歡的特性，避開焦泡。
+function scoop(D, st, forWho, rand) {
+  const keys = Object.keys(D.TRAITS);
+  const like = forWho && D.PREFS[forWho] ? D.PREFS[forWho].likeT : [];
+  const want = (b) => (b.t === 'burnt' ? -10 : b.v * ((D.RULES.maskWeights[b.t] || 0) + (like.includes(b.t) ? 1.5 : 0) + 0.1));
+  return Array.from({ length: D.RULES.craft.stirs }, () => {
+    const cands = Array.from({ length: 3 }, () => (rand() < 0.2 ? { t: 'burnt' } : { t: keys[Math.floor(rand() * keys.length)], v: rand() < 0.15 ? 2 : 1 }));
+    return st.skill === 'mask' ? cands.reduce((a, b) => (want(b) > want(a) ? b : a)) : cands[Math.floor(rand() * 3)];
+  });
+}
+
 function play(Dv, R, bot, rand, hauls) {
   const S = E.newState(Dv);
   // 統計物件（引擎不寫 S.m，由本檔從報告／結果翻出）
@@ -62,17 +74,39 @@ function play(Dv, R, bot, rand, hauls) {
       else E.gather(Dv, S, loc, rand);
       return true;
     },
-    craft(mats, spike) {
+    craft(mats, spike, forWho) {
       // 材料不足由 bot 端先擋（引擎的 craft 不檢查）
       if (mats.some((id) => have(id) < mats.filter((m) => m === id).length)) return false;
-      return E.craft(Dv, S, { mats, spike }).product;
+      const sel = { mats, spike };
+      // bot.craft：會撈泡泡／會失手的機器人（新手、甄嬛傳迷）；沒設定＝快速調合、不失手（原本五種，不多擲骰）
+      const st = bot.craft;
+      if (st) {
+        if (rand() < st.fail) {
+          // 記錯配方：換掉一樣素材，做出黑暗料理
+          const x = Object.keys(S.inv).find((id) => have(id) > 0 && Dv.ITEMS[id] && Dv.ITEMS[id].type === 'mat' && !mats.includes(id) && !E.findRecipe(Dv, [mats[0], id]));
+          if (x) sel.mats = [mats[0], x];
+        } else if (rand() < st.bubble) {
+          sel.stirs = scoop(Dv, st, forWho, rand);
+          const z = rand();
+          sel.finish = z < st.finish[0] ? 'up' : z < st.finish[0] + st.finish[1] ? 'keep' : 'down';
+        }
+      }
+      return E.craft(Dv, S, sel).product;
+    },
+    // 禁足抄經（花 1 時辰，手上多一本心經）
+    copySutra() {
+      if (!grounded() || S.slot >= R.slotsPerDay) return false;
+      const r = E.copySutra(Dv, S);
+      if (r.ok) S.m.sutras = (S.m.sutras || 0) + 1;
+      return !!r.ok;
     },
     // 禁足時包捐代交（只拿賞銀、不花時辰）；否則親自交
-    deliver(order) {
+    deliver(order, want) {
       // 沿用重構前的選件：手上第一個符合品項的成品
       const item = S.hand.find((h) => h.product === order.product);
       if (!item) return false;
-      const how = grounded() ? 'proxy' : 'self';
+      // 禁足時一定代交；bot.proxyChance：沒禁足也有機率讓包捐代交（新手）；want 指定（甄嬛傳迷）
+      const how = grounded() ? 'proxy' : want || (bot.proxyChance && rand() < bot.proxyChance ? 'proxy' : 'self');
       const res = E.deliver(Dv, S, order.id, item.id, rand, how);
       S.m.delivered++;
       if (how === 'proxy') S.m.proxy++;
@@ -102,7 +136,8 @@ function play(Dv, R, bot, rand, hauls) {
     let guard = 0;
     while (S.slot < R.slotsPerDay && guard++ < 10) { if (!bot.act(api)) break; }
     bot.evening?.(api);
-    const sing = S.flip === 'lingrong' && !grounded() && bot.sing !== false;
+    // bot.sing：true＝每次都唱、false＝不唱、數字＝唱的機率（只有數字才多擲骰，原本的機器人骰序不變）
+    const sing = S.flip === 'lingrong' && !grounded() && bot.sing !== false && (typeof bot.sing !== 'number' || rand() < bot.sing);
     const nr = E.settleNight(Dv, S, { sing, rand });
     const sv = nr.serve;
     if (sv && sv.target === 'lingrong' && sv.kind !== 'grounded') S.m.lingFlips++;
@@ -122,9 +157,9 @@ function play(Dv, R, bot, rand, hauls) {
 
 // ───────── 機器人 ─────────
 // 共通：交貨 > 做訂單 > 採集缺的素材。spikeFor 決定做訂單時要不要加料。
-function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, bribeSmart = false, sing = true, makeSaff = false, buySpikes = false, social = false }) {
+function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, bribeSmart = false, sing = true, makeSaff = false, buySpikes = false, social = false, sutra = false, proxyChance = 0, craft = null }) {
   return {
-    name, sing,
+    name, sing, proxyChance, craft,
     act(G) {
       const { S, D, have } = G;
       // 0. 有錢就打點敬事房（明天被翻的機率）
@@ -184,6 +219,7 @@ function makeBot({ name, spikeFor, giftSpike = false, bribeReserve = Infinity, b
         if (social && D.TARGETS.includes(S.flip)) return G.visit(S.flip, null);
         return G.gather(makeSaff ? 'taiyi' : 'garden');
       }
+      if (sutra && G.grounded()) return G.copySutra(); // 禁足沒事做 → 抄經
       return false; // 禁足又沒事做 → 就寢
     },
   };
@@ -234,7 +270,7 @@ function dungeonHauls(D, n = POOL) {
   return out;
 }
 
-function runVariant(D0, variant, N) {
+function runVariant(D0, variant, N, bots = BOTS) {
   const D = JSON.parse(JSON.stringify(D0, (k, v) => (typeof v === 'function' ? undefined : v)));
   const R = { ...D.RULES, ...(variant.rules || {}), fx: { ...D.RULES.fx, ...((variant.rules || {}).fx || {}) } };
   // 把合併後的規則烘回 D.RULES，供引擎（讀 D.RULES）套用 variant 覆蓋
@@ -243,9 +279,9 @@ function runVariant(D0, variant, N) {
   Object.entries(variant.products || {}).forEach(([id, o]) => Object.assign(D.PRODUCTS[id], o));
   const hauls = variant.quick ? null : dungeonHauls(D);
   const out = {};
-  BOTS.forEach((bot, bi) => {
+  bots.forEach((bot, bi) => {
     const rand = mulberry32(1234 + bi);
-    const acc = { got: {}, win: 0, rank: 0, ling: 0, top: 0, endings: {}, m: {} , caught: 0, grounded: 0, silver: 0, birthGames: 0 };
+    const acc = { got: {}, win: 0, rank: 0, ling: 0, top: 0, endings: {}, m: {} , caught: 0, grounded: 0, silver: 0, birthGames: 0, caughtGames: 0, tops: {}, favor: {}, stats: {} };
     for (let i = 0; i < N; i++) {
       const { S, rank, ending, titles } = play(D, R, bot, rand, hauls);
       titles.forEach((id) => { acc.got[id] = (acc.got[id] || 0) + 1; });
@@ -254,15 +290,24 @@ function runVariant(D0, variant, N) {
       acc.ling += S.favor.lingrong;
       acc.top += Math.max(...D.TARGETS.map((t) => S.favor[t]));
       acc.caught += S.stats.caught;
+      acc.caughtGames += S.stats.caught > 0; // 被抓過＝至少禁足一次、能抄經
       acc.grounded += S.stats.groundedDays;
       acc.silver += S.silver;
       acc.birthGames += S.m.births > 0;
       acc.endings[ending] = (acc.endings[ending] || 0) + 1;
+      if (ending === 'touming') acc.got.touming = (acc.got.touming || 0) + 1;
+      const top = D.ALL.reduce((a, b) => (S.favor[b] > S.favor[a] || (S.favor[b] === S.favor[a] && a === 'lingrong') ? b : a));
+      acc.tops[top] = (acc.tops[top] || 0) + 1;
+      D.ALL.forEach((w) => { acc.favor[w] = (acc.favor[w] || 0) + S.favor[w]; });
+      Object.entries(S.stats).forEach(([k, v]) => { if (typeof v === 'number') acc.stats[k] = (acc.stats[k] || 0) + v; });
       Object.entries(S.m).forEach(([k, v]) => { acc.m[k] = (acc.m[k] || 0) + v; });
     }
     out[bot.name] = {
       winRate: acc.win / N, avgRank: acc.rank / N, ling: acc.ling / N, topRival: acc.top / N,
-      caught: acc.caught / N, grounded: acc.grounded / N, silverLeft: acc.silver / N, birthGames: acc.birthGames / N,
+      caught: acc.caught / N, grounded: acc.grounded / N, silverLeft: acc.silver / N, birthGames: acc.birthGames / N, caughtGames: acc.caughtGames / N,
+      tops: Object.fromEntries(Object.entries(acc.tops).map(([k, v]) => [k, v / N])),
+      favor: Object.fromEntries(Object.entries(acc.favor).map(([k, v]) => [k, v / N])),
+      stats: Object.fromEntries(Object.entries(acc.stats).map(([k, v]) => [k, v / N])),
       got: Object.fromEntries(Object.entries(acc.got).map(([k, v]) => [k, v / N])),
       endings: Object.fromEntries(Object.entries(acc.endings).map(([k, v]) => [k, v / N])),
       m: Object.fromEntries(Object.entries(acc.m).map(([k, v]) => [k, v / N])),
@@ -271,7 +316,7 @@ function runVariant(D0, variant, N) {
   return out;
 }
 
-module.exports = { loadData, runVariant, BOTS, play, makeBot, smartSpike, mulberry32, dungeonHauls };
+module.exports = { loadData, runVariant, BOTS, play, makeBot, smartSpike, mulberry32, dungeonHauls, DEBUFFS };
 
 if (require.main === module) {
   const N = Number(process.argv[2]) || 5000;
